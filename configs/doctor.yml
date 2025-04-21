@@ -1,0 +1,121 @@
+process:
+  name: "Agent Hospital Full Cycle"
+  description: "Simulates the full closed cycle of patient treatment in a virtual hospital powered by LLM agents."
+
+  target_agent:
+    username: doctor_001
+    first_name: "Robert"
+    last_name: "Thompson"
+    gender: "Male"
+    age: 46
+    department: "Dermatology"
+    skills:
+      - "Diagnosis"
+      - "Treatment Planning"
+      - "Skin Surgery"
+    evolution_objective: "Improve diagnostic and treatment accuracy for skin-related diseases through repeated patient interactions and reflection."
+
+  nodes:
+    - id: onset
+      name: "Disease Onset"
+      role: "patient"
+      description: "Patient experiences symptoms and decides to visit the hospital."
+
+    - id: triage
+      name: "Triage"
+      role: "nurse"
+      description: "Nurse conducts initial assessment and determines the appropriate department."
+
+    - id: registration
+      name: "Registration"
+      role: "nurse"
+      description: "Patient registers and waits for doctor consultation."
+
+    - id: consultation
+      name: "Consultation"
+      role: "doctor"
+      assigned_to: "doctor_001"
+      description: "Doctor listens to symptoms and decides on required medical examination."
+
+    - id: examination
+      name: "Medical Examination"
+      role: "nurse"
+      description: "Nurse performs or assists with medical tests and generates reports."
+
+    - id: diagnosis
+      name: "Diagnosis"
+      role: "doctor"
+      assigned_to: "doctor_001"
+      description: "Doctor reviews reports and provides diagnosis."
+
+    - id: dispensary
+      name: "Medicine Dispensary"
+      role: "nurse"
+      description: "Patient receives medication based on prescription."
+
+    - id: convalescence
+      name: "Convalescence"
+      role: "patient"
+      description: "Patient returns home and recovers. May return if not healed."
+
+    - id: followup
+      name: "Post-Hospital Follow-up"
+      role: "doctor"
+      assigned_to: "doctor_001"
+      description: "Doctor handles patient follow-up and complaints."
+
+    - id: reading
+      name: "Reading Books"
+      role: "doctor"
+      assigned_to: "doctor_001"
+      description: "Doctor agent reads medical books to strengthen knowledge."
+
+  transitions:
+    - from: onset
+      to: triage
+    - from: triage
+      to: registration
+    - from: registration
+      to: consultation
+    - from: consultation
+      to: examination
+    - from: examination
+      to: diagnosis
+    - from: diagnosis
+      to: dispensary
+    - from: dispensary
+      to: convalescence
+    - from: convalescence
+      to: followup
+    - from: convalescence
+      to: triage
+    - from: followup
+      to: triage
+    - from: diagnosis
+      to: reading
+
+  roles:
+    - id: patient
+      name: "Patient Agent"
+      description: "LLM-powered patient agent with medical history, symptoms."
+
+    - id: nurse
+      name: "Nurse Agent"
+      description: "LLM-powered nurse agent for triage, registration, and examinations."
+
+    - id: doctor
+      name: "Doctor Agent"
+      description: "LLM-powered doctor agent capable of diagnosis, treatment, and self-evolution."
+
+  evolution:
+    method: "MedAgent-Zero"
+    description: "Doctors evolve by treating patient agents and learning from both successes (case base) and failures (experience base)."
+    knowledge_sources:
+      - "Medical Case Base"
+      - "Experience Base"
+      - "Medical Textbooks"
+
+  department_coverage:
+    clinical_departments: 21
+    diseases_supported: 339
+    note: "Supports all major medical workflows in diagnosis and treatment."
