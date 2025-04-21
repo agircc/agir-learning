@@ -1,0 +1,10 @@
+agir-db @ git+https://github.com/agircc/agir-db.git
+python-dotenv==1.0.0
+openai==1.12.0
+anthropic==0.15.0
+PyYAML>=6.0.1
+langchain==0.1.4
+fastapi==0.104.1
+uvicorn==0.23.2
+pydantic==2.5.0
+python-multipart==0.0.6 

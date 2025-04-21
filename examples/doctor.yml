@@ -2,13 +2,13 @@ process:
   name: "Agent Hospital Full Cycle"
   description: "Simulates the full closed cycle of patient treatment in a virtual hospital powered by LLM agents."
 
-  target_agent:
+  target_user:
     username: doctor_001
     first_name: "Robert"
     last_name: "Thompson"
     gender: "Male"
-    age: 46
-    department: "Dermatology"
+    birth_date: "1979-01-01" 
+    profession: "Dermatologist"
     skills:
       - "Diagnosis"
       - "Treatment Planning"
