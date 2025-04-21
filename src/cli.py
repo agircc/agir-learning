@@ -1,5 +1,5 @@
 """
-Command-line interface for AGIR Learning
+Command-line interface
 """
 
 import os
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description='AGIR Learning Evolution Process')
+    parser = argparse.ArgumentParser(description='Evolution Process')
     
     parser.add_argument(
         'process_file',

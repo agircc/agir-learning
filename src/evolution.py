@@ -1,5 +1,5 @@
 """
-Evolution module for AGIR Learning - handles the main evolution process
+Evolution module - handles the main evolution process
 """
 
 import os
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from agir_db.db.session import SessionLocal
+from agir_db.models.custom_fields import CustomField
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
@@ -405,7 +406,6 @@ class EvolutionEngine:
             existing_field.field_value = reflection
         else:
             # Create new field
-            from agir_db.models.custom_fields import CustomField
             evolution_field = CustomField(
                 user_id=target_user.id,
                 field_name=evolution_field_name,

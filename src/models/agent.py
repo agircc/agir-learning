@@ -1,5 +1,5 @@
 """
-Agent model for AGIR Learning
+Agent model
 """
 
 from typing import Dict, Any, List, Optional
@@ -9,7 +9,7 @@ import uuid
 
 class Agent(BaseModel):
     """
-    Represents an LLM-powered agent in the AGIR Learning system.
+    Represents an LLM-powered agent in the system.
     """
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str

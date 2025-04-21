@@ -1,5 +1,5 @@
 """
-Base LLM Provider for AGIR Learning
+Base LLM Provider
 """
 
 from abc import ABC, abstractmethod

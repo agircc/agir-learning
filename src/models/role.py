@@ -1,5 +1,5 @@
 """
-Role model for AGIR Learning
+Role model
 """
 
 from typing import Dict, Any, List, Optional

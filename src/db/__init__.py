@@ -1,5 +1,5 @@
 """
-Database utilities for AGIR Learning
+Database utilities
 """
 
 from agir_db.db.session import get_db, SessionLocal

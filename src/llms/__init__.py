@@ -1,5 +1,5 @@
 """
-LLM models management for AGIR Learning
+LLM models management
 """
 
 from .base import BaseLLMProvider

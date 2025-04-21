@@ -1,5 +1,5 @@
 """
-Anthropic LLM Provider for AGIR Learning
+Anthropic LLM Provider
 """
 
 import os

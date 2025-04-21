@@ -1,5 +1,5 @@
 """
-YAML loading utilities for AGIR Learning
+YAML loading utilities
 """
 
 import os

@@ -1,12 +1,12 @@
 """
-Process model for AGIR Learning
+Process model
 """
 
 from typing import Dict, Any, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field, validator
 import uuid
 import yaml
-from ..models.role import Role
+from .role import Role
 
 
 class ProcessNode(BaseModel):

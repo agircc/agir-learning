@@ -1,132 +1,138 @@
-# AGIR Learning
+# 智能体演进系统
 
-A system for evolving LLM-powered agents through simulated experiences based on process YAML definitions.
+一个基于YAML定义的过程，通过模拟经验让智能体演进的系统。
 
-## Overview
+## 概览
 
-AGIR Learning allows users to evolve through simulated experiences provided by LLM-powered agents. The system:
+该系统允许用户通过LLM驱动的智能体提供的模拟经验进行演进。系统功能：
 
-1. Loads process definitions from YAML files
-2. Creates or finds target users and agent users in the database
-3. Simulates interactions between agents following the process graph
-4. Generates reflections and evolution insights for the target user
+1. 从YAML文件加载过程定义
+2. 在数据库中创建或查找目标用户和智能体用户
+3. 根据过程图模拟智能体之间的交互
+4. 为目标用户生成反思和演进洞察
 
-## Installation
+## 安装
 
 ```bash
-# Create and activate virtual environment
+# 创建并激活虚拟环境
 python -m venv venv
 source venv/bin/activate
 
-# Install dependencies
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-## Usage
+## 使用方法
 
-### Running an Evolution Process
+### 运行演进过程
 
 ```bash
-# Using OpenAI with default GPT-4 model
+# 使用默认的OpenAI GPT-4模型
 python run_evolution.py examples/doctor.yml
 
-# Using Anthropic with Claude
+# 使用Anthropic的Claude模型
 python run_evolution.py examples/doctor.yml --model anthropic
 
-# Specifying a model name
+# 指定特定模型名称
 python run_evolution.py examples/doctor.yml --model openai --model-name gpt-4-turbo
 
-# Enable verbose logging
+# 启用详细日志
 python run_evolution.py examples/doctor.yml -v
 ```
 
-### Environment Variables
+### 环境变量
 
-Set the following environment variables in `.env` file:
+在`.env`文件中设置以下环境变量：
 
 ```
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-OPENAI_API_KEY=your_openai_key_here
-ANTHROPIC_API_KEY=your_anthropic_key_here
+OPENAI_API_KEY=你的openai密钥
+ANTHROPIC_API_KEY=你的anthropic密钥
 ```
 
-## Process YAML Format
+## 过程YAML格式
 
-Process YAML files define the evolution experience:
+过程YAML文件定义演进体验：
 
 ```yaml
 process:
-  name: "Process Name"
-  description: "Process Description"
+  name: "过程名称"
+  description: "过程描述"
 
   target_user:
-    username: "username_of_target_user"
-    first_name: "User's First Name"
-    last_name: "User's Last Name"
-    # Other user attributes
-    evolution_objective: "Description of what the user should learn"
+    username: "目标用户的用户名"
+    first_name: "用户的名"
+    last_name: "用户的姓"
+    # 其他用户属性
+    evolution_objective: "用户应该学习什么的描述"
 
   nodes:
     - id: node1
-      name: "Node Name"
+      name: "节点名称"
       role: "role_id"
-      description: "Node description"
-      assigned_to: "optional_username"  # If assigned to target user
+      description: "节点描述"
+      assigned_to: "可选的用户名"  # 如果分配给目标用户
 
   transitions:
     - from: node1
       to: node2
-    # More transitions
+    # 更多转换
 
   roles:
     - id: role_id
-      name: "Role Name"
-      description: "Role description"
+      name: "角色名称"
+      description: "角色描述"
 
   evolution:
-    method: "Evolution Method Name"
-    description: "Description of how evolution works"
+    method: "演进方法名称"
+    description: "演进如何工作的描述"
     knowledge_sources:
-      - "Source 1"
-      - "Source 2"
+      - "来源1"
+      - "来源2"
 ```
 
-## Project Structure
+## 项目结构
 
 ```
-agir_learning/
-├── __init__.py             # Package initialization
-├── cli.py                  # Command-line interface
-├── evolution.py            # Main evolution engine
-├── db/                     # Database utilities
-│   └── __init__.py         # Database initialization
-├── llms/                   # LLM providers
-│   ├── __init__.py         # LLM module initialization
-│   ├── base.py             # Base LLM provider interface
-│   ├── openai.py           # OpenAI implementation
-│   └── anthropic.py        # Anthropic implementation
-├── models/                 # Data models
-│   ├── __init__.py         # Models initialization
-│   ├── agent.py            # Agent model
-│   ├── process.py          # Process models
-│   └── role.py             # Role model
-└── utils/                  # Utility functions
-    ├── __init__.py         # Utils initialization
-    ├── database.py         # Database utility functions
-    └── yaml_loader.py      # YAML loading utilities
+项目根目录/
+├── run_evolution.py        # 主入口脚本
+├── requirements.txt        # 项目依赖
+├── .env                    # 环境变量（需要自己创建）
+├── examples/               # 示例YAML文件目录
+│   └── doctor.yml          # 医生示例
+└── src/                    # 源代码目录
+    ├── __init__.py         # 模块初始化
+    ├── cli.py              # 命令行界面
+    ├── evolution.py        # 主演进引擎
+    ├── db/                 # 数据库工具
+    │   └── __init__.py     # 数据库初始化
+    ├── llms/               # LLM提供者
+    │   ├── __init__.py     # LLM模块初始化
+    │   ├── base.py         # 基础LLM提供者接口
+    │   ├── openai.py       # OpenAI实现
+    │   └── anthropic.py    # Anthropic实现
+    ├── models/             # 数据模型
+    │   ├── __init__.py     # 模型初始化
+    │   ├── agent.py        # 智能体模型
+    │   ├── process.py      # 过程模型
+    │   └── role.py         # 角色模型
+    └── utils/              # 工具函数
+        ├── __init__.py     # 工具初始化
+        ├── database.py     # 数据库工具函数
+        └── yaml_loader.py  # YAML加载工具
 ```
 
-## Extending
+## 扩展
 
-### Adding a New LLM Provider
+### 添加新的LLM提供者
 
-1. Create a new provider in `agir_learning/llms/`
-2. Implement the `BaseLLMProvider` interface
-3. Add the provider to `agir_learning/llms/__init__.py`
-4. Update the CLI in `agir_learning/cli.py` to support the new provider
+1. 在`src/llms/`中创建一个新提供者
+2. 实现`BaseLLMProvider`接口
+3. 将提供者添加到`src/llms/__init__.py`
+4. 更新`src/cli.py`中的CLI以支持新提供者
 
-### Creating a Custom Process
+### 创建自定义过程
 
-1. Create a new YAML file based on the examples
-2. Define nodes, transitions, roles, and evolution method
-3. Run the process using the CLI
+1. 基于示例创建新的YAML文件
+2. 定义节点、转换、角色和演进方法
+3. 使用CLI运行过程

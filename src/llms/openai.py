@@ -1,5 +1,5 @@
 """
-OpenAI LLM Provider for AGIR Learning
+OpenAI LLM Provider
 """
 
 import os

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Entry point script for running AGIR Learning Evolution Process
+Entry point script for running Evolution Process
 """
 
 import sys

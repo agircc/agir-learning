@@ -1,5 +1,5 @@
 """
-Models for AGIR Learning
+Models for agent simulation
 """
 
 from .agent import Agent

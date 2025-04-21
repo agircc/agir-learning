@@ -1,5 +1,5 @@
 """
-Utility functions for AGIR Learning
+Utility functions
 """
 
 from .database import get_or_create_user, create_or_update_agent, find_agent_by_role
