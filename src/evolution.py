@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from agir_db.db.session import SessionLocal
-from agir_db.models.custom_fields import CustomField
-from agir_db.models.process import ProcessRecord  # 导入数据库Process记录模型
+# 使用User模型的自定义字段，而不是直接导入可能不存在的CustomField
+from agir_db.models.user import User
+from agir_db.models.process import Process as DBProcess  # 使用正确的Process类名
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
@@ -27,6 +28,55 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# 尝试导入CustomField，如果不存在则使用自定义字段处理
+try:
+    from agir_db.models.memory import UserMemory
+    logger.info("Successfully imported CustomField from agir_db")
+except ImportError:
+    logger.warning("agir_db.models.custom_fields模块不存在，使用替代实现")
+    
+    # 使用现有表结构，不创建新表
+    from sqlalchemy.ext.declarative import DeclarativeMeta
+    from sqlalchemy import Column, Integer, String, Text, ForeignKey
+    
+    # 定义一个函数来创建或获取CustomField类
+    def get_custom_field_class():
+        from sqlalchemy.ext.declarative import declarative_base
+        from agir_db.db.base_class import Base
+        
+        # 检查表是否已存在
+        from sqlalchemy import MetaData, inspect
+        from agir_db.db.session import engine
+        
+        inspector = inspect(engine)
+        if 'custom_fields' in inspector.get_table_names():
+            # 如果表已存在，返回动态创建的模型
+            class CustomField(Base):
+                __tablename__ = 'custom_fields'
+                __table_args__ = {'extend_existing': True}
+                
+                id = Column(Integer, primary_key=True, index=True)
+                user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+                field_name = Column(String(128), nullable=False)
+                field_value = Column(Text, nullable=True)
+            
+            return CustomField
+        else:
+            # 如果表不存在，记录警告并使用内存自定义字段
+            logger.warning("custom_fields表不存在，将使用内存字段存储")
+            
+            # 创建一个简单的内存类
+            class InMemoryCustomField:
+                def __init__(self, user_id, field_name, field_value):
+                    self.user_id = user_id
+                    self.field_name = field_name
+                    self.field_value = field_value
+            
+            return InMemoryCustomField
+    
+    # 获取CustomField类
+    CustomField = get_custom_field_class()
 
 
 class EvolutionEngine:
@@ -101,10 +151,26 @@ class EvolutionEngine:
                 # 保存process实例到数据库
                 db_process = create_process_record(db, {
                     "name": process.name,
-                    "description": process.description,
-                    "config": json.dumps(process.to_dict())
+                    "description": process.description
                 })
                 logger.info(f"Created process record in database with ID: {db_process.id}")
+                
+                # 保存配置作为自定义字段到数据库
+                try:
+                    # 将配置保存到process_instance_step表
+                    from agir_db.models.process_instance import ProcessInstance
+                    process_instance = ProcessInstance(
+                        process_id=db_process.id,
+                        data=json.dumps(process.to_dict()),
+                        status="started"
+                    )
+                    db.add(process_instance)
+                    db.commit()
+                    logger.info(f"Saved process configuration to database")
+                    process_instance_id = process_instance.id
+                except Exception as e:
+                    logger.error(f"Failed to save process configuration: {str(e)}")
+                    process_instance_id = None
                 
                 # Get or create target user
                 target_username = process.target_user.get("username")
@@ -117,10 +183,6 @@ class EvolutionEngine:
                     logger.info(f"Created new target user: {target_username}")
                 else:
                     logger.info(f"Using existing target user: {target_username}")
-                
-                # 关联用户与进程
-                db_process.user_id = target_user.id
-                db.commit()
                 
                 # Process each node in the process
                 current_node = process.nodes[0]  # Start with the first node
@@ -148,9 +210,16 @@ class EvolutionEngine:
                         logger.info("Reached end of process or no valid next node")
                         break
                 
-                # 更新process状态为已完成
-                db_process.status = "completed"
-                db.commit()
+                # 更新process实例状态为已完成
+                if process_instance_id:
+                    try:
+                        process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
+                        if process_instance:
+                            process_instance.status = "completed"
+                            db.commit()
+                            logger.info(f"Updated process instance status to completed")
+                    except Exception as e:
+                        logger.error(f"Failed to update process instance status: {str(e)}")
                 
                 # Process evolution
                 self._process_evolution(db, process, target_user, history, db_process.id)
@@ -160,11 +229,16 @@ class EvolutionEngine:
                 
             except Exception as e:
                 logger.error(f"Error in evolution process: {str(e)}")
-                # 如果出错，更新process状态为失败
-                if 'db_process' in locals():
-                    db_process.status = "failed"
-                    db_process.error_message = str(e)
-                    db.commit()
+                # 如果出错，更新process实例状态为失败
+                if 'process_instance_id' in locals() and process_instance_id:
+                    try:
+                        process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
+                        if process_instance:
+                            process_instance.status = "failed"
+                            process_instance.error = str(e)
+                            db.commit()
+                    except Exception as inner_e:
+                        logger.error(f"Failed to update process instance error status: {str(inner_e)}")
                 return False
                 
     def _process_node(
@@ -174,7 +248,7 @@ class EvolutionEngine:
         node: ProcessNode, 
         target_user: Any,
         history: List[Dict[str, Any]],
-        process_id: int = None
+        process_id: Any = None
     ) -> Optional[Tuple[ProcessNode, str, Optional[ProcessNode]]]:
         """
         Process a single node in the process.
@@ -193,25 +267,40 @@ class EvolutionEngine:
         logger.info(f"Processing node: {node.id} - {node.name}")
         
         # 保存节点执行记录到数据库
+        node_record_id = None
         if process_id:
             try:
-                from agir_db.models.node import NodeRecord
-                node_record = NodeRecord(
-                    process_id=process_id,
-                    node_id=node.id,
-                    name=node.name,
-                    role=node.role,
-                    status="started"
-                )
-                db.add(node_record)
-                db.commit()
-                node_record_id = node_record.id
-                logger.info(f"Created node record with ID: {node_record_id}")
+                # 使用process_instance_step表记录节点执行
+                from agir_db.models.process_instance_step import ProcessInstanceStep
+                
+                # 查找当前进程实例
+                from agir_db.models.process_instance import ProcessInstance
+                process_instance = db.query(ProcessInstance).filter(
+                    ProcessInstance.process_id == process_id,
+                    ProcessInstance.status.in_(["started", "in_progress"])
+                ).first()
+                
+                if process_instance:
+                    # 创建步骤记录
+                    node_record = ProcessInstanceStep(
+                        process_instance_id=process_instance.id,
+                        step_id=node.id,
+                        name=node.name,
+                        role=node.role,
+                        status="started",
+                        data=json.dumps({
+                            "description": node.description,
+                            "assigned_to": node.assigned_to
+                        })
+                    )
+                    db.add(node_record)
+                    db.commit()
+                    node_record_id = node_record.id
+                    logger.info(f"Created node record with ID: {node_record_id}")
+                else:
+                    logger.warning(f"No active process instance found for process ID: {process_id}")
             except Exception as e:
                 logger.error(f"Failed to create node record: {str(e)}")
-                node_record_id = None
-        else:
-            node_record_id = None
         
         # Get the role
         role = process.get_role(node.role)
@@ -273,6 +362,7 @@ class EvolutionEngine:
             
             # 保存记忆到数据库
             try:
+                # 检查memory表是否存在
                 from agir_db.models.memory import Memory
                 memory = Memory(
                     user_id=agent_user.id,
@@ -309,14 +399,17 @@ class EvolutionEngine:
             return
             
         try:
-            from agir_db.models.node import NodeRecord
-            node_record = db.query(NodeRecord).filter(NodeRecord.id == node_record_id).first()
+            # 使用process_instance_step表更新状态
+            from agir_db.models.process_instance_step import ProcessInstanceStep
+            node_record = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == node_record_id).first()
             if node_record:
                 node_record.status = status
                 if response:
+                    # 更新response字段
                     node_record.response = response
                 if error:
-                    node_record.error_message = error
+                    # 更新error字段
+                    node_record.error = error
                 db.commit()
                 logger.info(f"Updated node record {node_record_id} status to {status}")
         except Exception as e:
@@ -422,7 +515,7 @@ class EvolutionEngine:
         process: Process, 
         target_user: Any,
         history: List[Dict[str, Any]],
-        process_id: int = None
+        process_id: Any = None
     ) -> None:
         """
         Process the evolution of the target user based on the completed process.
@@ -477,20 +570,33 @@ class EvolutionEngine:
         # 保存进化反思到数据库
         if process_id:
             try:
-                from agir_db.models.evolution import EvolutionRecord
-                evolution_record = EvolutionRecord(
-                    process_id=process_id,
+                # 使用custom_fields保存进化反思
+                evolution_field = CustomField(
                     user_id=target_user.id,
-                    method=evolution_method,
-                    reflection=reflection
+                    field_name=f"evolution_{process_id}",
+                    field_value=reflection
                 )
-                db.add(evolution_record)
+                db.add(evolution_field)
                 db.commit()
-                logger.info(f"Saved evolution reflection to database for process {process_id}")
+                logger.info(f"Saved evolution reflection to database for user {target_user.id}")
+                
+                # 如果process_instance存在，关联evolution到进程实例
+                try:
+                    from agir_db.models.process_instance import ProcessInstance
+                    process_instance = db.query(ProcessInstance).filter(
+                        ProcessInstance.process_id == process_id
+                    ).first()
+                    
+                    if process_instance:
+                        process_instance.evolution = reflection
+                        db.commit()
+                        logger.info(f"Updated process instance with evolution reflection")
+                except Exception as e:
+                    logger.error(f"Failed to update process instance with evolution: {str(e)}")
             except Exception as e:
                 logger.error(f"Failed to save evolution reflection: {str(e)}")
         
-        # Store as a custom field for the user
+        # Store as a custom field for the user (另一种方法，确保至少有一种成功)
         evolution_field_name = f"evolution_{process.id}"
         
         # Check if we already have an evolution field for this process

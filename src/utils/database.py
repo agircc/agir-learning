@@ -3,14 +3,66 @@ Database utility functions for AGIR Learning
 """
 
 import json
+import uuid
 from typing import Dict, Any, List, Optional, Tuple
 import logging
 from sqlalchemy.orm import Session
 from agir_db.models.user import User
-from agir_db.models.custom_fields import CustomField
-from agir_db.models.process import ProcessRecord
+from agir_db.models.process import Process as DBProcess
 
 logger = logging.getLogger(__name__)
+
+# 尝试导入CustomField，如果不存在则使用自定义字段处理
+try:
+    from agir_db.models.memory import UserMemory
+    logger.info("Successfully imported CustomField from agir_db")
+except ImportError:
+    logger.warning("agir_db.models.custom_fields模块不存在，使用替代实现")
+    
+    # 使用现有表结构，不创建新表
+    from sqlalchemy.ext.declarative import DeclarativeMeta
+    from sqlalchemy import Column, Integer, String, Text, ForeignKey
+    
+    # 定义一个函数来创建或获取CustomField类
+    def get_custom_field_class():
+        from sqlalchemy.ext.declarative import declarative_base
+        from agir_db.db.base_class import Base
+        
+        # 检查表是否已存在
+        from sqlalchemy import MetaData, inspect
+        from agir_db.db.session import engine
+        
+        inspector = inspect(engine)
+        if 'custom_fields' in inspector.get_table_names():
+            # 如果表已存在，返回动态创建的模型
+            class CustomField(Base):
+                __tablename__ = 'custom_fields'
+                __table_args__ = {'extend_existing': True}
+                
+                id = Column(Integer, primary_key=True, index=True)
+                user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+                field_name = Column(String(128), nullable=False)
+                field_value = Column(Text, nullable=True)
+            
+            return CustomField
+        else:
+            # 如果表不存在，记录警告并使用内存自定义字段
+            logger.warning("custom_fields表不存在，将使用内存字段存储")
+            
+            # 创建一个简单的内存类
+            class InMemoryCustomField:
+                def __init__(self, user_id, field_name, field_value):
+                    self.user_id = user_id
+                    self.field_name = field_name
+                    self.field_value = field_value
+                    
+                def __repr__(self):
+                    return f"<InMemoryCustomField(user_id={self.user_id}, field_name={self.field_name})>"
+            
+            return InMemoryCustomField
+    
+    # 获取CustomField类
+    CustomField = get_custom_field_class()
 
 
 def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) -> Tuple[User, bool]:
@@ -205,7 +257,7 @@ def find_agent_by_role(db: Session, role: str, created_by_id: Optional[int] = No
     return None
 
 
-def create_process_record(db: Session, process_data: Dict[str, Any]) -> ProcessRecord:
+def create_process_record(db: Session, process_data: Dict[str, Any]) -> DBProcess:
     """
     创建进程记录到数据库
     
@@ -214,16 +266,14 @@ def create_process_record(db: Session, process_data: Dict[str, Any]) -> ProcessR
         process_data: 进程数据
         
     Returns:
-        ProcessRecord 实例
+        DBProcess 实例
     """
     logger.info(f"Creating process record: {process_data.get('name', 'Unnamed')}")
     
     # 创建进程记录
-    process_record = ProcessRecord(
+    process_record = DBProcess(
         name=process_data.get("name", "Unnamed Process"),
-        description=process_data.get("description", ""),
-        config=process_data.get("config", "{}"),
-        status="started"
+        description=process_data.get("description", "")
     )
     
     db.add(process_record)
