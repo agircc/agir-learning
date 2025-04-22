@@ -749,9 +749,10 @@ class EvolutionEngine:
         # 保存进化反思到数据库
         if process_id:
             try:
+                # 添加调试日志
+                logger.info(f"Creating CustomField with: user_id={target_user.id}, field_name=evolution_{process_id}, field_value={reflection[:20]}...")
                 # 使用custom_fields保存进化反思
                 evolution_field = CustomField(
-                    db=db,
                     user_id=target_user.id,
                     field_name=f"evolution_{process_id}",
                     field_value=reflection
@@ -776,6 +777,9 @@ class EvolutionEngine:
                     logger.error(f"Failed to update process instance with evolution: {str(e)}")
             except Exception as e:
                 logger.error(f"Failed to save evolution reflection: {str(e)}")
+                # 添加详细错误日志
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
         
         # Store as a custom field for the user (另一种方法，确保至少有一种成功)
         evolution_field_name = f"evolution_{process.id}"
@@ -792,9 +796,10 @@ class EvolutionEngine:
         else:
             # Create new field
             try:
-                # Always use db parameter with CustomField
+                # 添加调试日志
+                logger.info(f"Creating second CustomField with: user_id={target_user.id}, field_name={evolution_field_name}, field_value={reflection[:20]}...")
+                # Create new CustomField without db parameter
                 evolution_field = CustomField(
-                    db=db,
                     user_id=target_user.id,
                     field_name=evolution_field_name,
                     field_value=reflection
@@ -802,6 +807,9 @@ class EvolutionEngine:
                 db.add(evolution_field)
             except Exception as e:
                 logger.error(f"Failed to create CustomField: {str(e)}")
+                # 添加详细错误日志
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 return
             
         db.commit() 
