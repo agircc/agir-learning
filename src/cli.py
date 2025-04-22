@@ -9,6 +9,7 @@ import logging
 from dotenv import load_dotenv
 
 from .evolution import EvolutionEngine
+from .process_manager import ProcessManager  # Import the new ProcessManager
 from .llms import OpenAIProvider, AnthropicProvider
 from .db import check_database
 
@@ -62,6 +63,12 @@ def parse_args():
         help='Skip LLM initialization for debugging'
     )
     
+    parser.add_argument(
+        '--setup-only',
+        action='store_true',
+        help='Only setup the process in the database without executing it'
+    )
+    
     return parser.parse_args()
 
 
@@ -96,13 +103,28 @@ def main():
         logger.error(f"Process file not found: {args.process_file}")
         sys.exit(1)
     
-    # 检查数据库
+    # Check database tables using the ProcessManager
     if not args.skip_db_check:
-        logger.info("Checking database...")
-        if not check_database():
-            logger.error("Database check failed. Please ensure the database is configured correctly.")
+        logger.info("Checking database tables...")
+        if not ProcessManager.check_database_tables():
+            logger.error("Database tables check failed. Please ensure database migrations have been run.")
             sys.exit(1)
-        logger.info("Database check passed")
+        logger.info("Database tables check passed")
+    
+    # Create process from YAML file
+    logger.info(f"Creating process from file: {args.process_file}")
+    process_id = ProcessManager.create_process_from_yaml(args.process_file)
+    
+    if not process_id:
+        logger.error("Failed to create process from YAML file")
+        sys.exit(1)
+    
+    logger.info(f"Process created with ID: {process_id}")
+    
+    # If setup-only flag is set, exit here
+    if args.setup_only:
+        logger.info("Setup-only flag set, exiting without executing process")
+        sys.exit(0)
     
     # Create LLM provider
     llm_provider = None
@@ -136,12 +158,12 @@ def main():
             logger.info("Falling back to dummy provider for debugging")
             llm_provider = DummyProvider()
     
-    # Create evolution engine
+    # Create evolution engine with the process ID
     engine = EvolutionEngine(llm_provider=llm_provider)
     
-    # Run evolution process
-    logger.info(f"Running evolution process from file: {args.process_file}")
-    success = engine.run_evolution_from_file(args.process_file)
+    # Run evolution process, now using the ID rather than loading from file again
+    logger.info(f"Running evolution process with ID: {process_id}")
+    success = engine.run_evolution_with_id(process_id)
     
     if success:
         logger.info("Evolution process completed successfully")

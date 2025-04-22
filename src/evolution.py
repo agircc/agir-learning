@@ -11,15 +11,17 @@ from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
-from agir_db.db.session import SessionLocal
+from agir_db.db.session import SessionLocal, get_db
 from agir_db.models.user import User
-from agir_db.models.process import Process as DBProcess
+from agir_db.models.process import Process as DBProcess, ProcessNode as DBProcessNode
+from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.custom_field import CustomField  # 明确从agir_db包导入CustomField
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
 from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record
 from .utils.yaml_loader import load_process_from_file
+from .process_manager import ProcessManager  # Import the new ProcessManager
 
 # Configure logging
 logging.basicConfig(
@@ -86,6 +88,130 @@ class EvolutionEngine:
             return False
             
         return self.run_evolution(process)
+        
+    def run_evolution_with_id(self, process_id: int) -> bool:
+        """
+        Run the evolution process using a process ID from the database.
+        
+        Args:
+            process_id: ID of the process in the database
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        logger.info(f"Starting evolution process with ID: {process_id}")
+        
+        # Create database session
+        with SessionLocal() as db:
+            try:
+                # Get process from database
+                db_process = db.query(DBProcess).filter(DBProcess.id == process_id).first()
+                if not db_process:
+                    logger.error(f"Process with ID {process_id} not found in database")
+                    return False
+                
+                logger.info(f"Found process: {db_process.name}")
+                
+                # Find the target user (initiator)
+                target_user = None
+                
+                # Try to find a user who would be appropriate for this process
+                # This could be improved to check for users with specific roles/permissions
+                user = db.query(User).filter(User.status == 'ACTIVE').first()
+                if not user:
+                    logger.error("No active users found in the database")
+                    return False
+                
+                target_user = user
+                logger.info(f"Using user {target_user.username} as target user")
+                
+                # Execute the process using ProcessManager
+                instance_id = ProcessManager.execute_process(process_id, target_user.id)
+                if not instance_id:
+                    logger.error("Failed to execute process")
+                    return False
+                
+                logger.info(f"Created process instance with ID: {instance_id}")
+                
+                # Get the process instance
+                process_instance = db.query(ProcessInstance).filter(
+                    ProcessInstance.id == instance_id
+                ).first()
+                
+                if not process_instance:
+                    logger.error(f"Process instance with ID {instance_id} not found")
+                    return False
+                
+                # Get the current node
+                current_node_id = process_instance.current_node_id
+                if not current_node_id:
+                    logger.error("Process instance has no current node")
+                    return False
+                
+                current_db_node = db.query(DBProcessNode).filter(
+                    DBProcessNode.id == current_node_id
+                ).first()
+                
+                if not current_db_node:
+                    logger.error(f"Node with ID {current_node_id} not found")
+                    return False
+                
+                # Convert DB node to model node for processing
+                current_node = ProcessNode(
+                    id=str(current_db_node.id),
+                    name=current_db_node.name,
+                    role=current_db_node.role.id if current_db_node.role else "unknown",
+                    description=current_db_node.description
+                )
+                
+                # Process nodes sequentially, advancing through the process
+                history = []  # Conversation history
+                
+                # Create a simple process object for compatibility with existing code
+                process = Process(
+                    id=str(db_process.id),
+                    name=db_process.name,
+                    description=db_process.description,
+                    nodes=[current_node],  # Start with just the current node
+                    transitions=[],  # We'll use ProcessManager for transitions
+                    roles=[]  # We'll look up roles as needed
+                )
+                
+                # Process the current node
+                while current_node:
+                    result = self._process_node(db, process, current_node, target_user, history, process_id)
+                    if not result:
+                        logger.error(f"Failed to process node: {current_node.name}")
+                        # Mark process as failed
+                        ProcessManager.complete_process(instance_id, success=False)
+                        return False
+                    
+                    processed_node, response, next_node = result
+                    
+                    # Advance the process to the next node using ProcessManager
+                    if next_node:
+                        step_id = ProcessManager.advance_process(instance_id, next_node.name)
+                        if not step_id:
+                            logger.error(f"Failed to advance process to node: {next_node.name}")
+                            ProcessManager.complete_process(instance_id, success=False)
+                            return False
+                        
+                        # Update current node
+                        current_node = next_node
+                    else:
+                        # No next node, process is complete
+                        logger.info("Process complete, no more nodes to process")
+                        ProcessManager.complete_process(instance_id, success=True)
+                        current_node = None
+                
+                # Process evolution
+                self._process_evolution(db, process, target_user, history, process_id)
+                
+                return True
+                
+            except Exception as e:
+                logger.error(f"Error running evolution process: {str(e)}")
+                return False
         
     def run_evolution(self, process: Process) -> bool:
         """

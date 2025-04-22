@@ -7,6 +7,10 @@ import sys
 import logging
 from dotenv import load_dotenv
 import importlib
+from agir_db.db.session import get_db, SessionLocal
+from agir_db.models import User, Process
+from agir_db.db.base_class import Base
+from ..process_manager import ProcessManager
 
 # 加载环境变量
 load_dotenv()
@@ -19,10 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    from agir_db.db.session import get_db, SessionLocal
-    from agir_db.models import User, Process
-    from agir_db.db.base_class import Base
-    
+    from agir_db.db.session import engine
     # 尝试导入迁移模块
     try:
         # import agir_db.alembic.env as alembic_env
@@ -35,36 +36,23 @@ except ImportError:
     logger.error("agir_db package not found. Please install it using pip install -e git+https://github.com/agircc/agir-db.git")
     sys.exit(1)
 
-def check_database():
-    """检查数据库是否存在和表是否创建，如果不存在则运行迁移文件"""
+def check_database() -> bool:
+    """
+    Check if database is configured correctly.
+    
+    Returns:
+        bool: True if database is configured correctly, False otherwise
+    """
     try:
-        # 检查数据库连接
-        db = next(get_db())
-        
-        # 尝试查询用户表以检查表是否存在
-        try:
-            db.query(User).first()
-            logger.info("Database check passed: tables exist")
-            return True
-        except Exception as e:
-            logger.warning(f"Database tables do not exist: {str(e)}")
-            # 运行迁移
-            logger.info("Running database migrations...")
-            run_migrations()
-            logger.info("Database migrations completed")
-            return True
+        # Use ProcessManager to check database tables
+        return ProcessManager.check_database_tables()
     except Exception as e:
-        logger.error(f"Database connection failed: {str(e)}")
+        logger.error(f"Database check failed: {str(e)}")
         return False
-    finally:
-        if 'db' in locals():
-            db.close()
 
 def run_migrations():
     """运行数据库迁移"""
     try:
-        from agir_db.db.session import engine
-        
         # 使用Alembic运行迁移或使用SQLAlchemy创建表
         if has_alembic:
             try:

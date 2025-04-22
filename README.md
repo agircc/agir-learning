@@ -1,138 +1,195 @@
-# 智能体演进系统
+# Agent Evolution System
 
-一个基于YAML定义的过程，通过模拟经验让智能体演进的系统。
+A system for agent evolution through simulated experiences defined in YAML.
 
-## 概览
+## Overview
 
-该系统允许用户通过LLM驱动的智能体提供的模拟经验进行演进。系统功能：
+This system allows users to evolve through simulated experiences provided by LLM-powered agents. The system:
 
-1. 从YAML文件加载过程定义
-2. 在数据库中创建或查找目标用户和智能体用户
-3. 根据过程图模拟智能体之间的交互
-4. 为目标用户生成反思和演进洞察
+1. Loads process definitions from YAML files
+2. Creates or finds target users and agent users in the database
+3. Simulates interactions between agents according to the process graph
+4. Generates reflections and evolution insights for the target user
 
-## 安装
+## Installation
 
 ```bash
-# 创建并激活虚拟环境
+# Create and activate virtual environment
 python -m venv venv
 source venv/bin/activate
 
-# 安装依赖
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-## 使用方法
+## Usage
 
-### 运行演进过程
+### Running Evolution Process
 
 ```bash
-# 使用默认的OpenAI GPT-4模型
+# Using default OpenAI GPT-4 model
 python run_evolution.py examples/doctor.yml
 
-# 使用Anthropic的Claude模型
+# Using Anthropic's Claude model
 python run_evolution.py examples/doctor.yml --model anthropic
 
-# 指定特定模型名称
+# Specify model name
 python run_evolution.py examples/doctor.yml --model openai --model-name gpt-4-turbo
 
-# 启用详细日志
+# Enable verbose logging
 python run_evolution.py examples/doctor.yml -v
 ```
 
-### 环境变量
+### Environment Variables
 
-在`.env`文件中设置以下环境变量：
+Set the following environment variables in a `.env` file:
 
 ```
 DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-OPENAI_API_KEY=你的openai密钥
-ANTHROPIC_API_KEY=你的anthropic密钥
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
 ```
 
-## 过程YAML格式
+## Process YAML Format
 
-过程YAML文件定义演进体验：
+Process YAML files define the evolution experience:
 
 ```yaml
 process:
-  name: "过程名称"
-  description: "过程描述"
+  name: "Process Name"
+  description: "Process Description"
 
   target_user:
-    username: "目标用户的用户名"
-    first_name: "用户的名"
-    last_name: "用户的姓"
-    # 其他用户属性
-    evolution_objective: "用户应该学习什么的描述"
+    username: "target_username"
+    first_name: "User's First Name"
+    last_name: "User's Last Name"
+    # Other user attributes
+    evolution_objective: "Description of what the user should learn"
 
   nodes:
-    - id: node1
-      name: "节点名称"
+    - name: "Node Name"
       role: "role_id"
-      description: "节点描述"
-      assigned_to: "可选的用户名"  # 如果分配给目标用户
+      description: "Node Description"
+      assigned_to: "optional_username"  # If assigned to target user
 
   transitions:
-    - from: node1
-      to: node2
-    # 更多转换
+    - from: "Node Name"
+      to: "Another Node Name"
+    # More transitions
 
   roles:
     - id: role_id
-      name: "角色名称"
-      description: "角色描述"
+      name: "Role Name"
+      description: "Role Description"
 
   evolution:
-    method: "演进方法名称"
-    description: "演进如何工作的描述"
+    method: "Evolution Method Name"
+    description: "Description of how evolution works"
     knowledge_sources:
-      - "来源1"
-      - "来源2"
+      - "Source 1"
+      - "Source 2"
 ```
 
-## 项目结构
+## Process Creation Flow
+
+The system follows these steps when creating a process:
+
+1. **Database Validation**
+   - Check if required database tables exist
+   - If tables don't exist, prompt user to run database migrations
+
+2. **User Creation**
+   - Read the YAML file and extract target user information
+   - Check if the target user exists in the user table based on username
+   - If not found, create a new user record
+
+3. **Process Creation**
+   - Check if a process with the given name and creator already exists
+   - If not found, create a new process record
+
+4. **Process Roles Creation**
+   - For each role defined in the YAML, create a process role record
+   - Store mapping between YAML role IDs and database role IDs
+
+5. **Process Nodes Creation**
+   - For each node defined in the YAML, create a process node record
+   - Associate each node with its corresponding role using the role mapping
+   - Store mapping between YAML node IDs and database node IDs
+
+6. **Process Transitions Creation**
+   - For each transition defined in the YAML, create a process transition record
+   - Use node mappings to correctly link from_node_id and to_node_id
+
+## Process Execution Flow
+
+When executing a process, the system follows these steps:
+
+1. **Process Instance Creation**
+   - Create a process instance record linked to the process and target user
+   - Set initial status to RUNNING
+   - Store the full process configuration as JSON in the config field
+
+2. **Process Instance Steps**
+   - Start with the first node in the process
+   - For each node:
+     - Create a process instance step record linked to the appropriate node
+     - Execute the node logic (agent interaction, etc.)
+     - Update the step status upon completion
+     - Determine the next node based on transitions
+
+3. **Evolution Generation**
+   - After completing all nodes or reaching a terminal node
+   - Generate evolution insights based on the process history
+   - Update the target user with new knowledge/skills
+
+## Project Structure
 
 ```
-项目根目录/
-├── run_evolution.py        # 主入口脚本
-├── requirements.txt        # 项目依赖
-├── .env                    # 环境变量（需要自己创建）
-├── examples/               # 示例YAML文件目录
-│   └── doctor.yml          # 医生示例
-└── src/                    # 源代码目录
-    ├── __init__.py         # 模块初始化
-    ├── cli.py              # 命令行界面
-    ├── evolution.py        # 主演进引擎
-    ├── db/                 # 数据库工具
-    │   └── __init__.py     # 数据库初始化
-    ├── llms/               # LLM提供者
-    │   ├── __init__.py     # LLM模块初始化
-    │   ├── base.py         # 基础LLM提供者接口
-    │   ├── openai.py       # OpenAI实现
-    │   └── anthropic.py    # Anthropic实现
-    ├── models/             # 数据模型
-    │   ├── __init__.py     # 模型初始化
-    │   ├── agent.py        # 智能体模型
-    │   ├── process.py      # 过程模型
-    │   └── role.py         # 角色模型
-    └── utils/              # 工具函数
-        ├── __init__.py     # 工具初始化
-        ├── database.py     # 数据库工具函数
-        └── yaml_loader.py  # YAML加载工具
+Project Root/
+├── run_evolution.py        # Main entry script
+├── requirements.txt        # Project dependencies
+├── .env                    # Environment variables (create this)
+├── examples/               # Example YAML files directory
+│   └── doctor.yml          # Doctor example
+└── src/                    # Source code directory
+    ├── __init__.py         # Module initialization
+    ├── cli.py              # Command line interface
+    ├── evolution.py        # Main evolution engine
+    ├── db/                 # Database utilities
+    │   └── __init__.py     # Database initialization
+    ├── llms/               # LLM providers
+    │   ├── __init__.py     # LLM module initialization
+    │   ├── base.py         # Base LLM provider interface
+    │   ├── openai.py       # OpenAI implementation
+    │   └── anthropic.py    # Anthropic implementation
+    ├── models/             # Data models
+    │   ├── __init__.py     # Models initialization
+    │   ├── agent.py        # Agent model
+    │   ├── process.py      # Process model
+    │   └── role.py         # Role model
+    └── utils/              # Utility functions
+        ├── __init__.py     # Utils initialization
+        ├── database.py     # Database utility functions
+        └── yaml_loader.py  # YAML loading utilities
 ```
 
-## 扩展
+## Extension
 
-### 添加新的LLM提供者
+### Adding New LLM Providers
 
-1. 在`src/llms/`中创建一个新提供者
-2. 实现`BaseLLMProvider`接口
-3. 将提供者添加到`src/llms/__init__.py`
-4. 更新`src/cli.py`中的CLI以支持新提供者
+1. Create a new provider in `src/llms/`
+2. Implement the `BaseLLMProvider` interface
+3. Add the provider to `src/llms/__init__.py`
+4. Update the CLI in `src/cli.py` to support the new provider
 
-### 创建自定义过程
+### Creating Custom Processes
 
-1. 基于示例创建新的YAML文件
-2. 定义节点、转换、角色和演进方法
-3. 使用CLI运行过程
+1. Create a new YAML file based on the examples
+2. Define nodes, transitions, roles, and evolution method
+3. Run the process using the CLI
+
+## Development Notes
+
+- This project uses the latest version of agir_db package
+- All database operations are performed using agir_db models, not raw SQL
+- All code comments are in English

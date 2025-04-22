@@ -61,28 +61,28 @@ process:
       description: "Doctor agent reads medical books to strengthen knowledge."
 
   transitions:
-    - from: onset
-      to: triage
-    - from: triage
-      to: registration
-    - from: registration
-      to: consultation
-    - from: consultation
-      to: examination
-    - from: examination
-      to: diagnosis
-    - from: diagnosis
-      to: dispensary
-    - from: dispensary
-      to: convalescence
-    - from: convalescence
-      to: followup
-    - from: convalescence
-      to: triage
-    - from: followup
-      to: triage
-    - from: diagnosis
-      to: reading
+    - from: Disease Onset
+      to: Triage
+    - from: Triage
+      to: Registration
+    - from: Registration
+      to: Consultation
+    - from: Consultation
+      to: Medical Examination
+    - from: Medical Examination
+      to: Diagnosis
+    - from: Diagnosis
+      to: Medicine Dispensary
+    - from: Medicine Dispensary
+      to: Convalescence
+    - from: Convalescence
+      to: Post-Hospital Follow-up
+    - from: Convalescence
+      to: Triage
+    - from: Post-Hospital Follow-up
+      to: Triage
+    - from: Diagnosis
+      to: Reading Books
 
   roles:
     - id: patient
