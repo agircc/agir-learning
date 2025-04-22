@@ -14,8 +14,14 @@ logger = logging.getLogger(__name__)
 
 # 尝试导入CustomField，如果不存在则使用自定义字段处理
 try:
-    from agir_db.models.memory import UserMemory
-    logger.info("Successfully imported CustomField from agir_db")
+    # 尝试导入新增的CustomField模型
+    try:
+        from agir_db.models.custom_fields import CustomField
+        logger.info("Successfully imported CustomField from agir_db.models.custom_fields")
+    except ImportError:
+        # 尝试从UserMemory导入
+        from agir_db.models.memory import UserMemory as CustomField
+        logger.info("Successfully imported CustomField from agir_db.models.memory")
 except ImportError:
     logger.warning("agir_db.models.custom_fields模块不存在，使用替代实现")
     

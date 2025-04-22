@@ -24,6 +24,8 @@ class OpenAIProvider(BaseLLMProvider):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY env var or pass api_key.")
+        
+        # 直接初始化OpenAI客户端，不传递任何额外参数
         self.client = openai.OpenAI(api_key=self.api_key)
         
     def generate(self, prompt: str, system_prompt: Optional[str] = None, 
