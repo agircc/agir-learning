@@ -173,6 +173,68 @@ Project Root/
         └── yaml_loader.py  # YAML loading utilities
 ```
 
+## System Flow Diagram
+
+```mermaid
+graph TD
+    A[User Input: YAML Process File] --> B[CLI Arguments Processing]
+    B --> C{Check DB Tables}
+    C -->|Tables Exist| D[ProcessManager: Create Process from YAML]
+    C -->|Tables Don't Exist| C1[Error: Run Migrations]
+    
+    D --> D1[Create/Find Target User]
+    D1 --> D2[Create/Find Process]
+    D2 --> D3[Create Process Roles]
+    D3 --> D4[Create Process Nodes]
+    D4 --> D5[Create Process Transitions]
+    D5 --> E[Initialize LLM Provider]
+    
+    E --> F[EvolutionEngine: Run Evolution with Process ID]
+    F --> G[ProcessManager: Execute Process]
+    G --> G1[Create Process Instance]
+    G1 --> H[Process Nodes Sequentially]
+    
+    H --> I{Node Type?}
+    I -->|Target User Node| J[Simulate Target User]
+    I -->|Agent Node| K[Execute Agent Logic]
+    
+    J --> L[Generate Node Response]
+    K --> L
+    
+    L --> M{More Nodes?}
+    M -->|Yes| N[Advance Process to Next Node]
+    N --> H
+    M -->|No| O[Process Evolution]
+    
+    O --> P[Generate Reflections]
+    P --> Q[Update User Knowledge]
+    Q --> R[Mark Process Complete]
+    
+    subgraph "Database Interactions"
+        DB1[(PostgreSQL DB)]
+        D1 -.-> DB1
+        D2 -.-> DB1
+        D3 -.-> DB1
+        D4 -.-> DB1
+        D5 -.-> DB1
+        G1 -.-> DB1
+        L -.-> DB1
+        N -.-> DB1
+        Q -.-> DB1
+        R -.-> DB1
+    end
+    
+    subgraph "LLM Providers"
+        LLM1[OpenAI Provider]
+        LLM2[Anthropic Provider]
+        E -.-> LLM1
+        E -.-> LLM2
+        J -.-> LLM1
+        K -.-> LLM1
+        P -.-> LLM1
+    end
+```
+
 ## Extension
 
 ### Adding New LLM Providers
