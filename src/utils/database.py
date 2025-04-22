@@ -12,63 +12,25 @@ from agir_db.models.process import Process as DBProcess
 
 logger = logging.getLogger(__name__)
 
-# 尝试导入CustomField，如果不存在则使用自定义字段处理
-try:
-    # 尝试导入新增的CustomField模型
-    try:
-        from agir_db.models.custom_fields import CustomField
-        logger.info("Successfully imported CustomField from agir_db.models.custom_fields")
-    except ImportError:
-        # 尝试从UserMemory导入
-        from agir_db.models.memory import UserMemory as CustomField
-        logger.info("Successfully imported CustomField from agir_db.models.memory")
-except ImportError:
-    logger.warning("agir_db.models.custom_fields模块不存在，使用替代实现")
+# 直接使用数据库表
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from agir_db.db.base_class import Base
+
+# 定义基于数据库表的CustomField
+class CustomField(Base):
+    __tablename__ = 'custom_fields'
+    __table_args__ = {'extend_existing': True}
     
-    # 使用现有表结构，不创建新表
-    from sqlalchemy.ext.declarative import DeclarativeMeta
-    from sqlalchemy import Column, Integer, String, Text, ForeignKey
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    field_name = Column(String(128), nullable=False)
+    field_value = Column(Text, nullable=True)
     
-    # 定义一个函数来创建或获取CustomField类
-    def get_custom_field_class():
-        from sqlalchemy.ext.declarative import declarative_base
-        from agir_db.db.base_class import Base
-        
-        # 检查表是否已存在
-        from sqlalchemy import MetaData, inspect
-        from agir_db.db.session import engine
-        
-        inspector = inspect(engine)
-        if 'custom_fields' in inspector.get_table_names():
-            # 如果表已存在，返回动态创建的模型
-            class CustomField(Base):
-                __tablename__ = 'custom_fields'
-                __table_args__ = {'extend_existing': True}
-                
-                id = Column(Integer, primary_key=True, index=True)
-                user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-                field_name = Column(String(128), nullable=False)
-                field_value = Column(Text, nullable=True)
-            
-            return CustomField
-        else:
-            # 如果表不存在，记录警告并使用内存自定义字段
-            logger.warning("custom_fields表不存在，将使用内存字段存储")
-            
-            # 创建一个简单的内存类
-            class InMemoryCustomField:
-                def __init__(self, user_id, field_name, field_value):
-                    self.user_id = user_id
-                    self.field_name = field_name
-                    self.field_value = field_value
-                    
-                def __repr__(self):
-                    return f"<InMemoryCustomField(user_id={self.user_id}, field_name={self.field_name})>"
-            
-            return InMemoryCustomField
-    
-    # 获取CustomField类
-    CustomField = get_custom_field_class()
+    # 添加与CustomFieldAdapter兼容的初始化方法
+    def __init__(self, db=None, **kwargs):
+        # 忽略db参数，保持向后兼容
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
 
 def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) -> Tuple[User, bool]:

@@ -19,15 +19,17 @@ from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
 from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record, CustomField
 from .utils.yaml_loader import load_process_from_file
 
-# Load environment variables
-load_dotenv()
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+
 
 class EvolutionEngine:
     """
