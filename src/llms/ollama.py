@@ -44,7 +44,8 @@ class OllamaProvider(BaseLLMProvider):
                 "model": self.model_name,
                 "prompt": prompt,
                 "temperature": temperature,
-                "max_tokens": max_tokens,
+                "num_predict": max_tokens,  # Ollama uses num_predict instead of max_tokens
+                "stream": False  # Get the complete response, not a stream
             }
             
             if system_prompt:
@@ -54,9 +55,19 @@ class OllamaProvider(BaseLLMProvider):
             response = requests.post(self.api_url, json=payload)
             response.raise_for_status()
             
+            # Parse the JSON response
             result = response.json()
+            logger.debug(f"Received response from Ollama: {result}")
+            
+            # Extract the response text from the result
             return result.get("response", "")
             
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error with Ollama: {str(e)}")
+            return f"Error: {str(e)}"
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing JSON from Ollama: {str(e)}")
+            return f"Error parsing response: {str(e)}"
         except Exception as e:
             logger.error(f"Error generating text with Ollama: {str(e)}")
             return f"Error: {str(e)}"
@@ -86,26 +97,40 @@ class OllamaProvider(BaseLLMProvider):
             Your response should be ONLY valid JSON with no additional text or explanation.
             """
             
-            # Use the same generate method but tell the model to return JSON
-            json_str = self.generate(
-                json_prompt, 
-                system_prompt=system_prompt or "You are a helpful assistant that only responds with valid JSON.",
-                temperature=temperature,
-                max_tokens=2000
-            )
+            # Configure the request to use either "format": "json" or provide the schema
+            # depending on the Ollama model's capabilities
+            payload = {
+                "model": self.model_name,
+                "prompt": json_prompt,
+                "temperature": temperature,
+                "num_predict": 2000,  # Ollama uses num_predict instead of max_tokens
+                "stream": False,
+                "format": schema  # Provide the full schema for structured output
+            }
             
-            # Try to parse the response as JSON
-            try:
-                # Extract JSON from the response if the model included other text
-                json_start = json_str.find('{')
-                json_end = json_str.rfind('}') + 1
-                if json_start >= 0 and json_end > json_start:
-                    json_str = json_str[json_start:json_end]
+            if system_prompt:
+                payload["system"] = system_prompt or "You are a helpful assistant that only responds with valid JSON."
                 
-                result = json.loads(json_str)
-                return result
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse JSON from Ollama response: {json_str}")
+            logger.debug(f"Sending JSON request to Ollama: {payload}")
+            response = requests.post(self.api_url, json=payload)
+            response.raise_for_status()
+            
+            # Parse the JSON response from Ollama
+            result = response.json()
+            logger.debug(f"Received JSON response from Ollama: {result}")
+            
+            # Extract the response text which contains the JSON string
+            json_str = result.get("response", "{}")
+            
+            try:
+                # Parse the JSON string into a Python dictionary
+                # The response field contains the JSON as a string that needs to be parsed
+                parsed_json = json.loads(json_str)
+                return parsed_json
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON from Ollama response: {json_str} - Error: {str(e)}")
+                # Add additional debug info in case of error
+                logger.error(f"Full Ollama response: {result}")
                 return {"error": "Failed to parse JSON from model response"}
                 
         except Exception as e:
