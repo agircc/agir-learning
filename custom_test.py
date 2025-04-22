@@ -65,7 +65,7 @@ with SessionLocal() as db:
     
     try:
         # 导入 CustomField 类
-        from src.utils.database import CustomField
+        from agir_db.models.custom_field import CustomField
         
         # 创建一个自定义字段记录
         test_field = CustomField(

@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session
 from dotenv import load_dotenv
 
 from agir_db.db.session import SessionLocal
-# 使用User模型的自定义字段，而不是直接导入可能不存在的CustomField
 from agir_db.models.user import User
-from agir_db.models.process import Process as DBProcess  # 使用正确的Process类名
+from agir_db.models.process import Process as DBProcess
+from agir_db.models.custom_field import CustomField  # 明确从agir_db包导入CustomField
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record, CustomField
+from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record
 from .utils.yaml_loader import load_process_from_file
 
 # Configure logging

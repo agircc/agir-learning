@@ -23,14 +23,6 @@ print("Environment variables:")
 print(f"SQLALCHEMY_DATABASE_URI = {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
 print(f"DATABASE_URL = {os.environ.get('DATABASE_URL')}")
 
-# 应用 CustomField 适配器
-try:
-    from custom_fields_adapter import apply_adapter
-    CustomField = apply_adapter()
-    print("Successfully applied CustomFieldAdapter")
-except Exception as e:
-    print(f"Failed to apply CustomFieldAdapter: {str(e)}")
-
 # Import the database session
 try:
     from agir_db.db.session import get_db, SessionLocal

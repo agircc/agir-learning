@@ -6,7 +6,7 @@ process:
     username: doctor_001
     first_name: "Robert"
     last_name: "Thompson"
-    gender: "Male"
+    gender: "MALE"
     birth_date: "1979-01-01" 
     profession: "Dermatologist"
     skills:

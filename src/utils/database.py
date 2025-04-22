@@ -9,29 +9,13 @@ import logging
 from sqlalchemy.orm import Session
 from agir_db.models.user import User
 from agir_db.models.process import Process as DBProcess
+from agir_db.models.custom_field import CustomField  # 导入agir_db包中的CustomField
 
 logger = logging.getLogger(__name__)
 
-# 直接使用数据库表
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
-from agir_db.db.base_class import Base
-
-# 定义基于数据库表的CustomField
-class CustomField(Base):
-    __tablename__ = 'custom_fields'
-    __table_args__ = {'extend_existing': True}
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    field_name = Column(String(128), nullable=False)
-    field_value = Column(Text, nullable=True)
-    
-    # 添加与CustomFieldAdapter兼容的初始化方法
-    def __init__(self, db=None, **kwargs):
-        # 忽略db参数，保持向后兼容
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
+# 不再需要导入这些类，因为我们直接使用agir_db的CustomField
+# from sqlalchemy import Column, Integer, String, Text, ForeignKey
+# from agir_db.db.base_class import Base
 
 def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) -> Tuple[User, bool]:
     """
@@ -61,7 +45,7 @@ def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) ->
     gender = user_data.pop("gender", None)
     birth_date = user_data.pop("birth_date", None)
     email = user_data.pop("email", f"{username}@agir.ai")  # Generate default email
-    
+    logger.info(f"gender: {gender}")
     # Create the user
     new_user = User(
         username=username,
