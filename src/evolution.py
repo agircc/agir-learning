@@ -534,8 +534,8 @@ class EvolutionEngine:
             # 保存记忆到数据库
             try:
                 # 检查memory表是否存在
-                from agir_db.models.memory import Memory
-                memory = Memory(
+                from agir_db.models.memory import UserMemory
+                memory = UserMemory(
                     user_id=agent_user.id,
                     content=f"In {node.name}: {response}",
                     metadata=json.dumps({
