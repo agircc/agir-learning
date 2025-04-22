@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from .evolution import EvolutionEngine
 from .llms import OpenAIProvider, AnthropicProvider
+from .db import check_database
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +50,12 @@ def parse_args():
         help='Enable verbose logging'
     )
     
+    parser.add_argument(
+        '--skip-db-check',
+        action='store_true',
+        help='Skip database check (not recommended)'
+    )
+    
     return parser.parse_args()
 
 
@@ -64,6 +71,14 @@ def main():
     if not os.path.exists(args.process_file):
         logger.error(f"Process file not found: {args.process_file}")
         sys.exit(1)
+    
+    # 检查数据库
+    if not args.skip_db_check:
+        logger.info("Checking database...")
+        if not check_database():
+            logger.error("Database check failed. Please ensure the database is configured correctly.")
+            sys.exit(1)
+        logger.info("Database check passed")
     
     # Create LLM provider
     llm_provider = None

@@ -11,10 +11,11 @@ from dotenv import load_dotenv
 
 from agir_db.db.session import SessionLocal
 from agir_db.models.custom_fields import CustomField
+from agir_db.models.process import ProcessRecord  # 导入数据库Process记录模型
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role
+from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record
 from .utils.yaml_loader import load_process_from_file
 
 # Load environment variables
@@ -97,6 +98,14 @@ class EvolutionEngine:
         # Create database session
         with SessionLocal() as db:
             try:
+                # 保存process实例到数据库
+                db_process = create_process_record(db, {
+                    "name": process.name,
+                    "description": process.description,
+                    "config": json.dumps(process.to_dict())
+                })
+                logger.info(f"Created process record in database with ID: {db_process.id}")
+                
                 # Get or create target user
                 target_username = process.target_user.get("username")
                 if not target_username:
@@ -109,12 +118,16 @@ class EvolutionEngine:
                 else:
                     logger.info(f"Using existing target user: {target_username}")
                 
+                # 关联用户与进程
+                db_process.user_id = target_user.id
+                db.commit()
+                
                 # Process each node in the process
                 current_node = process.nodes[0]  # Start with the first node
                 history = []  # Conversation history
                 
                 while current_node:
-                    result = self._process_node(db, process, current_node, target_user, history)
+                    result = self._process_node(db, process, current_node, target_user, history, db_process.id)
                     if not result:
                         logger.error(f"Failed to process node: {current_node.id}")
                         return False
@@ -135,14 +148,23 @@ class EvolutionEngine:
                         logger.info("Reached end of process or no valid next node")
                         break
                 
+                # 更新process状态为已完成
+                db_process.status = "completed"
+                db.commit()
+                
                 # Process evolution
-                self._process_evolution(db, process, target_user, history)
+                self._process_evolution(db, process, target_user, history, db_process.id)
                 
                 logger.info(f"Evolution process completed successfully: {process.name}")
                 return True
                 
             except Exception as e:
                 logger.error(f"Error in evolution process: {str(e)}")
+                # 如果出错，更新process状态为失败
+                if 'db_process' in locals():
+                    db_process.status = "failed"
+                    db_process.error_message = str(e)
+                    db.commit()
                 return False
                 
     def _process_node(
@@ -151,7 +173,8 @@ class EvolutionEngine:
         process: Process, 
         node: ProcessNode, 
         target_user: Any,
-        history: List[Dict[str, Any]]
+        history: List[Dict[str, Any]],
+        process_id: int = None
     ) -> Optional[Tuple[ProcessNode, str, Optional[ProcessNode]]]:
         """
         Process a single node in the process.
@@ -162,16 +185,39 @@ class EvolutionEngine:
             node: Current node to process
             target_user: Target user
             history: Conversation history
+            process_id: 数据库中的进程ID
             
         Returns:
             Tuple of (processed_node, response, next_node) or None if failed
         """
         logger.info(f"Processing node: {node.id} - {node.name}")
         
+        # 保存节点执行记录到数据库
+        if process_id:
+            try:
+                from agir_db.models.node import NodeRecord
+                node_record = NodeRecord(
+                    process_id=process_id,
+                    node_id=node.id,
+                    name=node.name,
+                    role=node.role,
+                    status="started"
+                )
+                db.add(node_record)
+                db.commit()
+                node_record_id = node_record.id
+                logger.info(f"Created node record with ID: {node_record_id}")
+            except Exception as e:
+                logger.error(f"Failed to create node record: {str(e)}")
+                node_record_id = None
+        else:
+            node_record_id = None
+        
         # Get the role
         role = process.get_role(node.role)
         if not role:
             logger.error(f"Role not found for node: {node.id}, role: {node.role}")
+            self._update_node_status(db, node_record_id, "failed", error="Role not found")
             return None
             
         # Check if this node is assigned to the target user
@@ -225,7 +271,26 @@ class EvolutionEngine:
                 metadata={"node_id": node.id, "process_id": process.id}
             )
             
-            # In a real system, we would persist the agent memories to the database
+            # 保存记忆到数据库
+            try:
+                from agir_db.models.memory import Memory
+                memory = Memory(
+                    user_id=agent_user.id,
+                    content=f"In {node.name}: {response}",
+                    metadata=json.dumps({
+                        "node_id": node.id, 
+                        "process_id": process.id,
+                        "node_name": node.name
+                    })
+                )
+                db.add(memory)
+                db.commit()
+                logger.info(f"Saved agent memory to database for user {agent_user.id}")
+            except Exception as e:
+                logger.error(f"Failed to save agent memory: {str(e)}")
+        
+        # 更新节点状态为已完成
+        self._update_node_status(db, node_record_id, "completed", response=response)
         
         # Determine next node
         next_nodes = process.next_nodes(node.id)
@@ -237,6 +302,25 @@ class EvolutionEngine:
         next_node = next_nodes[0]
         
         return node, response, next_node
+    
+    def _update_node_status(self, db: Session, node_record_id: int, status: str, response: str = None, error: str = None):
+        """更新节点执行记录状态"""
+        if not node_record_id:
+            return
+            
+        try:
+            from agir_db.models.node import NodeRecord
+            node_record = db.query(NodeRecord).filter(NodeRecord.id == node_record_id).first()
+            if node_record:
+                node_record.status = status
+                if response:
+                    node_record.response = response
+                if error:
+                    node_record.error_message = error
+                db.commit()
+                logger.info(f"Updated node record {node_record_id} status to {status}")
+        except Exception as e:
+            logger.error(f"Failed to update node record status: {str(e)}")
     
     def _generate_node_context(
         self, 
@@ -337,7 +421,8 @@ class EvolutionEngine:
         db: Session, 
         process: Process, 
         target_user: Any,
-        history: List[Dict[str, Any]]
+        history: List[Dict[str, Any]],
+        process_id: int = None
     ) -> None:
         """
         Process the evolution of the target user based on the completed process.
@@ -347,6 +432,7 @@ class EvolutionEngine:
             process: Process instance
             target_user: Target user
             history: Conversation history
+            process_id: 数据库中的进程ID
         """
         logger.info(f"Processing evolution for user: {target_user.username}")
         
@@ -388,9 +474,21 @@ class EvolutionEngine:
             max_tokens=2000
         )
         
-        # In a real system, we would store this reflection in the database
-        # For now, log it
-        logger.info(f"Evolution reflection for {target_user.username}:\n{reflection}")
+        # 保存进化反思到数据库
+        if process_id:
+            try:
+                from agir_db.models.evolution import EvolutionRecord
+                evolution_record = EvolutionRecord(
+                    process_id=process_id,
+                    user_id=target_user.id,
+                    method=evolution_method,
+                    reflection=reflection
+                )
+                db.add(evolution_record)
+                db.commit()
+                logger.info(f"Saved evolution reflection to database for process {process_id}")
+            except Exception as e:
+                logger.error(f"Failed to save evolution reflection: {str(e)}")
         
         # Store as a custom field for the user
         evolution_field_name = f"evolution_{process.id}"

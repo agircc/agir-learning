@@ -188,4 +188,54 @@ class Process(BaseModel):
             transitions=transitions,
             roles=roles,
             evolution=process_data.get("evolution", {})
-        ) 
+        )
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        将Process对象转换为字典，用于序列化到数据库
+        
+        Returns:
+            字典表示
+        """
+        # 转换nodes
+        nodes_list = []
+        for node in self.nodes:
+            node_dict = {
+                "id": node.id,
+                "name": node.name,
+                "role": node.role,
+                "description": node.description
+            }
+            if node.assigned_to:
+                node_dict["assigned_to"] = node.assigned_to
+            nodes_list.append(node_dict)
+            
+        # 转换transitions
+        transitions_list = []
+        for transition in self.transitions:
+            transitions_list.append({
+                "from": transition.from_node,
+                "to": transition.to_node
+            })
+            
+        # 转换roles
+        roles_list = []
+        for role in self.roles:
+            roles_list.append({
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+                "system_prompt": role.system_prompt
+            })
+            
+        # 构建完整字典
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "target_user": self.target_user,
+            "nodes": nodes_list,
+            "transitions": transitions_list,
+            "roles": roles_list,
+            "evolution": self.evolution
+        } 

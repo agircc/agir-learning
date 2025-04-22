@@ -8,6 +8,7 @@ import logging
 from sqlalchemy.orm import Session
 from agir_db.models.user import User
 from agir_db.models.custom_fields import CustomField
+from agir_db.models.process import ProcessRecord
 
 logger = logging.getLogger(__name__)
 
@@ -201,4 +202,33 @@ def find_agent_by_role(db: Session, role: str, created_by_id: Optional[int] = No
     if result:
         return result[1]  # Return the User object
     
-    return None 
+    return None
+
+
+def create_process_record(db: Session, process_data: Dict[str, Any]) -> ProcessRecord:
+    """
+    创建进程记录到数据库
+    
+    Args:
+        db: 数据库会话
+        process_data: 进程数据
+        
+    Returns:
+        ProcessRecord 实例
+    """
+    logger.info(f"Creating process record: {process_data.get('name', 'Unnamed')}")
+    
+    # 创建进程记录
+    process_record = ProcessRecord(
+        name=process_data.get("name", "Unnamed Process"),
+        description=process_data.get("description", ""),
+        config=process_data.get("config", "{}"),
+        status="started"
+    )
+    
+    db.add(process_record)
+    db.commit()
+    db.refresh(process_record)
+    
+    logger.info(f"Created process record with ID: {process_record.id}")
+    return process_record 
