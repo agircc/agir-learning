@@ -221,7 +221,7 @@ class ProcessManager:
             
             # If still no creator_id, find an admin user
             if not creator_id:
-                admin_user = db.query(User).filter(User.status == "ACTIVE").first()
+                admin_user = db.query(User).filter(User.is_active == True).first()
                 if admin_user:
                     creator_id = str(admin_user.id)
                     logger.info(f"Using first active user as process creator: {admin_user.username}")
@@ -633,11 +633,22 @@ class ProcessManager:
                 logger.error(f"Process instance not found: {instance_id}")
                 return False
             
-            # Update status
+            # Update status - check available enum values
             if success:
                 instance.status = ProcessInstanceStatus.COMPLETED
             else:
-                instance.status = ProcessInstanceStatus.FAILED
+                # Try to use FAILED, TERMINATED, or CANCELLED, depending on what's available
+                # We do this to be compatible with different versions of agir_db
+                if hasattr(ProcessInstanceStatus, 'FAILED'):
+                    instance.status = ProcessInstanceStatus.FAILED
+                elif hasattr(ProcessInstanceStatus, 'TERMINATED'):
+                    instance.status = ProcessInstanceStatus.TERMINATED
+                elif hasattr(ProcessInstanceStatus, 'CANCELLED'):
+                    instance.status = ProcessInstanceStatus.CANCELLED
+                else:
+                    # If none of these are available, fall back to a string value
+                    instance.status = 'failed'
+                    logger.warning("ProcessInstanceStatus enum doesn't have FAILED/TERMINATED/CANCELLED; using string value 'failed'")
             
             db.commit()
             logger.info(f"Completed process instance {instance_id} with status: {instance.status}")

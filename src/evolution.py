@@ -117,7 +117,7 @@ class EvolutionEngine:
                 
                 # Try to find a user who would be appropriate for this process
                 # This could be improved to check for users with specific roles/permissions
-                user = db.query(User).filter(User.status == 'ACTIVE').first()
+                user = db.query(User).filter(User.is_active == True).first()
                 if not user:
                     logger.error("No active users found in the database")
                     return False
@@ -156,11 +156,25 @@ class EvolutionEngine:
                     logger.error(f"Node with ID {current_node_id} not found")
                     return False
                 
+                # Fetch all roles from the database
+                from agir_db.models.process_role import ProcessRole
+                roles = []
+                db_roles = db.query(ProcessRole).filter(ProcessRole.process_id == process_id).all()
+                
+                for db_role in db_roles:
+                    from .models.role import Role
+                    roles.append(Role(
+                        id=str(db_role.id),
+                        name=db_role.name,
+                        description=db_role.description,
+                        system_prompt_template=""
+                    ))
+                
                 # Convert DB node to model node for processing
                 current_node = ProcessNode(
                     id=str(current_db_node.id),
                     name=current_db_node.name,
-                    role=current_db_node.role.id if current_db_node.role else "unknown",
+                    role=str(current_db_node.role.id) if current_db_node.role else "unknown",
                     description=current_db_node.description
                 )
                 
@@ -174,7 +188,7 @@ class EvolutionEngine:
                     description=db_process.description,
                     nodes=[current_node],  # Start with just the current node
                     transitions=[],  # We'll use ProcessManager for transitions
-                    roles=[]  # We'll look up roles as needed
+                    roles=roles  # Use the roles we fetched from the database
                 )
                 
                 # Process the current node
@@ -396,6 +410,10 @@ class EvolutionEngine:
         """
         logger.info(f"Processing node: {node.id} - {node.name}")
         
+        # Ensure node.role is a string
+        if not isinstance(node.role, str):
+            node.role = str(node.role)
+        
         # 保存节点执行记录到数据库
         node_record_id = None
         if process_id:
@@ -479,13 +497,20 @@ class EvolutionEngine:
             # Generate context for this node
             context = self._generate_node_context(process, node, history, agent_user)
             
+            # Debug information
+            logger.info(f"Agent user ID: {agent_user.id}, type: {type(agent_user.id)}")
+            logger.info(f"Agent user ID after str conversion: {str(agent_user.id)}, type: {type(str(agent_user.id))}")
+            
             # Create agent model
             agent = Agent(
-                id=agent_user.id,
+                id=str(agent_user.id),
                 name=role.name,
                 role=node.role,
                 description=role.description
             )
+            
+            # Debug information
+            logger.info(f"Created agent with ID: {agent.id}, type: {type(agent.id)}")
             
             # Generate system prompt
             system_prompt = role.format_system_prompt(context)
