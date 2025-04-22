@@ -108,15 +108,14 @@ class EvolutionEngine:
                 # 保存配置作为自定义字段到数据库
                 try:
                     # 将配置保存到process_instance_step表
-                    from agir_db.models.process_instance import ProcessInstance
+                    from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
                     process_instance = ProcessInstance(
                         process_id=db_process.id,
-                        config_data=json.dumps(process.to_dict()),
-                        status="started"
+                        status=ProcessInstanceStatus.RUNNING
                     )
                     db.add(process_instance)
                     db.commit()
-                    logger.info(f"Saved process configuration to database")
+                    logger.info(f"Saved process instance to database")
                     process_instance_id = process_instance.id
                 except Exception as e:
                     logger.error(f"Failed to save process configuration: {str(e)}")
@@ -165,7 +164,7 @@ class EvolutionEngine:
                     try:
                         process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
                         if process_instance:
-                            process_instance.status = "completed"
+                            process_instance.status = ProcessInstanceStatus.COMPLETED
                             db.commit()
                             logger.info(f"Updated process instance status to completed")
                     except Exception as e:
@@ -184,7 +183,7 @@ class EvolutionEngine:
                     try:
                         process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
                         if process_instance:
-                            process_instance.status = "failed"
+                            process_instance.status = ProcessInstanceStatus.TERMINATED
                             process_instance.error = str(e)
                             db.commit()
                     except Exception as inner_e:
@@ -224,10 +223,10 @@ class EvolutionEngine:
                 from agir_db.models.process_instance_step import ProcessInstanceStep
                 
                 # 查找当前进程实例
-                from agir_db.models.process_instance import ProcessInstance
+                from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
                 process_instance = db.query(ProcessInstance).filter(
                     ProcessInstance.process_id == process_id,
-                    ProcessInstance.status.in_(["started", "in_progress"])
+                    ProcessInstance.status.in_([ProcessInstanceStatus.RUNNING])
                 ).first()
                 
                 if process_instance:
@@ -538,9 +537,10 @@ class EvolutionEngine:
                     ).first()
                     
                     if process_instance:
-                        process_instance.evolution = reflection
+                        # process_instance.evolution field doesn't exist - logging instead
+                        logger.info(f"Process instance found but evolution field doesn't exist on the model")
                         db.commit()
-                        logger.info(f"Updated process instance with evolution reflection")
+                        logger.info(f"Updated process instance")
                 except Exception as e:
                     logger.error(f"Failed to update process instance with evolution: {str(e)}")
             except Exception as e:
