@@ -98,6 +98,18 @@ class EvolutionEngine:
         # Create database session
         with SessionLocal() as db:
             try:
+                # Get or create target user first
+                target_username = process.target_user.get("username")
+                if not target_username:
+                    logger.error("Target user username not specified in process")
+                    return False
+                
+                target_user, created = get_or_create_user(db, target_username, process.target_user)
+                if created:
+                    logger.info(f"Created new target user: {target_username}")
+                else:
+                    logger.info(f"Using existing target user: {target_username}")
+                
                 # 保存process实例到数据库
                 db_process = create_process_record(db, {
                     "name": process.name,
@@ -109,18 +121,6 @@ class EvolutionEngine:
                 try:
                     # 将配置保存到process_instance表
                     from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
-                    
-                    # Get or create target user first
-                    target_username = process.target_user.get("username")
-                    if not target_username:
-                        logger.error("Target user username not specified in process")
-                        return False
-                    
-                    target_user, created = get_or_create_user(db, target_username, process.target_user)
-                    if created:
-                        logger.info(f"Created new target user: {target_username}")
-                    else:
-                        logger.info(f"Using existing target user: {target_username}")
                     
                     # Now create the process instance with target_user.id
                     process_instance = ProcessInstance(
@@ -525,6 +525,7 @@ class EvolutionEngine:
             try:
                 # 使用custom_fields保存进化反思
                 evolution_field = CustomField(
+                    db=db,
                     user_id=target_user.id,
                     field_name=f"evolution_{process_id}",
                     field_value=reflection
@@ -565,22 +566,13 @@ class EvolutionEngine:
         else:
             # Create new field
             try:
-                # Check if CustomField requires db parameter
-                import inspect
-                custom_field_params = inspect.signature(CustomField.__init__).parameters
-                if 'db' in custom_field_params:
-                    evolution_field = CustomField(
-                        db=db,
-                        user_id=target_user.id,
-                        field_name=evolution_field_name,
-                        field_value=reflection
-                    )
-                else:
-                    evolution_field = CustomField(
-                        user_id=target_user.id,
-                        field_name=evolution_field_name,
-                        field_value=reflection
-                    )
+                # Always use db parameter with CustomField
+                evolution_field = CustomField(
+                    db=db,
+                    user_id=target_user.id,
+                    field_name=evolution_field_name,
+                    field_value=reflection
+                )
                 db.add(evolution_field)
             except Exception as e:
                 logger.error(f"Failed to create CustomField: {str(e)}")
