@@ -238,15 +238,10 @@ class EvolutionEngine:
                 if process_instance:
                     # 创建步骤记录
                     node_record = ProcessInstanceStep(
-                        process_instance_id=process_instance.id,
-                        step_id=node.id,
-                        name=node.name,
-                        role=node.role,
-                        status="started",
-                        data=json.dumps({
-                            "description": node.description,
-                            "assigned_to": node.assigned_to
-                        })
+                        instance_id=process_instance.id,
+                        node_id=node.id,
+                        comment=node.description,
+                        user_id=node.assigned_to,
                     )
                     db.add(node_record)
                     db.commit()
