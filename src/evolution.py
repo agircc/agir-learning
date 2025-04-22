@@ -5,6 +5,8 @@ Evolution module - handles the main evolution process
 import os
 import logging
 import json
+import uuid
+from uuid import UUID
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from dotenv import load_dotenv
@@ -135,9 +137,54 @@ class EvolutionEngine:
                     db.commit()
                     logger.info(f"Saved process instance to database")
                     process_instance_id = process_instance.id
+                    
+                    # Create ProcessNode records in the database for each node in the process
+                    from agir_db.models.process import ProcessNode as DBProcessNode, ProcessRole
+                    
+                    # Dictionary to store mapping from YAML node IDs to database node IDs
+                    node_id_mapping = {}
+                    
+                    # First, create role records
+                    role_id_mapping = {}
+                    for role in process.roles:
+                        db_role = ProcessRole(
+                            process_id=db_process.id,
+                            name=role.name,
+                            description=role.description
+                        )
+                        db.add(db_role)
+                        db.flush()  # Get the ID without committing
+                        role_id_mapping[role.id] = db_role.id
+                    
+                    # Now create node records
+                    for node in process.nodes:
+                        # Get the role ID from the mapping
+                        role_id = role_id_mapping.get(node.role)
+                        
+                        db_node = DBProcessNode(
+                            process_id=db_process.id,
+                            name=node.name,
+                            description=node.description,
+                            role_id=role_id
+                        )
+                        db.add(db_node)
+                        db.flush()  # Get the ID without committing
+                        node_id_mapping[node.id] = db_node.id
+                    
+                    db.commit()
+                    logger.info(f"Created {len(node_id_mapping)} process node records in database")
+                    
+                    # Store the mapping in the process instance for later use
+                    config = json.loads(process_instance.config) if process_instance.config else {}
+                    config["node_id_mapping"] = {k: str(v) for k, v in node_id_mapping.items()}
+                    process_instance.config = json.dumps(config)
+                    db.commit()
+                
                 except Exception as e:
+                    db.rollback()
                     logger.error(f"Failed to save process configuration: {str(e)}")
                     process_instance_id = None
+                    node_id_mapping = {}
                 
                 # Process each node in the process
                 current_node = process.nodes[0]  # Start with the first node
@@ -187,6 +234,7 @@ class EvolutionEngine:
                 # 如果出错，更新process实例状态为失败
                 if 'process_instance_id' in locals() and process_instance_id:
                     try:
+                        db.rollback()  # Rollback any pending transaction
                         process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
                         if process_instance:
                             process_instance.status = ProcessInstanceStatus.TERMINATED
@@ -236,17 +284,38 @@ class EvolutionEngine:
                 ).first()
                 
                 if process_instance:
-                    # 创建步骤记录
-                    node_record = ProcessInstanceStep(
-                        instance_id=process_instance.id,
-                        node_id=node.id,
-                        comment=node.description,
-                        user_id=node.assigned_to,
-                    )
-                    db.add(node_record)
-                    db.commit()
-                    node_record_id = node_record.id
-                    logger.info(f"Created node record with ID: {node_record_id}")
+                    try:
+                        # Get the node_id_mapping from process_instance config
+                        config = {}
+                        if process_instance.config:
+                            config = json.loads(process_instance.config)
+                        
+                        node_id_mapping = config.get("node_id_mapping", {})
+                        
+                        # Get the database node ID for this YAML node
+                        db_node_id = node_id_mapping.get(node.id)
+                        
+                        if db_node_id:
+                            # Create the step record with the database node ID
+                            node_record = ProcessInstanceStep(
+                                instance_id=process_instance.id,
+                                node_id=db_node_id,  # Convert to UUID
+                                comment=node.description,
+                                user_id=node.assigned_to if node.assigned_to else None,
+                                action="process"  # Add a default action since it's required
+                            )
+                            db.add(node_record)
+                            db.commit()
+                            node_record_id = node_record.id
+                            logger.info(f"Created node record with ID: {node_record_id}")
+                        else:
+                            # If no mapping exists, log an error
+                            logger.error(f"No database node ID found for YAML node ID: {node.id}")
+                    except Exception as e:
+                        db.rollback()
+                        logger.error(f"Failed to create node record due to database error: {str(e)}")
+                        # Continue execution without the node record
+                        node_record_id = None
                 else:
                     logger.warning(f"No active process instance found for process ID: {process_id}")
             except Exception as e:
@@ -343,7 +412,7 @@ class EvolutionEngine:
         
         return node, response, next_node
     
-    def _update_node_status(self, db: Session, node_record_id: int, status: str, response: str = None, error: str = None):
+    def _update_node_status(self, db: Session, node_record_id: Any, status: str, response: str = None, error: str = None):
         """更新节点执行记录状态"""
         if not node_record_id:
             return
@@ -353,15 +422,23 @@ class EvolutionEngine:
             from agir_db.models.process_instance_step import ProcessInstanceStep
             node_record = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == node_record_id).first()
             if node_record:
-                node_record.status = status
-                if response:
-                    # 更新response字段
+                # Check if the model has a status field before trying to update it
+                if hasattr(node_record, 'status'):
+                    node_record.status = status
+                else:
+                    # If status field doesn't exist, log a warning
+                    logger.warning(f"ProcessInstanceStep model doesn't have a status field, skipping status update")
+                
+                # Update response if the field exists and a value is provided
+                if response and hasattr(node_record, 'response'):
                     node_record.response = response
-                if error:
-                    # 更新error字段
+                
+                # Update error if the field exists and a value is provided
+                if error and hasattr(node_record, 'error'):
                     node_record.error = error
+                
                 db.commit()
-                logger.info(f"Updated node record {node_record_id} status to {status}")
+                logger.info(f"Updated node record {node_record_id}")
         except Exception as e:
             logger.error(f"Failed to update node record status: {str(e)}")
     

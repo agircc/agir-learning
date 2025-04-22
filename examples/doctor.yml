@@ -16,56 +16,46 @@ process:
     evolution_objective: "Improve diagnostic and treatment accuracy for skin-related diseases through repeated patient interactions and reflection."
 
   nodes:
-    - id: onset
-      name: "Disease Onset"
+    - name: "Disease Onset"
       role: "patient"
       description: "Patient experiences symptoms and decides to visit the hospital."
 
-    - id: triage
-      name: "Triage"
+    - name: "Triage"
       role: "nurse"
       description: "Nurse conducts initial assessment and determines the appropriate department."
 
-    - id: registration
-      name: "Registration"
+    - name: "Registration"
       role: "nurse"
       description: "Patient registers and waits for doctor consultation."
 
-    - id: consultation
-      name: "Consultation"
+    - name: "Consultation"
       role: "doctor"
       assigned_to: "doctor_001"
       description: "Doctor listens to symptoms and decides on required medical examination."
 
-    - id: examination
-      name: "Medical Examination"
+    - name: "Medical Examination"
       role: "nurse"
       description: "Nurse performs or assists with medical tests and generates reports."
 
-    - id: diagnosis
-      name: "Diagnosis"
+    - name: "Diagnosis"
       role: "doctor"
       assigned_to: "doctor_001"
       description: "Doctor reviews reports and provides diagnosis."
 
-    - id: dispensary
-      name: "Medicine Dispensary"
+    - name: "Medicine Dispensary"
       role: "nurse"
       description: "Patient receives medication based on prescription."
 
-    - id: convalescence
-      name: "Convalescence"
+    - name: "Convalescence"
       role: "patient"
       description: "Patient returns home and recovers. May return if not healed."
 
-    - id: followup
-      name: "Post-Hospital Follow-up"
+    - name: "Post-Hospital Follow-up"
       role: "doctor"
       assigned_to: "doctor_001"
       description: "Doctor handles patient follow-up and complaints."
 
-    - id: reading
-      name: "Reading Books"
+    - name: "Reading Books"
       role: "doctor"
       assigned_to: "doctor_001"
       description: "Doctor agent reads medical books to strengthen knowledge."
