@@ -109,7 +109,6 @@ def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) ->
         birth_date=birth_date,
         email=email,
         is_active=True,
-        is_virtual=True,  # These are virtual users for the learning system
     )
     
     db.add(new_user)
@@ -205,7 +204,6 @@ def create_or_update_agent(db: Session, agent_data: Dict[str, Any], created_by_i
         last_name=last_name,
         email=email,
         is_active=True,
-        is_virtual=True,
         created_by_id=created_by_id
     )
     
@@ -249,8 +247,7 @@ def find_agent_by_role(db: Session, role: str, created_by_id: Optional[int] = No
     query = db.query(CustomField, User) \
         .filter(CustomField.field_name == "role") \
         .filter(CustomField.field_value == role) \
-        .filter(CustomField.user_id == User.id) \
-        .filter(User.is_virtual == True)
+        .filter(CustomField.user_id == User.id)
     
     if created_by_id is not None:
         query = query.filter(User.created_by_id == created_by_id)

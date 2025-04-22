@@ -111,7 +111,7 @@ class EvolutionEngine:
                     from agir_db.models.process_instance import ProcessInstance
                     process_instance = ProcessInstance(
                         process_id=db_process.id,
-                        data=json.dumps(process.to_dict()),
+                        config_data=json.dumps(process.to_dict()),
                         status="started"
                     )
                     db.add(process_instance)
@@ -560,11 +560,26 @@ class EvolutionEngine:
             existing_field.field_value = reflection
         else:
             # Create new field
-            evolution_field = CustomField(
-                user_id=target_user.id,
-                field_name=evolution_field_name,
-                field_value=reflection
-            )
-            db.add(evolution_field)
+            try:
+                # Check if CustomField requires db parameter
+                import inspect
+                custom_field_params = inspect.signature(CustomField.__init__).parameters
+                if 'db' in custom_field_params:
+                    evolution_field = CustomField(
+                        db=db,
+                        user_id=target_user.id,
+                        field_name=evolution_field_name,
+                        field_value=reflection
+                    )
+                else:
+                    evolution_field = CustomField(
+                        user_id=target_user.id,
+                        field_name=evolution_field_name,
+                        field_value=reflection
+                    )
+                db.add(evolution_field)
+            except Exception as e:
+                logger.error(f"Failed to create CustomField: {str(e)}")
+                return
             
         db.commit() 

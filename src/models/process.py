@@ -225,7 +225,7 @@ class Process(BaseModel):
                 "id": role.id,
                 "name": role.name,
                 "description": role.description,
-                "system_prompt": role.system_prompt
+                "system_prompt_template": role.system_prompt_template
             })
             
         # 构建完整字典
