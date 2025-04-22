@@ -240,10 +240,11 @@ class EvolutionEngine:
                 else:
                     logger.info(f"Using existing target user: {target_username}")
                 
-                # 保存process实例到数据库
+                # 保存process实例到数据库，使用target_user.id作为created_by
                 db_process = create_process_record(db, {
                     "name": process.name,
-                    "description": process.description
+                    "description": process.description,
+                    "created_by": str(target_user.id)  # Use target_user.id as the creator
                 })
                 logger.info(f"Created process record in database with ID: {db_process.id}")
                 

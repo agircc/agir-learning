@@ -5,13 +5,15 @@ Process Manager - handles creation and execution of processes
 import os
 import logging
 import json
+import uuid
 from typing import Dict, Any, List, Optional, Tuple, Union
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User
-from agir_db.models.process import Process, ProcessNode, ProcessRole, ProcessTransition
+from agir_db.models.process_role import ProcessRole
+from agir_db.models.process import Process, ProcessNode, ProcessTransition
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.process_instance_step import ProcessInstanceStep
 
@@ -94,7 +96,7 @@ class ProcessManager:
                 return None
             
             # 2. Create or find process
-            process_id = ProcessManager._create_or_find_process(db, yaml_process, created_by)
+            process_id = ProcessManager._create_or_find_process(db, yaml_process, created_by, target_user_id)
             if not process_id:
                 return None
             
@@ -175,14 +177,15 @@ class ProcessManager:
             return None
     
     @staticmethod
-    def _create_or_find_process(db: Session, yaml_process: YamlProcess, created_by: Optional[str] = None) -> Optional[int]:
+    def _create_or_find_process(db: Session, yaml_process: YamlProcess, created_by: Optional[str] = None, default_user_id: Optional[int] = None) -> Optional[int]:
         """
         Create or find process based on YAML process.
         
         Args:
             db: Database session
             yaml_process: YAML process object
-            created_by: Username of creator
+            created_by: Username of creator (optional)
+            default_user_id: User ID to use as default creator if created_by is None
             
         Returns:
             Optional[int]: ID of the process if successful, None otherwise
@@ -201,16 +204,41 @@ class ProcessManager:
                 logger.info(f"Found existing process: {process_name}")
                 return process.id
             
-            # Create new process
+            # If created_by is None, use default_user_id or find the first admin user
+            creator_id = None
+            if created_by:
+                # Find user by username
+                creator = db.query(User).filter(User.username == created_by).first()
+                if creator:
+                    creator_id = str(creator.id)
+                else:
+                    logger.warning(f"User with username {created_by} not found")
+            
+            # If still no creator_id, use default_user_id
+            if not creator_id and default_user_id:
+                creator_id = str(default_user_id)
+                logger.info(f"Using target user as process creator since created_by was not provided")
+            
+            # If still no creator_id, find an admin user
+            if not creator_id:
+                admin_user = db.query(User).filter(User.status == "ACTIVE").first()
+                if admin_user:
+                    creator_id = str(admin_user.id)
+                    logger.info(f"Using first active user as process creator: {admin_user.username}")
+                else:
+                    logger.error("No active users found in database to use as process creator")
+                    return None
+            
+            # Create new process with the determined creator_id
             process = Process(
                 name=process_name,
                 description=yaml_process.description,
-                created_by=created_by
+                created_by=creator_id
             )
             
             db.add(process)
             db.commit()
-            logger.info(f"Created new process: {process_name} with ID: {process.id}")
+            logger.info(f"Created new process: {process_name} with ID: {process.id}, creator ID: {creator_id}")
             
             return process.id
             

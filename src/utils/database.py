@@ -208,21 +208,34 @@ def find_agent_by_role(db: Session, role: str, created_by_id: Optional[int] = No
 
 def create_process_record(db: Session, process_data: Dict[str, Any]) -> DBProcess:
     """
-    创建进程记录到数据库
+    Create a process record in the database
     
     Args:
-        db: 数据库会话
-        process_data: 进程数据
+        db: Database session
+        process_data: Process data, should include 'name', 'description', and optionally 'created_by'
         
     Returns:
-        DBProcess 实例
+        DBProcess instance
     """
     logger.info(f"Creating process record: {process_data.get('name', 'Unnamed')}")
     
-    # 创建进程记录
+    # Make sure we have a created_by value (required by the database)
+    created_by = process_data.get("created_by")
+    if not created_by:
+        # Find an active user to use as creator
+        active_user = db.query(User).filter(User.is_active == True).first()
+        if active_user:
+            created_by = str(active_user.id)
+            logger.info(f"Using active user ID {active_user.id} as process creator")
+        else:
+            logger.error("No active users found to use as process creator")
+            raise ValueError("No active users found to use as process creator. Please create a user first.")
+    
+    # Create process record
     process_record = DBProcess(
         name=process_data.get("name", "Unnamed Process"),
-        description=process_data.get("description", "")
+        description=process_data.get("description", ""),
+        created_by=created_by
     )
     
     db.add(process_record)
