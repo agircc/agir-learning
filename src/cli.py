@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from .evolution import EvolutionEngine
 from .process_manager import ProcessManager  # Import the new ProcessManager
-from .llms import OpenAIProvider, AnthropicProvider
+from .llms import OpenAIProvider, AnthropicProvider, OllamaProvider
 from .db import check_database
 
 # Load environment variables
@@ -35,7 +35,7 @@ def parse_args():
     
     parser.add_argument(
         '--model',
-        choices=['openai', 'anthropic', 'dummy'],
+        choices=['openai', 'anthropic', 'ollama', 'dummy'],
         default='openai',
         help='LLM provider to use (default: openai)'
     )
@@ -155,6 +155,18 @@ def main():
             llm_provider = AnthropicProvider(model_name=model_name)
         except Exception as e:
             logger.error(f"Failed to initialize Anthropic provider: {str(e)}")
+            logger.info("Falling back to dummy provider for debugging")
+            llm_provider = DummyProvider()
+    elif args.model == 'ollama':
+        model_name = args.model_name or 'phi'
+        ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434/api/generate')
+        try:
+            # Set the OLLAMA_URL environment variable for the provider
+            os.environ['OLLAMA_URL'] = ollama_url
+            logger.info(f"Using Ollama provider with model {model_name} at {ollama_url}")
+            llm_provider = OllamaProvider(model_name=model_name)
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama provider: {str(e)}")
             logger.info("Falling back to dummy provider for debugging")
             llm_provider = DummyProvider()
     

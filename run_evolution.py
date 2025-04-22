@@ -22,6 +22,7 @@ load_dotenv()
 print("Environment variables:")
 print(f"SQLALCHEMY_DATABASE_URI = {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
 print(f"DATABASE_URL = {os.environ.get('DATABASE_URL')}")
+print(f"OLLAMA_URL = {os.environ.get('OLLAMA_URL', 'http://localhost:11434/api/generate')}")
 
 # Import the database session
 try:
