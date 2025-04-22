@@ -107,11 +107,27 @@ class EvolutionEngine:
                 
                 # 保存配置作为自定义字段到数据库
                 try:
-                    # 将配置保存到process_instance_step表
+                    # 将配置保存到process_instance表
                     from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
+                    
+                    # Get or create target user first
+                    target_username = process.target_user.get("username")
+                    if not target_username:
+                        logger.error("Target user username not specified in process")
+                        return False
+                    
+                    target_user, created = get_or_create_user(db, target_username, process.target_user)
+                    if created:
+                        logger.info(f"Created new target user: {target_username}")
+                    else:
+                        logger.info(f"Using existing target user: {target_username}")
+                    
+                    # Now create the process instance with target_user.id
                     process_instance = ProcessInstance(
                         process_id=db_process.id,
-                        status=ProcessInstanceStatus.RUNNING
+                        initiator_id=target_user.id,  # Now we have target_user.id
+                        status=ProcessInstanceStatus.RUNNING,
+                        config=json.dumps(process.to_dict())
                     )
                     db.add(process_instance)
                     db.commit()
@@ -120,18 +136,6 @@ class EvolutionEngine:
                 except Exception as e:
                     logger.error(f"Failed to save process configuration: {str(e)}")
                     process_instance_id = None
-                
-                # Get or create target user
-                target_username = process.target_user.get("username")
-                if not target_username:
-                    logger.error("Target user username not specified in process")
-                    return False
-                
-                target_user, created = get_or_create_user(db, target_username, process.target_user)
-                if created:
-                    logger.info(f"Created new target user: {target_username}")
-                else:
-                    logger.info(f"Using existing target user: {target_username}")
                 
                 # Process each node in the process
                 current_node = process.nodes[0]  # Start with the first node
@@ -537,10 +541,10 @@ class EvolutionEngine:
                     ).first()
                     
                     if process_instance:
-                        # process_instance.evolution field doesn't exist - logging instead
-                        logger.info(f"Process instance found but evolution field doesn't exist on the model")
+                        # Update the evolution field with reflection
+                        process_instance.evolution = reflection
                         db.commit()
-                        logger.info(f"Updated process instance")
+                        logger.info(f"Updated process instance with evolution reflection")
                 except Exception as e:
                     logger.error(f"Failed to update process instance with evolution: {str(e)}")
             except Exception as e:
