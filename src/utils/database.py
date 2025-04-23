@@ -150,7 +150,7 @@ def create_or_update_agent(db: Session, agent_data: Dict[str, Any], created_by_i
         last_name=last_name,
         email=email,
         is_active=True,
-        created_by_id=created_by_id
+        created_by=created_by_id
     )
     
     db.add(new_agent)
