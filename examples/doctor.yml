@@ -93,19 +93,6 @@ process:
     - from: Diagnosis
       to: Reading Books
 
-  roles:
-    - id: patient
-      name: "Patient Agent"
-      description: "LLM-powered patient agent with medical history, symptoms."
-
-    - id: nurse
-      name: "Nurse Agent"
-      description: "LLM-powered nurse agent for triage, registration, and examinations."
-
-    - id: doctor
-      name: "Doctor Agent"
-      description: "LLM-powered doctor agent capable of diagnosis, treatment, and self-evolution."
-
   evolution:
     method: "MedAgent-Zero"
     description: "Doctors evolve by treating patient agents and learning from both successes (case base) and failures (experience base)."
