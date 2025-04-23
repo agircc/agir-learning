@@ -158,12 +158,12 @@ class ProcessManager:
                 "first_name": target_user_data.get("first_name", ""),
                 "last_name": target_user_data.get("last_name", ""),
                 "email": target_user_data.get("email", f"{username}@example.com"),
-                "status": "ACTIVE"
+                "is_active": True
             }
             
             # Add model if it exists in YAML
             if "model" in target_user_data:
-                user_data["model"] = target_user_data["model"]
+                user_data["llm_model"] = target_user_data["model"]
             
             # Create new user
             user = User(**user_data)
