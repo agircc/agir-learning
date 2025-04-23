@@ -170,34 +170,44 @@ class EvolutionEngine:
             if not process:
                 logger.error(f"Process not found: {process_id}")
                 return False
+            
+            # Check for learner configuration directly from process
+            learner_config = None
+            
+            # First try to get learner from process directly (this comes from the YAML)
+            if "learner" in process and process["learner"]:
+                learner_config = process["learner"]
+                logger.info(f"Using learner from process configuration: {learner_config.get('username')}")
+            
+            # If no learner found directly, try from config section
+            if not learner_config:
+                # Load process configuration - handle the case where config is None
+                if "config" not in process or process["config"] is None:
+                    logger.warning(f"No configuration found for process {process_id}.")
+                    process_config = {}
+                else:
+                    process_config = process["config"]
+                    if isinstance(process_config, str):
+                        try:
+                            process_config = json.loads(process_config)
+                        except Exception as e:
+                            logger.error(f"Failed to parse process configuration: {str(e)}")
+                            return False
                 
-            # Load process configuration - handle the case where config is None
-            if "config" not in process or process["config"] is None:
-                logger.warning(f"No configuration found for process {process_id}. Using empty config.")
-                process_config = {}
-            else:
-                process_config = process["config"]
-                if isinstance(process_config, str):
-                    try:
-                        process_config = json.loads(process_config)
-                    except Exception as e:
-                        logger.error(f"Failed to parse process configuration: {str(e)}")
-                        return False
+                # Try to get learner from config
+                if isinstance(process_config, dict) and "learner" in process_config and process_config["learner"]:
+                    learner_config = process_config["learner"]
+                    logger.info(f"Using learner from process config: {learner_config.get('username')}")
+            
+            # If still no learner config, use default
+            if not learner_config:
+                logger.warning("No learner configuration found in the process. Using default.")
+                learner_config = {"username": "default_learner"}
             
             # Get process name with fallback
             process_name = process.get("name", f"Process {process_id}") if isinstance(process, dict) else f"Process {process_id}"
             logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
-
-            # Get the learner user from the config
-            if not isinstance(process_config, dict):
-                logger.warning("Process config is not a dictionary. Using default learner config.")
-                learner_config = {"username": "default_learner"}
-            else:
-                learner_config = process_config.get("learner", {})
-                if not learner_config:
-                    logger.warning("No learner configuration found in the process. Using default.")
-                    learner_config = {"username": "default_learner"}
-            
+                
             logger.info(f"Looking up learner from config: {learner_config}")
             
             # Find or create the learner user
@@ -205,22 +215,55 @@ class EvolutionEngine:
             logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
             
             # Load roles from the config and create users
-            roles_config = process_config.get("roles", {})
-            for role_name, role_data in roles_config.items():
-                if role_name.lower() == "learner":
-                    # Skip the learner role as it's already handled
-                    continue
+            roles_config = {}
+            if "roles" in process and process["roles"]:
+                roles_config = process["roles"]
+            
+            # Handle roles_config in different formats (array or dictionary)
+            if isinstance(roles_config, list):
+                # If roles_config is a list of role objects
+                for role in roles_config:
+                    # For list format, each role should be a dictionary with at least 'name' or 'id'
+                    if isinstance(role, dict):
+                        role_name = role.get('name') or role.get('id')
+                        role_data = role
+                    else:
+                        # If it's not a dict, try to extract name/id as attribute
+                        role_name = getattr(role, 'name', None) or getattr(role, 'id', None)
+                        # Convert object to dict for easier handling
+                        role_data = vars(role) if hasattr(role, '__dict__') else {'name': role_name}
                     
-                logger.info(f"Creating agent for role: {role_name}")
-                username = role_data.get("username", f"{role_name}_{process_id}")
-                agent = create_user(db, role_name, process_id, username)
-                logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
-                
-                # Update agent's model if specified
-                if "model" in role_data and hasattr(agent, "llm_model"):
-                    agent.llm_model = role_data["model"]
-                    db.commit()
-                    logger.info(f"Updated {role_name}'s model to {role_data['model']}")
+                    if not role_name or role_name.lower() == "learner":
+                        # Skip if no name/id or if it's the learner role
+                        continue
+                    
+                    logger.info(f"Creating agent for role: {role_name}")
+                    username = role_data.get("username", f"{role_name}_{process_id}")
+                    agent = create_user(db, role_name, process_id, username)
+                    logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
+                    
+                    # Update agent's model if specified
+                    if "model" in role_data and hasattr(agent, "llm_model"):
+                        agent.llm_model = role_data["model"]
+                        db.commit()
+                        logger.info(f"Updated {role_name}'s model to {role_data['model']}")
+            elif isinstance(roles_config, dict):
+                # If roles_config is a dictionary mapping role names to role data
+                for role_name, role_data in roles_config.items():
+                    if role_name.lower() == "learner":
+                        # Skip the learner role as it's already handled
+                        continue
+                        
+                    logger.info(f"Creating agent for role: {role_name}")
+                    username = role_data.get("username", f"{role_name}_{process_id}")
+                    agent = create_user(db, role_name, process_id, username)
+                    logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
+                    
+                    # Update agent's model if specified
+                    if "model" in role_data and hasattr(agent, "llm_model"):
+                        agent.llm_model = role_data["model"]
+                        db.commit()
+                        logger.info(f"Updated {role_name}'s model to {role_data['model']}")
             
             # Initialize empty history for the process
             history = []
