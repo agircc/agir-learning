@@ -55,6 +55,10 @@ class EvolutionEngine:
             self.llm_provider = llm_provider or self._create_default_provider()
             self.llm_provider_manager = None
         
+        # Initialize the process manager
+        from src.process_manager import ProcessManager
+        self.process_manager = ProcessManager()
+        
     def _create_default_provider(self) -> BaseLLMProvider:
         """
         Create a default LLM provider based on available API keys.
@@ -146,40 +150,51 @@ class EvolutionEngine:
             
         return self.run_evolution(process)
         
-    def run_evolution_with_id(self, process_id: int, process_name: str, process_config: Dict[str, Any]) -> None:
+    def run_evolution_with_id(self, process_id: int) -> bool:
         """
         Run an evolution process for a process with the given ID
         
         Args:
             process_id: The database ID of the process
-            process_name: Name of the process
-            process_config: Process configuration from YAML
-        """
-        logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
-
-        # Get the learner user from the YAML config
-        learner_config = process_config.get("learner", {})
-        if not learner_config:
-            logger.warning("No learner configuration found in the process YAML. Using default.")
-            learner_config = {"username": "default_learner"}
             
-        logger.info(f"Looking up learner from config: {learner_config}")
-        
-        # Create database session
+        Returns:
+            True if successful, False otherwise
+        """
+        # Create database session to fetch the process
         with SessionLocal() as db:
             self.db = db  # Store db in instance for helper methods that need it
-            
-            # Find or create the learner user
-            learner = find_or_create_learner(db, learner_config)
-            logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
             
             # Get the process data
             process = self.process_manager.get_process(process_id)
             
             if not process:
                 logger.error(f"Process not found: {process_id}")
-                return
+                return False
                 
+            # Load process configuration
+            process_config = process.config
+            if isinstance(process_config, str):
+                try:
+                    process_config = json.loads(process_config)
+                except Exception as e:
+                    logger.error(f"Failed to parse process configuration: {str(e)}")
+                    return False
+            
+            process_name = process.name
+            logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
+
+            # Get the learner user from the config
+            learner_config = process_config.get("learner", {})
+            if not learner_config:
+                logger.warning("No learner configuration found in the process. Using default.")
+                learner_config = {"username": "default_learner"}
+                
+            logger.info(f"Looking up learner from config: {learner_config}")
+            
+            # Find or create the learner user
+            learner = find_or_create_learner(db, learner_config)
+            logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
+            
             # Load roles from the config and create users
             roles_config = process_config.get("roles", {})
             for role_name, role_data in roles_config.items():
@@ -203,6 +218,8 @@ class EvolutionEngine:
             
             # Run the evolution process
             self._process_evolution(db, process, learner, history, process_id)
+            
+            return True
         
     def run_evolution(self, process: Process) -> bool:
         """
