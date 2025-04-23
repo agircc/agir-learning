@@ -746,4 +746,73 @@ class ProcessManager:
             
         except Exception as e:
             logger.error(f"Failed to complete process: {str(e)}")
-            return False 
+            return False
+    
+    @staticmethod
+    def get_process(process_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Get a process by ID from the database.
+        
+        Args:
+            process_id: ID of the process
+            
+        Returns:
+            Process data as a dictionary if found, None otherwise
+        """
+        try:
+            db = next(get_db())
+            
+            # Get the process from the database
+            process = db.query(Process).filter(Process.id == process_id).first()
+            
+            if not process:
+                logger.error(f"Process not found with ID: {process_id}")
+                return None
+                
+            # Get process instance for config
+            process_instance = db.query(ProcessInstance).filter(
+                ProcessInstance.process_id == process_id
+            ).order_by(ProcessInstance.created_at.desc()).first()
+                
+            # Create a dictionary with process data
+            process_data = {
+                "id": process.id,
+                "name": process.name,
+                "description": process.description,
+                "config": process_instance.config if process_instance else None
+            }
+            
+            # Add yaml-compatible attributes for compatibility with evolution engine
+            process_data["learner"] = {}
+            process_data["roles"] = []
+            process_data["nodes"] = []
+            process_data["transitions"] = []
+            process_data["evolution"] = {}
+            
+            # If we have config, parse and add it
+            if process_data["config"]:
+                try:
+                    if isinstance(process_data["config"], str):
+                        config = json.loads(process_data["config"])
+                    else:
+                        config = process_data["config"]
+                        
+                    # Add config details to the process data
+                    if "learner" in config:
+                        process_data["learner"] = config["learner"]
+                    if "roles" in config:
+                        process_data["roles"] = config["roles"]
+                    if "nodes" in config:
+                        process_data["nodes"] = config["nodes"]
+                    if "transitions" in config:
+                        process_data["transitions"] = config["transitions"]
+                    if "evolution" in config:
+                        process_data["evolution"] = config["evolution"]
+                except Exception as e:
+                    logger.error(f"Failed to parse process config: {str(e)}")
+            
+            return process_data
+            
+        except Exception as e:
+            logger.error(f"Error getting process {process_id}: {str(e)}")
+            return None 
