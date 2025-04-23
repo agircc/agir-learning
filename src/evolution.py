@@ -172,7 +172,7 @@ class EvolutionEngine:
                 return False
                 
             # Load process configuration
-            process_config = process.config
+            process_config = process["config"]
             if isinstance(process_config, str):
                 try:
                     process_config = json.loads(process_config)
@@ -180,7 +180,7 @@ class EvolutionEngine:
                     logger.error(f"Failed to parse process configuration: {str(e)}")
                     return False
             
-            process_name = process.name
+            process_name = process["name"]
             logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
 
             # Get the learner user from the config
@@ -598,11 +598,18 @@ class EvolutionEngine:
             history: Conversation history
             process_id: ID of the process in the database
         """
-        if not process.evolution:
+        # Check if process is a dictionary (from get_process) or a Process object
+        is_dict = isinstance(process, dict)
+        
+        # Access evolution based on the object type
+        evolution = process["evolution"] if is_dict else process.evolution
+        if not evolution:
             logger.info("No evolution defined for process")
             return
             
-        logger.info(f"Processing evolution for process: {process.name}")
+        # Get process name based on object type
+        process_name = process["name"] if is_dict else process.name
+        logger.info(f"Processing evolution for process: {process_name}")
         
         # Get or create agent for learner user
         agent = find_user_by_role(db, "learner", process_id)
@@ -612,12 +619,20 @@ class EvolutionEngine:
                 logger.error(f"Failed to create agent for learner {learner.username}")
                 return
                 
+        # Safely access learner data
+        if is_dict:
+            learner_data = process["learner"]
+            evolution_objective = learner_data.get('evolution_objective', 'Improve your skills and knowledge.')
+        else:
+            learner_data = process.learner
+            evolution_objective = learner_data.get('evolution_objective', 'Improve your skills and knowledge.')
+                
         # Generate evolution prompt
         prompt = f"""
         # Evolution Process for {learner.first_name} {learner.last_name}
 
-        You are part of an evolution process called "{process.name}".
-        Your objective: {process.learner.get('evolution_objective', 'Improve your skills and knowledge.')}
+        You are part of an evolution process called "{process_name}".
+        Your objective: {evolution_objective}
 
         ## Conversation History:
         {json.dumps(history, indent=2)}
@@ -657,7 +672,9 @@ class EvolutionEngine:
             db.rollback()
         
         # Store as a custom field for the user
-        evolution_field_name = f"evolution_{process.id}"
+        # Get process ID based on object type 
+        process_id_value = process["id"] if is_dict else process.id
+        evolution_field_name = f"evolution_{process_id_value}"
         
         # Check if we already have an evolution field for this process
         existing_field = db.query(CustomField).filter(
@@ -700,14 +717,35 @@ class EvolutionEngine:
         Returns:
             Optional[ProcessNode]: Next node if available, None otherwise
         """
-        if not hasattr(process, 'transitions') or not process.transitions:
-            return None
+        # Check if process is a dictionary (from get_process) or a Process object
+        is_dict = isinstance(process, dict)
+        
+        # Access transitions based on the object type
+        if is_dict:
+            transitions = process.get("transitions", [])
+            if not transitions:
+                return None
+        else:
+            if not hasattr(process, 'transitions') or not process.transitions:
+                return None
+            transitions = process.transitions
             
         # Find transitions where current node is the 'from' node
         next_node_names = []
-        for transition in process.transitions:
-            if transition.get('from') == current_node.name:
-                next_node_names.append(transition.get('to'))
+        for transition in transitions:
+            # Handle both dictionary and object cases
+            if is_dict:
+                from_node = transition.get('from') 
+                to_node = transition.get('to')
+            else:
+                from_node = transition.get('from') if isinstance(transition, dict) else getattr(transition, 'from_node', None)
+                to_node = transition.get('to') if isinstance(transition, dict) else getattr(transition, 'to_node', None)
+                
+            # Get current node name, accounting for both dict and object
+            current_node_name = current_node.name if hasattr(current_node, 'name') else current_node.get('name')
+            
+            if from_node == current_node_name:
+                next_node_names.append(to_node)
                 
         if not next_node_names:
             return None
@@ -715,9 +753,17 @@ class EvolutionEngine:
         # Get the first next node (could be extended with branching logic)
         next_node_name = next_node_names[0]
         
+        # Access nodes based on the object type
+        if is_dict:
+            nodes = process.get("nodes", [])
+        else:
+            nodes = process.nodes
+            
         # Find the node in the process nodes
-        for node in process.nodes:
-            if node.name == next_node_name:
+        for node in nodes:
+            # Handle both dictionary and object cases
+            node_name = node.name if hasattr(node, 'name') else node.get('name')
+            if node_name == next_node_name:
                 return node
                 
         return None 
