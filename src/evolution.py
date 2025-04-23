@@ -45,15 +45,19 @@ class EvolutionEngine:
         Initialize the evolution engine.
         
         Args:
-            llm_provider: Optional LLM provider, defaults to OpenAI if not provided
-            llm_provider_manager: Optional LLM provider manager for managing multiple providers
+            llm_provider: Optional LLM provider (deprecated, use llm_provider_manager instead)
+            llm_provider_manager: LLM provider manager for managing multiple providers
+            
+        Raises:
+            ValueError: If no provider manager is specified
         """
-        if llm_provider_manager:
-            self.llm_provider_manager = llm_provider_manager
-            self.llm_provider = llm_provider_manager.default_provider
-        else:
-            self.llm_provider = llm_provider or self._create_default_provider()
-            self.llm_provider_manager = None
+        if not llm_provider_manager:
+            raise ValueError("LLM provider manager is required")
+            
+        self.llm_provider_manager = llm_provider_manager
+        
+        # For backward compatibility - use only in methods that don't support specific models
+        self.llm_provider = llm_provider
         
         # Initialize the process manager
         from src.process_manager import ProcessManager
@@ -89,17 +93,20 @@ class EvolutionEngine:
         Args:
             db: Database session
             node: Process node
-            default_provider: Default provider to use if no specific model is found
+            default_provider: Default provider to use if no specific model is found (ignored)
             
         Returns:
             LLM provider instance
+            
+        Raises:
+            ValueError: If no model is specified for the role or user
         """
         if not self.llm_provider_manager:
-            return default_provider
+            raise ValueError("LLM provider manager is required")
             
         # Get the role for this node
         if not node.role:
-            return default_provider
+            raise ValueError(f"Node {node.name} has no role specified")
             
         # Special handling for learner role
         if node.role == "learner":
@@ -109,28 +116,38 @@ class EvolutionEngine:
                 if user and hasattr(user, 'llm_model') and user.llm_model:
                     logger.info(f"Using learner's model '{user.llm_model}' for node: {node.name}")
                     return self.llm_provider_manager.get_provider(user.llm_model)
+                else:
+                    raise ValueError(f"Learner user '{node.assigned_to}' has no model specified")
             
-            # If no user found or no model specified, try to find a default learner
+            # Try to find an active learner user
             user = db.query(User).filter(User.is_active == True).first()
             if user and hasattr(user, 'llm_model') and user.llm_model:
                 logger.info(f"Using active user's model '{user.llm_model}' for learner node: {node.name}")
                 return self.llm_provider_manager.get_provider(user.llm_model)
-                
-            return default_provider
+            else:
+                raise ValueError("No active user with model specified found for learner role")
             
         # Query the database to get the role's model
         from agir_db.models.process_role import ProcessRole
         role = db.query(ProcessRole).filter(ProcessRole.id == node.role).first()
         
-        if not role or not hasattr(role, 'model') or not role.model:
-            # If role has no model specified, try to get the model from assigned_to user if available
+        if not role:
+            raise ValueError(f"Role with ID {node.role} not found")
+            
+        if not hasattr(role, 'model') or not role.model:
+            # Try to get the model from assigned_to user if available
             if hasattr(node, 'assigned_to') and node.assigned_to:
                 user = db.query(User).filter(User.username == node.assigned_to).first()
                 if user and hasattr(user, 'llm_model') and user.llm_model:
+                    logger.info(f"Using assigned user's model '{user.llm_model}' for node: {node.name}")
                     return self.llm_provider_manager.get_provider(user.llm_model)
-            return default_provider
+                else:
+                    raise ValueError(f"Assigned user '{node.assigned_to}' for node {node.name} has no model specified")
+            else:
+                raise ValueError(f"Role '{role.name}' has no model specified and node is not assigned to a user")
             
         # Use the model specified for the role
+        logger.info(f"Using role's model '{role.model}' for node: {node.name}")
         return self.llm_provider_manager.get_provider(role.model)
         
     def run_evolution_from_file(self, file_path: str) -> bool:
@@ -281,157 +298,130 @@ class EvolutionEngine:
             process: Process instance
             
         Returns:
-            True if successful, False otherwise
+            True if successful
+            
+        Raises:
+            ValueError: If process fails for any reason
         """
         logger.info(f"Starting evolution process: {process.name}")
         
         # Create database session
         with SessionLocal() as db:
-            try:
-                # Get or create target user first
-                learnername = process.learner.get("username")
-                if not learnername:
-                    logger.error("Target user username not specified in process")
-                    return False
+            # Get or create target user first
+            learnername = process.learner.get("username")
+            if not learnername:
+                raise ValueError("Target user username not specified in process")
+            
+            learner, created = get_or_create_user(db, learnername, process.learner)
+            if created:
+                logger.info(f"Created new target user: {learnername}")
+            else:
+                logger.info(f"Using existing target user: {learnername}")
+            
+            # 保存process实例到数据库，使用learner.id作为created_by
+            db_process = create_process_record(db, {
+                "name": process.name,
+                "description": process.description,
+                "created_by": str(learner.id)  # Use learner.id as the creator
+            })
+            logger.info(f"Created process record in database with ID: {db_process.id}")
+            
+            # 保存配置作为自定义字段到数据库
+            # 将配置保存到process_instance表
+            from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
+            
+            # Now create the process instance with learner.id
+            process_instance = ProcessInstance(
+                process_id=db_process.id,
+                initiator_id=learner.id,  # Now we have learner.id
+                status=ProcessInstanceStatus.RUNNING,
+                config=json.dumps(process.to_dict())
+            )
+            db.add(process_instance)
+            db.commit()
+            logger.info(f"Saved process instance to database")
+            process_instance_id = process_instance.id
+            
+            # Create ProcessNode records in the database for each node in the process
+            from agir_db.models.process import ProcessNode as DBProcessNode, ProcessRole
+            
+            # Dictionary to store mapping from YAML node IDs to database node IDs
+            node_id_mapping = {}
+            
+            # First, create role records
+            role_id_mapping = {}
+            for role in process.roles:
+                db_role = ProcessRole(
+                    process_id=db_process.id,
+                    name=role.name,
+                    description=role.description,
+                    model=role.model
+                )
+                db.add(db_role)
+                db.flush()  # Get the ID without committing
+                role_id_mapping[role.id] = db_role.id
+            
+            # Now create node records
+            for node in process.nodes:
+                # Get the role ID from the mapping
+                role_id = role_id_mapping.get(node.role)
                 
-                learner, created = get_or_create_user(db, learnername, process.learner)
-                if created:
-                    logger.info(f"Created new target user: {learnername}")
-                else:
-                    logger.info(f"Using existing target user: {learnername}")
+                db_node = DBProcessNode(
+                    process_id=db_process.id,
+                    name=node.name,
+                    description=node.description,
+                    role_id=role_id
+                )
+                db.add(db_node)
+                db.flush()  # Get the ID without committing
+                node_id_mapping[node.id] = db_node.id
+            
+            db.commit()
+            logger.info(f"Created {len(node_id_mapping)} process node records in database")
+            
+            # Store the mapping in the process instance for later use
+            config = json.loads(process_instance.config) if process_instance.config else {}
+            config["node_id_mapping"] = {k: str(v) for k, v in node_id_mapping.items()}
+            process_instance.config = json.dumps(config)
+            db.commit()
+            
+            # Process each node in the process
+            current_node = process.nodes[0]  # Start with the first node
+            history = []  # Conversation history
+            
+            while current_node:
+                result = self._process_node(db, process, current_node, learner, history, db_process.id)
                 
-                # 保存process实例到数据库，使用learner.id作为created_by
-                db_process = create_process_record(db, {
-                    "name": process.name,
-                    "description": process.description,
-                    "created_by": str(learner.id)  # Use learner.id as the creator
+                processed_node, response, next_node = result
+                
+                # Add to conversation history
+                history.append({
+                    "node": processed_node.id,
+                    "role": processed_node.role,
+                    "content": response
                 })
-                logger.info(f"Created process record in database with ID: {db_process.id}")
                 
-                # 保存配置作为自定义字段到数据库
-                try:
-                    # 将配置保存到process_instance表
-                    from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
-                    
-                    # Now create the process instance with learner.id
-                    process_instance = ProcessInstance(
-                        process_id=db_process.id,
-                        initiator_id=learner.id,  # Now we have learner.id
-                        status=ProcessInstanceStatus.RUNNING,
-                        config=json.dumps(process.to_dict())
-                    )
-                    db.add(process_instance)
+                # Update current node
+                current_node = next_node
+                
+                if not current_node:
+                    logger.info("Reached end of process or no valid next node")
+                    break
+            
+            # 更新process实例状态为已完成
+            if process_instance_id:
+                process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
+                if process_instance:
+                    process_instance.status = ProcessInstanceStatus.COMPLETED
                     db.commit()
-                    logger.info(f"Saved process instance to database")
-                    process_instance_id = process_instance.id
-                    
-                    # Create ProcessNode records in the database for each node in the process
-                    from agir_db.models.process import ProcessNode as DBProcessNode, ProcessRole
-                    
-                    # Dictionary to store mapping from YAML node IDs to database node IDs
-                    node_id_mapping = {}
-                    
-                    # First, create role records
-                    role_id_mapping = {}
-                    for role in process.roles:
-                        db_role = ProcessRole(
-                            process_id=db_process.id,
-                            name=role.name,
-                            description=role.description,
-                            model=role.model
-                        )
-                        db.add(db_role)
-                        db.flush()  # Get the ID without committing
-                        role_id_mapping[role.id] = db_role.id
-                    
-                    # Now create node records
-                    for node in process.nodes:
-                        # Get the role ID from the mapping
-                        role_id = role_id_mapping.get(node.role)
-                        
-                        db_node = DBProcessNode(
-                            process_id=db_process.id,
-                            name=node.name,
-                            description=node.description,
-                            role_id=role_id
-                        )
-                        db.add(db_node)
-                        db.flush()  # Get the ID without committing
-                        node_id_mapping[node.id] = db_node.id
-                    
-                    db.commit()
-                    logger.info(f"Created {len(node_id_mapping)} process node records in database")
-                    
-                    # Store the mapping in the process instance for later use
-                    config = json.loads(process_instance.config) if process_instance.config else {}
-                    config["node_id_mapping"] = {k: str(v) for k, v in node_id_mapping.items()}
-                    process_instance.config = json.dumps(config)
-                    db.commit()
-                
-                except Exception as e:
-                    db.rollback()
-                    logger.error(f"Failed to save process configuration: {str(e)}")
-                    process_instance_id = None
-                    node_id_mapping = {}
-                
-                # Process each node in the process
-                current_node = process.nodes[0]  # Start with the first node
-                history = []  # Conversation history
-                
-                while current_node:
-                    result = self._process_node(db, process, current_node, learner, history, db_process.id)
-                    if not result:
-                        logger.error(f"Failed to process node: {current_node.id}")
-                        return False
-                        
-                    processed_node, response, next_node = result
-                    
-                    # Add to conversation history
-                    history.append({
-                        "node": processed_node.id,
-                        "role": processed_node.role,
-                        "content": response
-                    })
-                    
-                    # Update current node
-                    current_node = next_node
-                    
-                    if not current_node:
-                        logger.info("Reached end of process or no valid next node")
-                        break
-                
-                # 更新process实例状态为已完成
-                if process_instance_id:
-                    try:
-                        process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
-                        if process_instance:
-                            process_instance.status = ProcessInstanceStatus.COMPLETED
-                            db.commit()
-                            logger.info(f"Updated process instance status to completed")
-                    except Exception as e:
-                        logger.error(f"Failed to update process instance status: {str(e)}")
-                
-                # Process evolution
-                self._process_evolution(db, process, learner, history, db_process.id)
-                
-                logger.info(f"Evolution process completed successfully: {process.name}")
-                return True
-                
-            except Exception as e:
-                logger.error(f"Error in evolution process: {str(e)}")
-                # 如果出错，更新process实例状态为失败
-                if 'process_instance_id' in locals() and process_instance_id:
-                    try:
-                        db.rollback()  # Rollback any pending transaction
-                        process_instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
-                        if process_instance:
-                            process_instance.status = ProcessInstanceStatus.TERMINATED
-                            process_instance.error = str(e)
-                            db.commit()
-                    except Exception as inner_e:
-                        logger.error(f"Failed to update process instance error status: {str(inner_e)}")
-                return False
-                
+                    logger.info(f"Updated process instance status to completed")
+            
+            # Process evolution
+            self._process_evolution(db, process, learner, history, db_process.id)
+            
+            logger.info(f"Evolution process completed successfully: {process.name}")
+            return True
+        
     def _process_node(
         self, 
         db: Session, 
@@ -453,31 +443,34 @@ class EvolutionEngine:
             process_id: ID of the process in the database
             
         Returns:
-            Optional tuple of (node, response, next_node)
+            Tuple of (node, response, next_node)
+            
+        Raises:
+            ValueError: If there is an error processing the node
         """
         logger.info(f"Processing node: {node.name}")
         
+        # Get the appropriate LLM provider for this node
+        llm_provider = self._get_provider_for_node(db, node, self.llm_provider)
+        
+        # Get the role for this node
+        role_id = node.role
+        
+        # Check if node is assigned to a specific user or if it's a learner node
+        is_learner_node = False
+        if role_id == "learner":
+            is_learner_node = True
+            logger.info(f"Node {node.name} is a learner node, will use learner's model")
+        elif hasattr(node, 'assigned_to') and node.assigned_to and node.assigned_to == target_user.username:
+            is_learner_node = True
+            logger.info(f"Node {node.name} is assigned to target user {target_user.username}")
+            
+        # Generate context for the node
+        context = self._generate_node_context(process, node, history, target_user)
+        
+        # If node is for the learner, handle differently
+        response = ""
         try:
-            # Get the appropriate LLM provider for this node
-            llm_provider = self._get_provider_for_node(db, node, self.llm_provider)
-            
-            # Get the role for this node
-            role_id = node.role
-            
-            # Check if node is assigned to a specific user or if it's a learner node
-            is_learner_node = False
-            if role_id == "learner":
-                is_learner_node = True
-                logger.info(f"Node {node.name} is a learner node, will use learner's model")
-            elif hasattr(node, 'assigned_to') and node.assigned_to and node.assigned_to == target_user.username:
-                is_learner_node = True
-                logger.info(f"Node {node.name} is assigned to target user {target_user.username}")
-                
-            # Generate context for the node
-            context = self._generate_node_context(process, node, history, target_user)
-            
-            # If node is for the learner, handle differently
-            response = ""
             if is_learner_node:
                 response = self._simulate_target_user_response(node, context)
             else:
@@ -505,8 +498,9 @@ class EvolutionEngine:
             return (node, response, next_node)
             
         except Exception as e:
-            logger.error(f"Error processing node {node.name}: {str(e)}")
-            return None
+            error_msg = f"Error processing node {node.name}: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     def _update_node_status(self, db: Session, node_record_id: Any, status: str, response: str = None, error: str = None):
         """更新节点执行记录状态"""
@@ -613,24 +607,47 @@ class EvolutionEngine:
             
         Returns:
             Simulated response
+            
+        Raises:
+            ValueError: If user has no model specified
         """
-        # For simulation, generate a response with LLM
-        system_prompt = (
-            f"You are {context['user_name']}, a {node.role}. "
-            f"You are currently in the '{node.name}' phase of a process. "
-            f"Respond as if you are this person."
-        )
-        
-        prompt = (
-            f"Phase description: {node.description}\n\n"
-            f"Please provide your response as {context['user_name']}."
-        )
-        
-        return self.llm_provider.generate(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=0.7
-        )
+        # Get the user ID from context
+        user_id = context.get('user_id')
+        if not user_id:
+            raise ValueError("User ID not found in context")
+            
+        # Get the user from database
+        with SessionLocal() as db:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise ValueError(f"User with ID {user_id} not found")
+                
+            # Check if user has a model specified
+            if not hasattr(user, 'llm_model') or not user.llm_model:
+                raise ValueError(f"User '{user.username}' has no model specified")
+                
+            # Get the appropriate LLM provider for this user
+            llm_provider = self.llm_provider_manager.get_provider(user.llm_model)
+            
+            # Generate system prompt
+            system_prompt = (
+                f"You are {context['user_name']}, a {node.role}. "
+                f"You are currently in the '{node.name}' phase of a process. "
+                f"Respond as if you are this person."
+            )
+            
+            # Generate prompt
+            prompt = (
+                f"Phase description: {node.description}\n\n"
+                f"Please provide your response as {context['user_name']}."
+            )
+            
+            logger.info(f"Generating response for {context['user_name']} using model: {user.llm_model}")
+            return llm_provider.generate(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=0.7
+            )
     
     def _process_evolution(
         self, 
@@ -649,6 +666,9 @@ class EvolutionEngine:
             learner: The learner user that is evolving through this process
             history: Conversation history
             process_id: ID of the process in the database
+            
+        Raises:
+            ValueError: If learner has no model specified
         """
         # Check if process is a dictionary (from get_process) or a Process object
         is_dict = isinstance(process, dict)
@@ -668,8 +688,7 @@ class EvolutionEngine:
         if not agent:
             agent = create_user(db, "learner", process_id, learner.username)
             if not agent:
-                logger.error(f"Failed to create agent for learner {learner.username}")
-                return
+                raise ValueError(f"Failed to create agent for learner {learner.username}")
                 
         # Safely access learner data
         if is_dict:
@@ -696,11 +715,13 @@ class EvolutionEngine:
         4. Create action items for future iterations.
         """
         
-        # Get the appropriate LLM provider for evolution
-        # For evolution, we'll use the learner's model if available
-        llm_provider = self.llm_provider
-        if self.llm_provider_manager and learner and hasattr(learner, 'llm_model') and learner.llm_model:
-            llm_provider = self.llm_provider_manager.get_provider(learner.llm_model)
+        # Check if learner has a model specified
+        if not hasattr(learner, 'llm_model') or not learner.llm_model:
+            raise ValueError(f"Learner user '{learner.username}' has no model specified")
+        
+        # Get the appropriate LLM provider using learner's model
+        logger.info(f"Using learner's model '{learner.llm_model}' for evolution")
+        llm_provider = self.llm_provider_manager.get_provider(learner.llm_model)
         
         # Generate evolution response
         try:
@@ -722,6 +743,7 @@ class EvolutionEngine:
         except Exception as e:
             logger.error(f"Error in evolution process: {str(e)}")
             db.rollback()
+            raise ValueError(f"Failed to generate evolution response: {str(e)}")
         
         # Store as a custom field for the user
         # Get process ID based on object type 
@@ -754,7 +776,7 @@ class EvolutionEngine:
                 # Add detailed error logs
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                return
+                raise ValueError(f"Failed to create custom field for evolution result: {str(e)}")
             
         db.commit()
 

@@ -93,81 +93,113 @@ class DummyProvider:
 class LLMProviderManager:
     """Manages multiple LLM providers based on model names"""
     
-    def __init__(self, default_provider_type='openai', default_model_name=None, skip_llm=False):
+    def __init__(self, skip_llm=False):
         """Initialize the LLM provider manager
         
         Args:
-            default_provider_type: Default provider type to use
-            default_model_name: Default model name for the default provider
-            skip_llm: Whether to skip LLM initialization
+            skip_llm: Whether to skip LLM initialization for testing purposes only
         """
         self.providers = {}  # Cache of initialized providers
-        self.default_provider_type = default_provider_type
-        self.default_model_name = default_model_name
         self.skip_llm = skip_llm
         
-        # Initialize default provider
-        self.default_provider = self._create_provider(default_provider_type, default_model_name)
+        # No default provider - will be determined by the database values
+        self.default_provider = None
     
-    def _create_provider(self, provider_type, model_name=None):
+    def _create_provider(self, provider_type, model_name):
         """Create a new LLM provider
         
         Args:
-            provider_type: Type of provider (openai, anthropic, ollama, dummy)
+            provider_type: Type of provider (openai, anthropic, ollama)
             model_name: Name of the model to use
             
         Returns:
             LLM provider instance
+        
+        Raises:
+            ValueError: If provider cannot be initialized
         """
-        # Use dummy provider if skip_llm is True
+        # Skip LLM is only for testing
         if self.skip_llm:
-            return DummyProvider()
+            logger.info("Skip LLM flag is set, using dummy provider")
+            return DummyProvider(model_name=model_name)
             
-        if provider_type == 'dummy':
-            return DummyProvider()
-        elif provider_type == 'openai':
+        if provider_type == 'openai':
             model = model_name or 'gpt-4'
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
-                logger.error("OPENAI_API_KEY not found in environment")
-                logger.info("Falling back to dummy provider for debugging")
-                return DummyProvider()
-            try:
-                return OpenAIProvider(model_name=model)
-            except Exception as e:
-                logger.error(f"Failed to initialize OpenAI provider: {str(e)}")
-                logger.info("Falling back to dummy provider for debugging")
-                return DummyProvider()
+                raise ValueError(f"OPENAI_API_KEY not found in environment. Required for model: {model}")
+            
+            logger.info(f"Initializing OpenAI provider with model: {model}")
+            return OpenAIProvider(model_name=model)
+            
         elif provider_type == 'anthropic':
             model = model_name or 'claude-3-opus-20240229'
             api_key = os.getenv('ANTHROPIC_API_KEY')
             if not api_key:
-                logger.error("ANTHROPIC_API_KEY not found in environment")
-                logger.info("Falling back to dummy provider for debugging")
-                return DummyProvider()
-            try:
-                return AnthropicProvider(model_name=model)
-            except Exception as e:
-                logger.error(f"Failed to initialize Anthropic provider: {str(e)}")
-                logger.info("Falling back to dummy provider for debugging")
-                return DummyProvider()
+                raise ValueError(f"ANTHROPIC_API_KEY not found in environment. Required for model: {model}")
+            
+            logger.info(f"Initializing Anthropic provider with model: {model}")
+            return AnthropicProvider(model_name=model)
+            
         elif provider_type == 'ollama':
-            model = model_name or 'phi'
+            model = model_name  # Must be specified
+            if not model:
+                raise ValueError("Model name must be specified for Ollama provider")
+                
             ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434/api/generate')
-            try:
-                # Set the OLLAMA_URL environment variable for the provider
-                os.environ['OLLAMA_URL'] = ollama_url
-                logger.info(f"Using Ollama provider with model {model} at {ollama_url}")
-                return OllamaProvider(model_name=model)
-            except Exception as e:
-                logger.error(f"Failed to initialize Ollama provider: {str(e)}")
-                logger.info("Falling back to dummy provider for debugging")
-                return DummyProvider()
+            
+            # Set the OLLAMA_URL environment variable for the provider
+            os.environ['OLLAMA_URL'] = ollama_url
+            logger.info(f"Initializing Ollama provider with model {model} at {ollama_url}")
+            
+            # Verify Ollama is running and model is available
+            self._verify_ollama_model(model)
+            
+            return OllamaProvider(model_name=model)
+            
         else:
-            logger.error(f"Unknown provider type: {provider_type}")
-            return DummyProvider()
+            raise ValueError(f"Unsupported provider type: {provider_type}")
     
-    def get_provider(self, model_name=None):
+    def _verify_ollama_model(self, model_name):
+        """Verify that Ollama is running and the specified model is available
+        
+        Args:
+            model_name: Name of the model to verify
+            
+        Raises:
+            ValueError: If Ollama is not available or model is not found
+        """
+        try:
+            import requests
+            base_url = os.getenv('OLLAMA_URL', 'http://localhost:11434').split('/api')[0]
+            
+            try:
+                # Check if Ollama server is running
+                response = requests.get(f"{base_url}/api/tags", timeout=5)
+                if response.status_code != 200:
+                    raise ValueError(f"Ollama server returned status code {response.status_code}")
+                
+                # Check if model is available
+                models_data = response.json()
+                models = models_data.get('models', [])
+                model_names = [m.get('name') for m in models]
+                
+                if model_name not in model_names:
+                    available_models = ", ".join(model_names) if model_names else "none"
+                    raise ValueError(
+                        f"Model '{model_name}' not found in Ollama. Available models: {available_models}. "
+                        f"You may need to run: ollama pull {model_name}"
+                    )
+                
+                logger.info(f"Verified Ollama model '{model_name}' is available")
+                
+            except requests.exceptions.RequestException as e:
+                raise ValueError(f"Failed to connect to Ollama server: {str(e)}")
+                
+        except ImportError:
+            raise ValueError("Requests library not available, cannot verify Ollama model")
+        
+    def get_provider(self, model_name):
         """Get a provider for the specified model
         
         Args:
@@ -175,9 +207,12 @@ class LLMProviderManager:
             
         Returns:
             LLM provider instance
+            
+        Raises:
+            ValueError: If provider cannot be initialized
         """
         if not model_name:
-            return self.default_provider
+            raise ValueError("Model name must be specified")
             
         # If we already have a provider for this model, return it
         if model_name in self.providers:
@@ -199,7 +234,13 @@ class LLMProviderManager:
             
         Returns:
             Provider type string
+            
+        Raises:
+            ValueError: If provider type cannot be determined
         """
+        if not model_name:
+            raise ValueError("Model name must be specified")
+            
         model_name = model_name.lower()
         if model_name in ["gpt-3", "gpt-3.5", "gpt-4", "gpt-4o", "gpt-3.5-turbo", "gpt-4-turbo"] or model_name.startswith("gpt-"):
             return "openai"
@@ -208,8 +249,7 @@ class LLMProviderManager:
         elif model_name in ["llama", "phi", "mixtral", "mistral"] or model_name.startswith("llama-") or model_name.startswith("phi-"):
             return "ollama"
         else:
-            # Default to default provider type
-            return self.default_provider_type
+            raise ValueError(f"Could not determine provider type for model: {model_name}")
 
 
 def main():
@@ -248,25 +288,29 @@ def main():
         logger.info("Setup-only flag set, exiting without executing process")
         sys.exit(0)
     
-    # Create LLM provider manager
-    llm_provider_manager = LLMProviderManager(
-        default_provider_type=args.model,
-        default_model_name=args.model_name,
-        skip_llm=args.skip_llm
-    )
-    
-    # Create evolution engine with the provider manager
-    engine = EvolutionEngine(llm_provider_manager=llm_provider_manager)
-    
-    # Run evolution process, now using the ID rather than loading from file again
-    logger.info(f"Running evolution process with ID: {process_id}")
-    success = engine.run_evolution_with_id(process_id)
-    
-    if success:
-        logger.info("Evolution process completed successfully")
-        sys.exit(0)
-    else:
-        logger.error("Evolution process failed")
+    try:
+        # Create LLM provider manager - no default settings
+        logger.info("Initializing LLM provider manager")
+        llm_provider_manager = LLMProviderManager(
+            skip_llm=args.skip_llm
+        )
+        
+        # Create evolution engine with the provider manager
+        engine = EvolutionEngine(llm_provider_manager=llm_provider_manager)
+        
+        # Run evolution process, now using the ID rather than loading from file again
+        logger.info(f"Running evolution process with ID: {process_id}")
+        success = engine.run_evolution_with_id(process_id)
+        
+        if success:
+            logger.info("Evolution process completed successfully")
+            sys.exit(0)
+        else:
+            logger.error("Evolution process failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        logger.error(f"Error in evolution process: {str(e)}")
         sys.exit(1)
 
 

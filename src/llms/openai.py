@@ -25,8 +25,13 @@ class OpenAIProvider(BaseLLMProvider):
         if not self.api_key:
             raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY env var or pass api_key.")
         
-        # 直接初始化OpenAI客户端，不传递任何额外参数
-        self.client = openai.OpenAI(api_key=self.api_key)
+        # Filter out any unsupported arguments
+        # Current OpenAI client only accepts a few specific parameters
+        valid_client_args = ['api_key', 'organization', 'base_url', 'timeout']
+        client_kwargs = {k: v for k, v in kwargs.items() if k in valid_client_args}
+        
+        # Initialize the OpenAI client with only the valid arguments
+        self.client = openai.OpenAI(api_key=self.api_key, **client_kwargs)
         
     def generate(self, prompt: str, system_prompt: Optional[str] = None, 
                 temperature: float = 0.7, max_tokens: int = 1000) -> str:
