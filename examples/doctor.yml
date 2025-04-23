@@ -9,11 +9,20 @@ process:
     gender: "MALE"
     birth_date: "1979-01-01" 
     profession: "Dermatologist"
+    model: "phi"
     skills:
       - "Diagnosis"
       - "Treatment Planning"
       - "Skin Surgery"
     evolution_objective: "Improve diagnostic and treatment accuracy for skin-related diseases through repeated patient interactions and reflection."
+
+  roles:
+    - name: "patient"
+      model: "phi"
+      description: "Patient agent with medical history, symptoms."
+    - name: "nurse"
+      model: "phi"
+      description: "Nurse agent for triage, registration, and examinations."
 
   nodes:
     - name: "Disease Onset"
