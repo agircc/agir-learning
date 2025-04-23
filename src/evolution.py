@@ -171,24 +171,33 @@ class EvolutionEngine:
                 logger.error(f"Process not found: {process_id}")
                 return False
                 
-            # Load process configuration
-            process_config = process["config"]
-            if isinstance(process_config, str):
-                try:
-                    process_config = json.loads(process_config)
-                except Exception as e:
-                    logger.error(f"Failed to parse process configuration: {str(e)}")
-                    return False
+            # Load process configuration - handle the case where config is None
+            if "config" not in process or process["config"] is None:
+                logger.warning(f"No configuration found for process {process_id}. Using empty config.")
+                process_config = {}
+            else:
+                process_config = process["config"]
+                if isinstance(process_config, str):
+                    try:
+                        process_config = json.loads(process_config)
+                    except Exception as e:
+                        logger.error(f"Failed to parse process configuration: {str(e)}")
+                        return False
             
-            process_name = process["name"]
+            # Get process name with fallback
+            process_name = process.get("name", f"Process {process_id}") if isinstance(process, dict) else f"Process {process_id}"
             logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
 
             # Get the learner user from the config
-            learner_config = process_config.get("learner", {})
-            if not learner_config:
-                logger.warning("No learner configuration found in the process. Using default.")
+            if not isinstance(process_config, dict):
+                logger.warning("Process config is not a dictionary. Using default learner config.")
                 learner_config = {"username": "default_learner"}
-                
+            else:
+                learner_config = process_config.get("learner", {})
+                if not learner_config:
+                    logger.warning("No learner configuration found in the process. Using default.")
+                    learner_config = {"username": "default_learner"}
+            
             logger.info(f"Looking up learner from config: {learner_config}")
             
             # Find or create the learner user
