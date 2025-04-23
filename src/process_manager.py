@@ -374,11 +374,13 @@ class ProcessManager:
             node_id_mapping = {}
             
             for i, node in enumerate(yaml_process.nodes):
-                # Get the role ID from the mapping
-                role_id = role_id_mapping.get(node.role)
-                if not role_id:
-                    logger.warning(f"Role not found for node: {node.name}, role: {node.role}")
-                    continue
+                # Special handling for "learner" role - don't try to find a role_id
+                role_id = None
+                if node.role != "learner":
+                    # Get the role ID from the mapping
+                    role_id = role_id_mapping.get(node.role)
+                    if not role_id:
+                        logger.warning(f"Role not found for node: {node.name}, role: {node.role}")
                 
                 db_node = ProcessNode(
                     process_id=process_id,
@@ -428,55 +430,18 @@ class ProcessManager:
             if not yaml_process.transitions:
                 logger.info("No transitions defined in YAML")
                 return True
-                
-            # Get all nodes for this process from the database
-            all_nodes = db.query(ProcessNode).filter(
-                ProcessNode.process_id == process_id
-            ).all()
-            
-            # Create a mapping of node names to database IDs
-            node_name_to_id = {}
-            for node in all_nodes:
-                node_name_to_id[node.name] = node.id
             
             # Log node mappings for debugging
-            logger.debug(f"Node name to ID mapping: {node_name_to_id}")
+            logger.debug(f"Node name to ID mapping: {node_id_mapping}")
             
             # Process each transition
             for transition in yaml_process.transitions:
                 from_node_name = transition.from_node
                 to_node_name = transition.to_node
                 
-                # Try to get IDs from different sources
-                from_node_id = None
-                to_node_id = None
-                
-                # First check if we already have mappings from the node ID mapping
-                if from_node_name in node_id_mapping:
-                    from_node_id = node_id_mapping[from_node_name]
-                
-                if to_node_name in node_id_mapping:
-                    to_node_id = node_id_mapping[to_node_name]
-                
-                # If not found, try the node name mapping
-                if not from_node_id and from_node_name in node_name_to_id:
-                    from_node_id = node_name_to_id[from_node_name]
-                
-                if not to_node_id and to_node_name in node_name_to_id:
-                    to_node_id = node_name_to_id[to_node_name]
-                
-                # As a last resort, case-insensitive search in node names
-                if not from_node_id:
-                    for name, id in node_name_to_id.items():
-                        if name.lower() == from_node_name.lower():
-                            from_node_id = id
-                            break
-                
-                if not to_node_id:
-                    for name, id in node_name_to_id.items():
-                        if name.lower() == to_node_name.lower():
-                            to_node_id = id
-                            break
+                # Find nodes by name if not found in the mapping
+                from_node_id = node_id_mapping.get(from_node_name)
+                to_node_id = node_id_mapping.get(to_node_name)
                 
                 # Skip if either node is not found
                 if not from_node_id:

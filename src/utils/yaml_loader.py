@@ -57,26 +57,10 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
         transitions = []
         
         for transition_data in process_data.get("transitions", []):
-            # Get from/to names from YAML
-            from_node_name = transition_data["from"]
-            to_node_name = transition_data["to"]
-            
-            # Find the node IDs based on names
-            from_node_id = node_name_to_id.get(from_node_name)
-            to_node_id = node_name_to_id.get(to_node_name)
-            
-            # Skip if either node is not found
-            if not from_node_id:
-                logger.warning(f"From node not found for transition: {from_node_name}")
-                continue
-                
-            if not to_node_id:
-                logger.warning(f"To node not found for transition: {to_node_name}")
-                continue
-            
+            # Use the original node names for transitions - they will be resolved at database creation time
             transitions.append(ProcessTransition(
-                from_node=from_node_id,
-                to_node=to_node_id
+                from_node=transition_data["from"],
+                to_node=transition_data["to"]
             ))
             
         # Prepare roles

@@ -30,9 +30,9 @@ class ProcessTransition(BaseModel):
 
 class Process(BaseModel):
     """
-    Represents a learning process with nodes, transitions, and roles.
+    Represents a process definition with nodes and transitions.
     """
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: Optional[str] = None
     name: str
     description: Optional[str] = None
     learner: Dict[str, Any] = Field(default_factory=dict)
@@ -40,103 +40,117 @@ class Process(BaseModel):
     transitions: List[ProcessTransition] = Field(default_factory=list)
     roles: List[Role] = Field(default_factory=list)
     evolution: Dict[str, Any] = Field(default_factory=dict)
-
-    # Node lookup cache
-    _node_map: Dict[str, ProcessNode] = {}
     
-    def node_by_id(self, node_id: str) -> Optional[ProcessNode]:
+    def get_node(self, node_id: str) -> Optional[ProcessNode]:
         """
         Get a node by its ID.
         
         Args:
-            node_id: The node ID
+            node_id: ID of the node
             
         Returns:
-            The node or None if not found
+            The node with matching ID, or None if not found
         """
-        # Populate cache if empty
-        if not self._node_map:
-            self._node_map = {node.id: node for node in self.nodes}
-            
-        return self._node_map.get(node_id)
-    
-    def next_nodes(self, node_id: str) -> List[ProcessNode]:
-        """
-        Get the next nodes after the given node.
-        
-        Args:
-            node_id: The current node ID
-            
-        Returns:
-            List of next possible nodes
-        """
-        next_node_ids = [
-            t.to_node for t in self.transitions 
-            if t.from_node == node_id
-        ]
-        
-        return [
-            self.node_by_id(node_id) 
-            for node_id in next_node_ids 
-            if self.node_by_id(node_id) is not None
-        ]
+        for node in self.nodes:
+            if node.id == node_id:
+                return node
+        return None
     
     def get_role(self, role_id: str) -> Optional[Role]:
         """
         Get a role by its ID.
         
         Args:
-            role_id: The role ID
+            role_id: ID of the role
             
         Returns:
-            The role or None if not found
+            The role with matching ID, or None if not found
         """
         for role in self.roles:
             if role.id == role_id:
                 return role
         return None
     
-    def validate_graph(self) -> Tuple[bool, List[str]]:
+    def next_nodes(self, node_id: str) -> List[ProcessNode]:
         """
-        Validate the process graph for correctness.
+        Get the next nodes for a given node.
+        
+        Args:
+            node_id: ID of the node
+            
+        Returns:
+            A list of next nodes
+        """
+        next_nodes = []
+        for transition in self.transitions:
+            if transition.from_node == node_id:
+                next_node_id = transition.to_node
+                next_node = self.get_node(next_node_id)
+                if next_node:
+                    next_nodes.append(next_node)
+        return next_nodes
+    
+    def terminal_nodes(self) -> List[ProcessNode]:
+        """
+        Get all terminal nodes in the process.
+        
+        A terminal node is a node with no outgoing transitions.
         
         Returns:
-            Tuple of (is_valid, list_of_errors)
+            A list of terminal nodes
         """
-        errors = []
-        
-        # Check for nodes referenced in transitions that don't exist
-        node_ids = {node.id for node in self.nodes}
-        
+        # Get all nodes with outgoing transitions
+        nodes_with_outgoing = set()
         for transition in self.transitions:
-            if transition.from_node not in node_ids:
-                errors.append(f"Transition references non-existent 'from' node: {transition.from_node}")
-            if transition.to_node not in node_ids:
-                errors.append(f"Transition references non-existent 'to' node: {transition.to_node}")
+            nodes_with_outgoing.add(transition.from_node)
         
-        # Check for nodes with no incoming or outgoing transitions
-        nodes_with_incoming = {t.to_node for t in self.transitions}
-        nodes_with_outgoing = {t.from_node for t in self.transitions}
-        
-        nodes_with_no_incoming = node_ids - nodes_with_incoming
-        if nodes_with_no_incoming and not nodes_with_no_incoming.issubset({self.nodes[0].id}):
-            # It's okay for the first node to have no incoming transitions
-            no_incoming_except_first = nodes_with_no_incoming - {self.nodes[0].id}
-            if no_incoming_except_first:
-                errors.append(f"Nodes with no incoming transitions: {no_incoming_except_first}")
-        
-        nodes_with_no_outgoing = node_ids - nodes_with_outgoing
-        if nodes_with_no_outgoing:
-            # It might be okay to have leaf nodes with no outgoing transitions
-            errors.append(f"Possible leaf nodes with no outgoing transitions: {nodes_with_no_outgoing}")
-        
-        # Check for roles referenced in nodes that don't exist
-        role_ids = {role.id for role in self.roles}
+        # Find all nodes that are not in the above set
+        terminal_nodes = []
         for node in self.nodes:
-            if node.role not in role_ids:
-                errors.append(f"Node '{node.id}' references non-existent role: {node.role}")
+            if node.id not in nodes_with_outgoing:
+                terminal_nodes.append(node)
         
-        return len(errors) == 0, errors
+        return terminal_nodes
+    
+    def initial_nodes(self) -> List[ProcessNode]:
+        """
+        Get all initial nodes in the process.
+        
+        An initial node is a node with no incoming transitions.
+        
+        Returns:
+            A list of initial nodes
+        """
+        # Get all nodes with incoming transitions
+        nodes_with_incoming = set()
+        for transition in self.transitions:
+            nodes_with_incoming.add(transition.to_node)
+        
+        # Find all nodes that are not in the above set
+        initial_nodes = []
+        for node in self.nodes:
+            if node.id not in nodes_with_incoming:
+                initial_nodes.append(node)
+        
+        return initial_nodes
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert the process to a dictionary.
+        
+        Returns:
+            Dictionary representation of the process
+        """
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "learner": self.learner,
+            "nodes": [node.dict() for node in self.nodes],
+            "transitions": [transition.dict() for transition in self.transitions],
+            "roles": [role.dict() for role in self.roles],
+            "evolution": self.evolution
+        }
     
     @classmethod
     def from_yaml(cls, yaml_content: str) -> "Process":
@@ -188,54 +202,4 @@ class Process(BaseModel):
             transitions=transitions,
             roles=roles,
             evolution=process_data.get("evolution", {})
-        )
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        将Process对象转换为字典，用于序列化到数据库
-        
-        Returns:
-            字典表示
-        """
-        # 转换nodes
-        nodes_list = []
-        for node in self.nodes:
-            node_dict = {
-                "id": node.id,
-                "name": node.name,
-                "role": node.role,
-                "description": node.description
-            }
-            if node.assigned_to:
-                node_dict["assigned_to"] = node.assigned_to
-            nodes_list.append(node_dict)
-            
-        # 转换transitions
-        transitions_list = []
-        for transition in self.transitions:
-            transitions_list.append({
-                "from": transition.from_node,
-                "to": transition.to_node
-            })
-            
-        # 转换roles
-        roles_list = []
-        for role in self.roles:
-            roles_list.append({
-                "id": role.id,
-                "name": role.name,
-                "description": role.description,
-                "system_prompt_template": role.system_prompt_template
-            })
-            
-        # 构建完整字典
-        return {
-            "id": self.id,
-            "name": self.name,
-            "description": self.description,
-            "learner": self.learner,
-            "nodes": nodes_list,
-            "transitions": transitions_list,
-            "roles": roles_list,
-            "evolution": self.evolution
-        } 
+        ) 

@@ -97,6 +97,23 @@ class EvolutionEngine:
         if not node.role:
             return default_provider
             
+        # Special handling for learner role
+        if node.role == "learner":
+            # Get the learner user
+            if hasattr(node, 'assigned_to') and node.assigned_to:
+                user = db.query(User).filter(User.username == node.assigned_to).first()
+                if user and hasattr(user, 'llm_model') and user.llm_model:
+                    logger.info(f"Using learner's model '{user.llm_model}' for node: {node.name}")
+                    return self.llm_provider_manager.get_provider(user.llm_model)
+            
+            # If no user found or no model specified, try to find a default learner
+            user = db.query(User).filter(User.is_active == True).first()
+            if user and hasattr(user, 'llm_model') and user.llm_model:
+                logger.info(f"Using active user's model '{user.llm_model}' for learner node: {node.name}")
+                return self.llm_provider_manager.get_provider(user.llm_model)
+                
+            return default_provider
+            
         # Query the database to get the role's model
         from agir_db.models.process_role import ProcessRole
         role = db.query(ProcessRole).filter(ProcessRole.id == node.role).first()
@@ -431,7 +448,7 @@ class EvolutionEngine:
         db: Session, 
         process: Process, 
         node: ProcessNode, 
-        learner: Any,
+        target_user: Any,
         history: List[Dict[str, Any]],
         process_id: Any = None
     ) -> Optional[Tuple[ProcessNode, str, Optional[ProcessNode]]]:
@@ -442,7 +459,7 @@ class EvolutionEngine:
             db: Database session
             process: Process instance
             node: Current node to process
-            learner: Target user for the process
+            target_user: Target user for the process
             history: Conversation history
             process_id: ID of the process in the database
             
@@ -458,22 +475,22 @@ class EvolutionEngine:
             # Get the role for this node
             role_id = node.role
             
-            # Check if node is assigned to a specific user or assigned to the target user
-            is_learner = False
-            if hasattr(node, 'assigned_to') and node.assigned_to:
-                if node.assigned_to == learner.username:
-                    is_learner = True
-                elif node.assigned_to == "learner":
-                    is_learner = True
-                    
+            # Check if node is assigned to a specific user or if it's a learner node
+            is_learner_node = False
+            if role_id == "learner":
+                is_learner_node = True
+                logger.info(f"Node {node.name} is a learner node, will use learner's model")
+            elif hasattr(node, 'assigned_to') and node.assigned_to and node.assigned_to == target_user.username:
+                is_learner_node = True
+                logger.info(f"Node {node.name} is assigned to target user {target_user.username}")
+                
             # Generate context for the node
-            context = self._generate_node_context(process, node, history, learner)
+            context = self._generate_node_context(process, node, history, target_user)
             
-            # If node is assigned to target user, handle differently
+            # If node is for the learner, handle differently
             response = ""
-            if is_learner:
-                logger.info(f"Node {node.name} is assigned to target user {learner.username}")
-                response = self._simulate_learner_response(node, context)
+            if is_learner_node:
+                response = self._simulate_target_user_response(node, context)
             else:
                 # Generate agent prompt
                 prompt = self._generate_agent_prompt(node, context, history)
@@ -595,7 +612,7 @@ class EvolutionEngine:
         
         return "\n".join(prompt_parts)
     
-    def _simulate_learner_response(self, node: ProcessNode, context: Dict[str, Any]) -> str:
+    def _simulate_target_user_response(self, node: ProcessNode, context: Dict[str, Any]) -> str:
         """
         Simulate a response from the target user.
         

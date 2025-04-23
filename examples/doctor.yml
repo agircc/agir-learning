@@ -38,7 +38,7 @@ process:
       description: "Patient registers and waits for doctor consultation."
 
     - name: "Consultation"
-      role: "doctor"
+      role: "learner"
       description: "Doctor listens to symptoms and decides on required medical examination."
 
     - name: "Medical Examination"
