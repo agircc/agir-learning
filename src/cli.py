@@ -126,15 +126,8 @@ def main():
         logger.info("Setup-only flag set, exiting without executing process")
         sys.exit(0)
     
-    try:
-        # Create LLM provider manager - no default settings
-        logger.info("Initializing LLM provider manager")
-        llm_provider_manager = LLMProviderManager(
-            skip_llm=args.skip_llm
-        )
-        
-        # Create evolution engine with the provider manager
-        engine = EvolutionEngine(llm_provider_manager=llm_provider_manager)
+    try:        
+        engine = EvolutionEngine()
         
         # Run evolution process, now using the ID rather than loading from file again
         logger.info(f"Running evolution process with ID: {process_id}")

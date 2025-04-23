@@ -15,7 +15,9 @@ from agir_db.db.session import SessionLocal, get_db
 from agir_db.models.user import User
 from agir_db.models.process import Process as DBProcess, ProcessNode as DBProcessNode
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
-from agir_db.models.custom_field import CustomField  # 明确从agir_db包导入CustomField
+from agir_db.models.custom_field import CustomField
+
+from .llms.llm_provider_manager import LLMProviderManager  # 明确从agir_db包导入CustomField
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
@@ -40,21 +42,15 @@ class EvolutionEngine:
     Main engine for running the evolution process.
     """
     
-    def __init__(self, llm_provider: Optional[BaseLLMProvider] = None, llm_provider_manager = None):
+    def __init__(self, llm_provider: Optional[BaseLLMProvider] = None):
         """
         Initialize the evolution engine.
         
         Args:
             llm_provider: Optional LLM provider (deprecated, use llm_provider_manager instead)
-            llm_provider_manager: LLM provider manager for managing multiple providers
-            
-        Raises:
-            ValueError: If no provider manager is specified
         """
-        if not llm_provider_manager:
-            raise ValueError("LLM provider manager is required")
             
-        self.llm_provider_manager = llm_provider_manager
+        self.llm_provider_manager = LLMProviderManager()
         
         # For backward compatibility - use only in methods that don't support specific models
         self.llm_provider = llm_provider
