@@ -291,7 +291,8 @@ class EvolutionEngine:
                         db_role = ProcessRole(
                             process_id=db_process.id,
                             name=role.name,
-                            description=role.description
+                            description=role.description,
+                            model=role.model
                         )
                         db.add(db_role)
                         db.flush()  # Get the ID without committing

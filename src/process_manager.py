@@ -145,21 +145,33 @@ class ProcessManager:
             
             if user:
                 logger.info(f"Found existing user: {username}")
+                # Update model field if it exists in YAML
+                if "model" in target_user_data and hasattr(user, "model"):
+                    user.model = target_user_data["model"]
+                    db.commit()
+                    logger.info(f"Updated user model to {target_user_data['model']}")
                 return user.id
             
+            # Prepare user data
+            user_data = {
+                "username": username,
+                "first_name": target_user_data.get("first_name", ""),
+                "last_name": target_user_data.get("last_name", ""),
+                "email": target_user_data.get("email", f"{username}@example.com"),
+                "status": "ACTIVE"
+            }
+            
+            # Add model if it exists in YAML
+            if "model" in target_user_data:
+                user_data["model"] = target_user_data["model"]
+            
             # Create new user
-            user = User(
-                username=username,
-                first_name=target_user_data.get("first_name", ""),
-                last_name=target_user_data.get("last_name", ""),
-                email=target_user_data.get("email", f"{username}@example.com"),
-                status="ACTIVE"
-            )
+            user = User(**user_data)
             
             # Add additional profile data
             profile_data = {}
             for key, value in target_user_data.items():
-                if key not in ["username", "first_name", "last_name", "email"]:
+                if key not in ["username", "first_name", "last_name", "email", "model"]:
                     profile_data[key] = value
             
             if profile_data:
@@ -267,7 +279,8 @@ class ProcessManager:
                 db_role = ProcessRole(
                     process_id=process_id,
                     name=role.name,
-                    description=role.description
+                    description=role.description,
+                    model=role.model
                 )
                 
                 db.add(db_role)

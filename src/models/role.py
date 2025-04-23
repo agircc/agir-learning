@@ -15,6 +15,7 @@ class Role(BaseModel):
     name: str
     description: str
     system_prompt_template: Optional[str] = None
+    model: Optional[str] = None
     required_skills: List[str] = Field(default_factory=list)
     knowledge_sources: List[str] = Field(default_factory=list)
     
