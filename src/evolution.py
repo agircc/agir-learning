@@ -19,7 +19,7 @@ from agir_db.models.custom_field import CustomField  # 明确从agir_db包导入
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record
+from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record, find_or_create_learner
 from .utils.yaml_loader import load_process_from_file
 from .process_manager import ProcessManager  # Import the new ProcessManager
 
@@ -146,143 +146,63 @@ class EvolutionEngine:
             
         return self.run_evolution(process)
         
-    def run_evolution_with_id(self, process_id: int) -> bool:
+    def run_evolution_with_id(self, process_id: int, process_name: str, process_config: Dict[str, Any]) -> None:
         """
-        Run the evolution process using a process ID from the database.
+        Run an evolution process for a process with the given ID
         
         Args:
-            process_id: ID of the process in the database
-            
-        Returns:
-            True if successful, False otherwise
+            process_id: The database ID of the process
+            process_name: Name of the process
+            process_config: Process configuration from YAML
         """
-        logger.info(f"Starting evolution process with ID: {process_id}")
+        logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
+
+        # Get the learner user from the YAML config
+        learner_config = process_config.get("learner", {})
+        if not learner_config:
+            logger.warning("No learner configuration found in the process YAML. Using default.")
+            learner_config = {"username": "default_learner"}
+            
+        logger.info(f"Looking up learner from config: {learner_config}")
         
         # Create database session
         with SessionLocal() as db:
-            try:
-                # Get process from database
-                db_process = db.query(DBProcess).filter(DBProcess.id == process_id).first()
-                if not db_process:
-                    logger.error(f"Process with ID {process_id} not found in database")
-                    return False
+            self.db = db  # Store db in instance for helper methods that need it
+            
+            # Find or create the learner user
+            learner = find_or_create_learner(db, learner_config)
+            logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
+            
+            # Get the process data
+            process = self.process_manager.get_process(process_id)
+            
+            if not process:
+                logger.error(f"Process not found: {process_id}")
+                return
                 
-                logger.info(f"Found process: {db_process.name}")
-                
-                # Find the target user (initiator)
-                learner = None
-                
-                # Try to find a user who would be appropriate for this process
-                # This could be improved to check for users with specific roles/permissions
-                user = db.query(User).filter(User.is_active == True).first()
-                if not user:
-                    logger.error("No active users found in the database")
-                    return False
-                
-                learner = user
-                logger.info(f"Using user {learner.username} as target user")
-                
-                # Execute the process using ProcessManager
-                instance_id = ProcessManager.execute_process(process_id, learner.id)
-                if not instance_id:
-                    logger.error("Failed to execute process")
-                    return False
-                
-                logger.info(f"Created process instance with ID: {instance_id}")
-                
-                # Get the process instance
-                process_instance = db.query(ProcessInstance).filter(
-                    ProcessInstance.id == instance_id
-                ).first()
-                
-                if not process_instance:
-                    logger.error(f"Process instance with ID {instance_id} not found")
-                    return False
-                
-                # Get the current node
-                current_node_id = process_instance.current_node_id
-                if not current_node_id:
-                    logger.error("Process instance has no current node")
-                    return False
-                
-                current_db_node = db.query(DBProcessNode).filter(
-                    DBProcessNode.id == current_node_id
-                ).first()
-                
-                if not current_db_node:
-                    logger.error(f"Node with ID {current_node_id} not found")
-                    return False
-                
-                # Fetch all roles from the database
-                from agir_db.models.process_role import ProcessRole
-                roles = []
-                db_roles = db.query(ProcessRole).filter(ProcessRole.process_id == process_id).all()
-                
-                for db_role in db_roles:
-                    from .models.role import Role
-                    roles.append(Role(
-                        id=str(db_role.id),
-                        name=db_role.name,
-                        description=db_role.description,
-                        system_prompt_template=""
-                    ))
-                
-                # Convert DB node to model node for processing
-                current_node = ProcessNode(
-                    id=str(current_db_node.id),
-                    name=current_db_node.name,
-                    role=str(current_db_node.role.id) if current_db_node.role else "unknown",
-                    description=current_db_node.description
-                )
-                
-                # Process nodes sequentially, advancing through the process
-                history = []  # Conversation history
-                
-                # Create a simple process object for compatibility with existing code
-                process = Process(
-                    id=str(db_process.id),
-                    name=db_process.name,
-                    description=db_process.description,
-                    nodes=[current_node],  # Start with just the current node
-                    transitions=[],  # We'll use ProcessManager for transitions
-                    roles=roles  # Use the roles we fetched from the database
-                )
-                
-                # Process the current node
-                while current_node:
-                    result = self._process_node(db, process, current_node, learner, history, process_id)
-                    if not result:
-                        logger.error(f"Failed to process node: {current_node.name}")
-                        # Mark process as failed
-                        ProcessManager.complete_process(instance_id, success=False)
-                        return False
+            # Load roles from the config and create users
+            roles_config = process_config.get("roles", {})
+            for role_name, role_data in roles_config.items():
+                if role_name.lower() == "learner":
+                    # Skip the learner role as it's already handled
+                    continue
                     
-                    processed_node, response, next_node = result
-                    
-                    # Advance the process to the next node using ProcessManager
-                    if next_node:
-                        step_id = ProcessManager.advance_process(instance_id, next_node.name)
-                        if not step_id:
-                            logger.error(f"Failed to advance process to node: {next_node.name}")
-                            ProcessManager.complete_process(instance_id, success=False)
-                            return False
-                        
-                        # Update current node
-                        current_node = next_node
-                    else:
-                        # No next node, process is complete
-                        logger.info("Process complete, no more nodes to process")
-                        ProcessManager.complete_process(instance_id, success=True)
-                        current_node = None
+                logger.info(f"Creating agent for role: {role_name}")
+                username = role_data.get("username", f"{role_name}_{process_id}")
+                agent = create_or_update_agent(db, role_name, process_id, username)
+                logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
                 
-                # Process evolution
-                self._process_evolution(db, process, learner, history, process_id)
-                
-                return True
-                
-            except Exception as e:
-                logger.error(f"Error running evolution process: {str(e)}")
-                return False
+                # Update agent's model if specified
+                if "model" in role_data and hasattr(agent, "llm_model"):
+                    agent.llm_model = role_data["model"]
+                    db.commit()
+                    logger.info(f"Updated {role_name}'s model to {role_data['model']}")
+            
+            # Initialize empty history for the process
+            history = []
+            
+            # Run the evolution process
+            self._process_evolution(db, process, learner, history, process_id)
         
     def run_evolution(self, process: Process) -> bool:
         """
@@ -657,7 +577,7 @@ class EvolutionEngine:
         Args:
             db: Database session
             process: Process instance
-            learner: Target user for the process
+            learner: The learner user that is evolving through this process
             history: Conversation history
             process_id: ID of the process in the database
         """
@@ -667,12 +587,12 @@ class EvolutionEngine:
             
         logger.info(f"Processing evolution for process: {process.name}")
         
-        # Get or create agent for target user
+        # Get or create agent for learner user
         agent = find_agent_by_role(db, "learner", process_id)
         if not agent:
             agent = create_or_update_agent(db, "learner", process_id, learner.username)
             if not agent:
-                logger.error("Failed to create agent for target user")
+                logger.error(f"Failed to create agent for learner {learner.username}")
                 return
                 
         # Generate evolution prompt
@@ -693,7 +613,7 @@ class EvolutionEngine:
         """
         
         # Get the appropriate LLM provider for evolution
-        # For evolution, we'll use the target user's model if available
+        # For evolution, we'll use the learner's model if available
         llm_provider = self.llm_provider
         if self.llm_provider_manager and learner and hasattr(learner, 'llm_model') and learner.llm_model:
             llm_provider = self.llm_provider_manager.get_provider(learner.llm_model)
@@ -719,7 +639,7 @@ class EvolutionEngine:
             logger.error(f"Error in evolution process: {str(e)}")
             db.rollback()
         
-        # Store as a custom field for the user (另一种方法，确保至少有一种成功)
+        # Store as a custom field for the user
         evolution_field_name = f"evolution_{process.id}"
         
         # Check if we already have an evolution field for this process
@@ -734,9 +654,9 @@ class EvolutionEngine:
         else:
             # Create new field
             try:
-                # 添加调试日志
-                logger.info(f"Creating second CustomField with: user_id={learner.id}, field_name={evolution_field_name}, field_value={evolution_result[:20]}...")
-                # Create new CustomField without db parameter
+                # Add debug logs
+                logger.info(f"Creating CustomField with: user_id={learner.id}, field_name={evolution_field_name}, field_value={evolution_result[:20]}...")
+                # Create new CustomField
                 evolution_field = CustomField(
                     user_id=learner.id,
                     field_name=evolution_field_name,
@@ -745,12 +665,12 @@ class EvolutionEngine:
                 db.add(evolution_field)
             except Exception as e:
                 logger.error(f"Failed to create CustomField: {str(e)}")
-                # 添加详细错误日志
+                # Add detailed error logs
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 return
             
-        db.commit() 
+        db.commit()
 
     def _find_next_node(self, process: Process, current_node: ProcessNode) -> Optional[ProcessNode]:
         """

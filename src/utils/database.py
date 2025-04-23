@@ -45,7 +45,10 @@ def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) ->
     gender = user_data.pop("gender", None)
     birth_date = user_data.pop("birth_date", None)
     email = user_data.pop("email", f"{username}@agir.ai")  # Generate default email
-    logger.info(f"gender: {gender}")
+    
+    # Handle LLM model if present
+    llm_model = user_data.pop("model", None)
+    
     # Create the user
     new_user = User(
         username=username,
@@ -56,6 +59,10 @@ def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) ->
         email=email,
         is_active=True,
     )
+    
+    # Set LLM model if present and the field exists
+    if llm_model and hasattr(new_user, 'llm_model'):
+        new_user.llm_model = llm_model
     
     db.add(new_user)
     db.flush()  # Flush to get the ID without committing
@@ -79,98 +86,116 @@ def get_or_create_user(db: Session, username: str, user_data: Dict[str, Any]) ->
     return new_user, True
 
 
-def create_or_update_agent(db: Session, agent_data: Dict[str, Any], created_by_id: int) -> User:
+def find_or_create_learner(db: Session, learner_data: Dict[str, Any]) -> User:
     """
-    Create or update an agent user.
+    Find an existing learner or create a new one based on the provided data.
+    This is a specialized function for handling the main learner user.
     
     Args:
         db: Database session
-        agent_data: Agent data
-        created_by_id: ID of the user who created this agent
+        learner_data: Learner data from the YAML file
+        
+    Returns:
+        User instance representing the learner
+    """
+    username = learner_data.get("username")
+    if not username:
+        raise ValueError("Learner must have a username specified")
+    
+    # Try to find existing learner
+    user, created = get_or_create_user(db, username, learner_data.copy())
+    
+    # Mark as learner role in custom fields if created
+    if created:
+        learner_role = CustomField(
+            user_id=user.id,
+            field_name="role",
+            field_value="learner"
+        )
+        db.add(learner_role)
+        db.commit()
+        logger.info(f"Marked user {username} as a learner")
+    
+    return user
+
+
+def create_or_update_agent(db: Session, role: str, process_id: Any, username: Optional[str] = None) -> User:
+    """
+    Create or update an agent user for a specific role and process.
+    
+    Args:
+        db: Database session
+        role: Role name
+        process_id: ID of the process
+        username: Optional username for the agent
         
     Returns:
         Agent user
     """
-    username = agent_data.get("username", f"{agent_data.get('role', 'agent')}_{agent_data.get('id', 'unknown')}")
+    # Generate username if not provided
+    if not username:
+        username = f"{role}_{process_id}"
     
     # Check if agent already exists
     existing_agent = db.query(User).filter(User.username == username).first()
     
     if existing_agent:
-        logger.info(f"Updating existing agent: {username}")
+        logger.info(f"Found existing agent for role {role}: {username}")
         
-        # Update basic fields if provided
-        if "first_name" in agent_data:
-            existing_agent.first_name = agent_data["first_name"]
-        if "last_name" in agent_data:
-            existing_agent.last_name = agent_data["last_name"]
-        if "email" in agent_data:
-            existing_agent.email = agent_data["email"]
-            
-        # Update custom fields
-        for key, value in agent_data.items():
-            if key in ["username", "first_name", "last_name", "email", "id"]:
-                continue
-                
-            if value is not None:
-                if isinstance(value, (list, dict)):
-                    value = json.dumps(value)
-                    
-                # Check if field exists
-                existing_field = db.query(CustomField).filter(
-                    CustomField.user_id == existing_agent.id,
-                    CustomField.field_name == key
-                ).first()
-                
-                if existing_field:
-                    existing_field.field_value = str(value)
-                else:
-                    new_field = CustomField(
-                        user_id=existing_agent.id,
-                        field_name=key,
-                        field_value=str(value)
-                    )
-                    db.add(new_field)
+        # Update role if needed
+        existing_role = db.query(CustomField).filter(
+            CustomField.user_id == existing_agent.id,
+            CustomField.field_name == "role"
+        ).first()
         
-        db.commit()
-        db.refresh(existing_agent)
+        if existing_role:
+            if existing_role.field_value != role:
+                existing_role.field_value = role
+                db.commit()
+                logger.info(f"Updated agent role to {role}")
+        else:
+            # Add role field
+            role_field = CustomField(
+                user_id=existing_agent.id,
+                field_name="role",
+                field_value=role
+            )
+            db.add(role_field)
+            db.commit()
+            logger.info(f"Added role {role} to existing agent")
+        
         return existing_agent
     
     # Create new agent
-    logger.info(f"Creating new agent: {username}")
+    logger.info(f"Creating new agent for role {role}: {username}")
     
-    first_name = agent_data.get("first_name", f"Agent {agent_data.get('name', username)}")
-    last_name = agent_data.get("last_name", agent_data.get("role", ""))
-    email = agent_data.get("email", f"{username}@agir.ai")
-    
-    # Create agent user
+    # Create basic user
     new_agent = User(
         username=username,
-        first_name=first_name,
-        last_name=last_name,
-        email=email,
-        is_active=True,
-        created_by=created_by_id
+        first_name=f"Agent {role.capitalize()}",
+        last_name=str(process_id)[:8],
+        email=f"{username}@agir.ai",
+        is_active=True
     )
     
     db.add(new_agent)
     db.flush()
     
-    # Add custom fields
-    for key, value in agent_data.items():
-        if key in ["username", "first_name", "last_name", "email", "id"]:
-            continue
-            
-        if value is not None:
-            if isinstance(value, (list, dict)):
-                value = json.dumps(value)
-                
-            custom_field = CustomField(
-                user_id=new_agent.id,
-                field_name=key,
-                field_value=str(value)
-            )
-            db.add(custom_field)
+    # Add role custom field
+    role_field = CustomField(
+        user_id=new_agent.id,
+        field_name="role",
+        field_value=role
+    )
+    db.add(role_field)
+    
+    # Add process ID custom field
+    process_field = CustomField(
+        user_id=new_agent.id,
+        field_name="process_id",
+        field_value=str(process_id)
+    )
+    db.add(process_field)
     
     db.commit()
     db.refresh(new_agent)
@@ -178,31 +203,45 @@ def create_or_update_agent(db: Session, agent_data: Dict[str, Any], created_by_i
     return new_agent
 
 
-def find_agent_by_role(db: Session, role: str, created_by_id: Optional[int] = None) -> Optional[User]:
+def find_agent_by_role(db: Session, role: str, process_id: Optional[Any] = None) -> Optional[User]:
     """
-    Find an agent by role.
+    Find an agent by role and optionally process ID.
     
     Args:
         db: Database session
-        role: Role to look for
-        created_by_id: Optional filter by creator
+        role: Role to look for (e.g., "learner", "patient", "nurse")
+        process_id: Optional process ID to filter by
         
     Returns:
         Agent user or None if not found
     """
-    query = db.query(CustomField, User) \
-        .filter(CustomField.field_name == "role") \
-        .filter(CustomField.field_value == role) \
-        .filter(CustomField.user_id == User.id)
+    # Start with basic query for the role
+    query = db.query(User).join(
+        CustomField, 
+        User.id == CustomField.user_id
+    ).filter(
+        CustomField.field_name == "role",
+        CustomField.field_value == role
+    )
     
-    if created_by_id is not None:
-        query = query.filter(User.created_by_id == created_by_id)
+    # If process_id provided, add that filter
+    if process_id is not None:
+        query = query.join(
+            CustomField, 
+            User.id == CustomField.user_id,
+            isouter=True
+        ).filter(
+            CustomField.field_name == "process_id",
+            CustomField.field_value == str(process_id)
+        )
     
-    result = query.first()
+    agent = query.first()
     
-    if result:
-        return result[1]  # Return the User object
+    if agent:
+        logger.info(f"Found agent for role {role}" + (f" in process {process_id}" if process_id else ""))
+        return agent
     
+    logger.info(f"No agent found for role {role}" + (f" in process {process_id}" if process_id else ""))
     return None
 
 

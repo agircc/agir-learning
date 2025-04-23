@@ -1,15 +1,24 @@
-# Agent Evolution System
+# AGIR Learning: Agent-Guided Intelligent Reflection for Skill Development
 
-A system for agent evolution through simulated experiences defined in YAML.
+A system designed to improve learner skills through simulated experiences and guided interactions with AI agents in virtual processes.
 
 ## Overview
 
-This system allows users to evolve through simulated experiences provided by LLM-powered agents. The system:
+AGIR Learning is a platform that helps learners develop specific skills through structured interactions with AI agents in simulated environments. The system creates virtual scenarios where learners can practice skills, receive feedback, and reflect on their performance—all with the guidance of specialized AI agents.
 
-1. Loads process definitions from YAML files
-2. Creates or finds target users and agent users in the database
-3. Simulates interactions between agents according to the process graph
-4. Generates reflections and evolution insights for the target user
+The core purpose of AGIR Learning is to **accelerate skill development through simulated practice in a safe environment**. Whether learning medical diagnosis, negotiation tactics, or programming techniques, the system provides:
+
+1. **Structured learning environments** defined as processes in YAML
+2. **Role-based AI agents** that simulate different participants in the learning scenario
+3. **Guided reflection** to help learners understand their strengths and areas for improvement
+4. **Iterative skill development** through repeated practice with increasing complexity
+
+### Key Concepts
+
+- **Learner**: The primary user whose skills are being developed through the process. In the database, a learner is a record in the user table.
+- **Process**: A structured sequence of interactions designed as a learning experience for specific skills.
+- **Agents**: AI participants in the process represented by different roles (stored as users in the database).
+- **Evolution**: The mechanism by which the learner's skills improve through experiences, feedback, and guided reflection.
 
 ## Installation
 
@@ -59,29 +68,38 @@ process:
   name: "Process Name"
   description: "Process Description"
 
+  # The learner is the central user whose skills are being developed
   learner:
-    username: "learnername"
-    first_name: "User's First Name"
-    last_name: "User's Last Name"
+    username: "username"  # Username in the database
+    first_name: "First Name"
+    last_name: "Last Name"
+    model: "gpt-4"  # LLM model to use for this learner
     # Other user attributes
-    evolution_objective: "Description of what the user should learn"
+    evolution_objective: "Description of what the learner should learn"
 
+  # Roles represent different agents in the process
+  roles:
+    - name: "patient"
+      model: "phi"  # Each role can use a different LLM model
+      description: "Patient agent with medical history, symptoms."
+    - name: "nurse"
+      model: "phi"
+      description: "Nurse agent for triage, registration, and examinations."
+
+  # Nodes are the steps in the process
   nodes:
     - name: "Node Name"
-      role: "role_id"
+      role: "role_name"  # Role this node belongs to
       description: "Node Description"
-      assigned_to: "optional_username"  # If assigned to target user
+      # If role is "learner", this node represents actions by the learner
 
+  # Transitions define the flow between nodes
   transitions:
-    - from: "Node Name"
-      to: "Another Node Name"
+    - from: "First Node Name"
+      to: "Second Node Name"
     # More transitions
 
-  roles:
-    - id: role_id
-      name: "Role Name"
-      description: "Role Description"
-
+  # Evolution defines how the learner improves
   evolution:
     method: "Evolution Method Name"
     description: "Description of how evolution works"
@@ -89,6 +107,24 @@ process:
       - "Source 1"
       - "Source 2"
 ```
+
+## Learner-Centric Architecture
+
+This system is designed around the central concept of a **learner** - a user whose skills and knowledge evolve through simulated processes. Here's how it works:
+
+1. **Learner Identification**: 
+   - The system identifies the learner based on the YAML configuration
+   - The learner is always a real user in the database
+   - All interactions are designed to benefit this user's development
+
+2. **Multi-Provider LLM Architecture**:
+   - Each role in the process can be assigned a different LLM model
+   - The learner can have their own designated model
+   - This allows for efficient resource allocation (powerful models for complex tasks, simpler models for basic interactions)
+
+3. **User Database Integration**:
+   - All agents in the system, including the learner, are stored in the user table
+   - This unified approach ensures consistent user handling and evolution tracking
 
 ## Process Creation Flow
 
@@ -98,9 +134,9 @@ The system follows these steps when creating a process:
    - Check if required database tables exist
    - If tables don't exist, prompt user to run database migrations
 
-2. **User Creation**
-   - Read the YAML file and extract target user information
-   - Check if the target user exists in the user table based on username
+2. **Learner Creation**
+   - Read the YAML file and extract learner information
+   - Check if the learner exists in the user table based on username
    - If not found, create a new user record
 
 3. **Process Creation**
@@ -109,38 +145,36 @@ The system follows these steps when creating a process:
 
 4. **Process Roles Creation**
    - For each role defined in the YAML, create a process role record
-   - Store mapping between YAML role IDs and database role IDs
+   - Special handling for the "learner" role which references the main user
 
 5. **Process Nodes Creation**
    - For each node defined in the YAML, create a process node record
-   - Associate each node with its corresponding role using the role mapping
-   - Store mapping between YAML node IDs and database node IDs
+   - Special handling for nodes with role="learner" - these represent learner actions
 
 6. **Process Transitions Creation**
    - For each transition defined in the YAML, create a process transition record
-   - Use node mappings to correctly link from_node_id and to_node_id
+   - Transitions define the flow of the learning experience
 
 ## Process Execution Flow
 
 When executing a process, the system follows these steps:
 
 1. **Process Instance Creation**
-   - Create a process instance record linked to the process and target user
+   - Create a process instance record linked to the process and learner
    - Set initial status to RUNNING
-   - Store the full process configuration as JSON in the config field
 
 2. **Process Instance Steps**
    - Start with the first node in the process
    - For each node:
-     - Create a process instance step record linked to the appropriate node
-     - Execute the node logic (agent interaction, etc.)
-     - Update the step status upon completion
-     - Determine the next node based on transitions
+     - Create a process instance step record
+     - Use the appropriate LLM model based on role or learner configuration
+     - Generate responses and advance through the process
 
 3. **Evolution Generation**
-   - After completing all nodes or reaching a terminal node
+   - After completing all nodes
    - Generate evolution insights based on the process history
-   - Update the target user with new knowledge/skills
+   - Update the learner with new knowledge/skills
+   - Store evolution data in the database for future reference
 
 ## Project Structure
 
@@ -153,7 +187,7 @@ Project Root/
 │   └── doctor.yml          # Doctor example
 └── src/                    # Source code directory
     ├── __init__.py         # Module initialization
-    ├── cli.py              # Command line interface
+    ├── cli.py              # Command line interface and LLM provider management
     ├── evolution.py        # Main evolution engine
     ├── db/                 # Database utilities
     │   └── __init__.py     # Database initialization
@@ -161,78 +195,18 @@ Project Root/
     │   ├── __init__.py     # LLM module initialization
     │   ├── base.py         # Base LLM provider interface
     │   ├── openai.py       # OpenAI implementation
-    │   └── anthropic.py    # Anthropic implementation
+    │   ├── anthropic.py    # Anthropic implementation
+    │   └── ollama.py       # Ollama implementation
     ├── models/             # Data models
     │   ├── __init__.py     # Models initialization
     │   ├── agent.py        # Agent model
     │   ├── process.py      # Process model
     │   └── role.py         # Role model
+    ├── process_manager.py  # Process management and execution
     └── utils/              # Utility functions
         ├── __init__.py     # Utils initialization
         ├── database.py     # Database utility functions
         └── yaml_loader.py  # YAML loading utilities
-```
-
-## System Flow Diagram
-
-```mermaid
-graph TD
-    A[User Input: YAML Process File] --> B[CLI Arguments Processing]
-    B --> C{Check DB Tables}
-    C -->|Tables Exist| D[ProcessManager: Create Process from YAML]
-    C -->|Tables Don't Exist| C1[Error: Run Migrations]
-    
-    D --> D1[Create/Find Target User]
-    D1 --> D2[Create/Find Process]
-    D2 --> D3[Create Process Roles]
-    D3 --> D4[Create Process Nodes]
-    D4 --> D5[Create Process Transitions]
-    D5 --> E[Initialize LLM Provider]
-    
-    E --> F[EvolutionEngine: Run Evolution with Process ID]
-    F --> G[ProcessManager: Execute Process]
-    G --> G1[Create Process Instance]
-    G1 --> H[Process Nodes Sequentially]
-    
-    H --> I{Node Type?}
-    I -->|Target User Node| J[Simulate Target User]
-    I -->|Agent Node| K[Execute Agent Logic]
-    
-    J --> L[Generate Node Response]
-    K --> L
-    
-    L --> M{More Nodes?}
-    M -->|Yes| N[Advance Process to Next Node]
-    N --> H
-    M -->|No| O[Process Evolution]
-    
-    O --> P[Generate Reflections]
-    P --> Q[Update User Knowledge]
-    Q --> R[Mark Process Complete]
-    
-    subgraph "Database Interactions"
-        DB1[(PostgreSQL DB)]
-        D1 -.-> DB1
-        D2 -.-> DB1
-        D3 -.-> DB1
-        D4 -.-> DB1
-        D5 -.-> DB1
-        G1 -.-> DB1
-        L -.-> DB1
-        N -.-> DB1
-        Q -.-> DB1
-        R -.-> DB1
-    end
-    
-    subgraph "LLM Providers"
-        LLM1[OpenAI Provider]
-        LLM2[Anthropic Provider]
-        E -.-> LLM1
-        E -.-> LLM2
-        J -.-> LLM1
-        K -.-> LLM1
-        P -.-> LLM1
-    end
 ```
 
 ## Extension
@@ -242,12 +216,12 @@ graph TD
 1. Create a new provider in `src/llms/`
 2. Implement the `BaseLLMProvider` interface
 3. Add the provider to `src/llms/__init__.py`
-4. Update the CLI in `src/cli.py` to support the new provider
+4. Update the `LLMProviderManager` in `src/cli.py` to support the new provider
 
 ### Creating Custom Processes
 
 1. Create a new YAML file based on the examples
-2. Define nodes, transitions, roles, and evolution method
+2. Define the learner, nodes, transitions, roles, and evolution method
 3. Run the process using the CLI
 
 ## Development Notes
