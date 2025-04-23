@@ -19,7 +19,7 @@ from agir_db.models.custom_field import CustomField  # 明确从agir_db包导入
 from .models.process import Process, ProcessNode
 from .models.agent import Agent
 from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from .utils.database import get_or_create_user, create_or_update_agent, find_agent_by_role, create_process_record, find_or_create_learner
+from .utils.database import get_or_create_user, create_user, find_user_by_role, create_process_record, find_or_create_learner
 from .utils.yaml_loader import load_process_from_file
 from .process_manager import ProcessManager  # Import the new ProcessManager
 
@@ -189,7 +189,7 @@ class EvolutionEngine:
                     
                 logger.info(f"Creating agent for role: {role_name}")
                 username = role_data.get("username", f"{role_name}_{process_id}")
-                agent = create_or_update_agent(db, role_name, process_id, username)
+                agent = create_user(db, role_name, process_id, username)
                 logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
                 
                 # Update agent's model if specified
@@ -588,9 +588,9 @@ class EvolutionEngine:
         logger.info(f"Processing evolution for process: {process.name}")
         
         # Get or create agent for learner user
-        agent = find_agent_by_role(db, "learner", process_id)
+        agent = find_user_by_role(db, "learner", process_id)
         if not agent:
-            agent = create_or_update_agent(db, "learner", process_id, learner.username)
+            agent = create_user(db, "learner", process_id, learner.username)
             if not agent:
                 logger.error(f"Failed to create agent for learner {learner.username}")
                 return

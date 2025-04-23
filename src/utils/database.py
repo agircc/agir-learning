@@ -9,7 +9,9 @@ import logging
 from sqlalchemy.orm import Session
 from agir_db.models.user import User
 from agir_db.models.process import Process as DBProcess
-from agir_db.models.custom_field import CustomField  # 导入agir_db包中的CustomField
+from agir_db.models.custom_field import CustomField
+from agir_db.models.process_role import ProcessRole
+from agir_db.models.process_role_user import ProcessRoleUser
 
 logger = logging.getLogger(__name__)
 
@@ -105,72 +107,38 @@ def find_or_create_learner(db: Session, learner_data: Dict[str, Any]) -> User:
     # Try to find existing learner
     user, created = get_or_create_user(db, username, learner_data.copy())
     
-    # Mark as learner role in custom fields if created
-    if created:
-        learner_role = CustomField(
-            user_id=user.id,
-            field_name="role",
-            field_value="learner"
-        )
-        db.add(learner_role)
-        db.commit()
-        logger.info(f"Marked user {username} as a learner")
-    
     return user
 
 
-def create_or_update_agent(db: Session, role: str, process_id: Any, username: Optional[str] = None) -> User:
+def create_user(db: Session, role: str, process_id: Any, username: Optional[str] = None) -> User:
     """
-    Create or update an agent user for a specific role and process.
+    Create a user for a specific role and process and associate them in process_role_users.
     
     Args:
         db: Database session
         role: Role name
         process_id: ID of the process
-        username: Optional username for the agent
+        username: Optional username for the user
         
     Returns:
-        Agent user
+        User instance
     """
     # Generate username if not provided
     if not username:
         username = f"{role}_{process_id}"
     
-    # Check if agent already exists
-    existing_agent = db.query(User).filter(User.username == username).first()
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.username == username).first()
     
-    if existing_agent:
-        logger.info(f"Found existing agent for role {role}: {username}")
-        
-        # Update role if needed
-        existing_role = db.query(CustomField).filter(
-            CustomField.user_id == existing_agent.id,
-            CustomField.field_name == "role"
-        ).first()
-        
-        if existing_role:
-            if existing_role.field_value != role:
-                existing_role.field_value = role
-                db.commit()
-                logger.info(f"Updated agent role to {role}")
-        else:
-            # Add role field
-            role_field = CustomField(
-                user_id=existing_agent.id,
-                field_name="role",
-                field_value=role
-            )
-            db.add(role_field)
-            db.commit()
-            logger.info(f"Added role {role} to existing agent")
-        
-        return existing_agent
+    if existing_user:
+        logger.info(f"Found existing user with username {username}")
+        return existing_user
     
-    # Create new agent
-    logger.info(f"Creating new agent for role {role}: {username}")
+    # Create new user
+    logger.info(f"Creating new user for role {role}: {username}")
     
     # Create basic user
-    new_agent = User(
+    new_user = User(
         username=username,
         first_name=f"Agent {role.capitalize()}",
         last_name=str(process_id)[:8],
@@ -178,34 +146,42 @@ def create_or_update_agent(db: Session, role: str, process_id: Any, username: Op
         is_active=True
     )
     
-    db.add(new_agent)
+    db.add(new_user)
     db.flush()
     
-    # Add role custom field
-    role_field = CustomField(
-        user_id=new_agent.id,
-        field_name="role",
-        field_value=role
-    )
-    db.add(role_field)
+    # Find the process role
+    process_role = db.query(ProcessRole).filter(
+        ProcessRole.process_id == process_id,
+        ProcessRole.name == role
+    ).first()
     
-    # Add process ID custom field
-    process_field = CustomField(
-        user_id=new_agent.id,
-        field_name="process_id",
-        field_value=str(process_id)
+    if not process_role:
+        logger.warning(f"Role '{role}' not found for process {process_id}. Creating a default role.")
+        # Create a default role if it doesn't exist
+        process_role = ProcessRole(
+            process_id=process_id,
+            name=role,
+            description=f"Automatically created role for {role}"
+        )
+        db.add(process_role)
+        db.flush()
+    
+    # Associate user with role
+    role_user = ProcessRoleUser(
+        process_role_id=process_role.id,
+        user_id=new_user.id
     )
-    db.add(process_field)
+    db.add(role_user)
     
     db.commit()
-    db.refresh(new_agent)
+    db.refresh(new_user)
     
-    return new_agent
+    return new_user
 
 
-def find_agent_by_role(db: Session, role: str, process_id: Optional[Any] = None) -> Optional[User]:
+def find_user_by_role(db: Session, role: str, process_id: Optional[Any] = None) -> Optional[User]:
     """
-    Find an agent by role and optionally process ID.
+    Find a user by role and optionally process ID using the process_role_users table.
     
     Args:
         db: Database session
@@ -213,35 +189,41 @@ def find_agent_by_role(db: Session, role: str, process_id: Optional[Any] = None)
         process_id: Optional process ID to filter by
         
     Returns:
-        Agent user or None if not found
+        User or None if not found
     """
-    # Start with basic query for the role
-    query = db.query(User).join(
-        CustomField, 
-        User.id == CustomField.user_id
-    ).filter(
-        CustomField.field_name == "role",
-        CustomField.field_value == role
-    )
+    query = db.query(User)
     
-    # If process_id provided, add that filter
     if process_id is not None:
+        # Use process_role_users to find users with this role in this process
         query = query.join(
-            CustomField, 
-            User.id == CustomField.user_id,
-            isouter=True
+            ProcessRoleUser, 
+            User.id == ProcessRoleUser.user_id
+        ).join(
+            ProcessRole,
+            ProcessRoleUser.process_role_id == ProcessRole.id
         ).filter(
-            CustomField.field_name == "process_id",
-            CustomField.field_value == str(process_id)
+            ProcessRole.name == role,
+            ProcessRole.process_id == process_id
+        )
+    else:
+        # If no process_id specified, just find any user with this role
+        query = query.join(
+            ProcessRoleUser, 
+            User.id == ProcessRoleUser.user_id
+        ).join(
+            ProcessRole,
+            ProcessRoleUser.process_role_id == ProcessRole.id
+        ).filter(
+            ProcessRole.name == role
         )
     
-    agent = query.first()
+    user = query.first()
     
-    if agent:
-        logger.info(f"Found agent for role {role}" + (f" in process {process_id}" if process_id else ""))
-        return agent
+    if user:
+        logger.info(f"Found user for role {role}" + (f" in process {process_id}" if process_id else ""))
+        return user
     
-    logger.info(f"No agent found for role {role}" + (f" in process {process_id}" if process_id else ""))
+    logger.info(f"No user found for role {role}" + (f" in process {process_id}" if process_id else ""))
     return None
 
 
