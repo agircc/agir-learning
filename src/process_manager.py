@@ -262,7 +262,7 @@ class ProcessManager:
     @staticmethod
     def _create_process_roles(db: Session, process_id: int, yaml_process: YamlProcess) -> Optional[Dict[str, int]]:
         """
-        Create process roles from YAML process.
+        Create roles for a process based on YAML process.
         
         Args:
             db: Database session
@@ -270,31 +270,77 @@ class ProcessManager:
             yaml_process: YAML process object
             
         Returns:
-            Optional[Dict[str, int]]: Mapping of YAML role IDs to database role IDs if successful, None otherwise
+            Optional[Dict[str, int]]: Mapping of role names to IDs if successful, None otherwise
         """
         try:
+            roles = yaml_process.roles
+            if not roles:
+                logger.warning("No roles defined in process YAML")
+                return {}
+            
+            # Create role ID mapping
             role_id_mapping = {}
             
-            for role in yaml_process.roles:
-                db_role = ProcessRole(
-                    process_id=process_id,
-                    name=role.name,
-                    description=role.description,
-                    model=role.model
-                )
+            # Process each role
+            for role_data in roles:
+                role_name = None
+                role_description = None
+                model = None
                 
-                db.add(db_role)
-                db.flush()  # Get the ID without committing
-                role_id_mapping[role.id] = db_role.id
-            
-            db.commit()
-            logger.info(f"Created {len(role_id_mapping)} process roles")
+                # Handle both formats (dict and Role object)
+                if isinstance(role_data, dict):
+                    role_name = role_data.get("name") or role_data.get("id")
+                    role_description = role_data.get("description", "")
+                    model = role_data.get("model", "")  # Get model from role data
+                else:
+                    role_name = role_data.name or role_data.id
+                    role_description = role_data.description
+                    # Try to get model from role object attributes
+                    model = getattr(role_data, "model", "") if hasattr(role_data, "model") else ""
+                
+                if not role_name:
+                    logger.error("Role name not specified in YAML")
+                    continue
+                
+                # Check if role exists
+                role = db.query(ProcessRole).filter(
+                    ProcessRole.process_id == process_id,
+                    ProcessRole.name == role_name
+                ).first()
+                
+                if role:
+                    logger.info(f"Found existing role: {role_name}")
+                    # Update model if it's provided
+                    if model and hasattr(role, "model"):
+                        role.model = model
+                        db.commit()
+                        logger.info(f"Updated role model to {model}")
+                else:
+                    # Create role data
+                    role_data = {
+                        "process_id": process_id,
+                        "name": role_name,
+                        "description": role_description
+                    }
+                    
+                    # Add model if it exists
+                    if model:
+                        role_data["model"] = model
+                    
+                    # Create role
+                    role = ProcessRole(**role_data)
+                    db.add(role)
+                    db.commit()
+                    logger.info(f"Created new role: {role_name} with ID: {role.id}")
+                
+                # Add to mapping
+                role_id_mapping[role_name] = role.id
             
             return role_id_mapping
             
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to create process roles: {str(e)}")
+            logger.error(f"Failed to create roles: {str(e)}")
             return None
     
     @staticmethod

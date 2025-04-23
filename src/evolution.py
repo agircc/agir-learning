@@ -40,14 +40,20 @@ class EvolutionEngine:
     Main engine for running the evolution process.
     """
     
-    def __init__(self, llm_provider: Optional[BaseLLMProvider] = None):
+    def __init__(self, llm_provider: Optional[BaseLLMProvider] = None, llm_provider_manager = None):
         """
         Initialize the evolution engine.
         
         Args:
             llm_provider: Optional LLM provider, defaults to OpenAI if not provided
+            llm_provider_manager: Optional LLM provider manager for managing multiple providers
         """
-        self.llm_provider = llm_provider or self._create_default_provider()
+        if llm_provider_manager:
+            self.llm_provider_manager = llm_provider_manager
+            self.llm_provider = llm_provider_manager.default_provider
+        else:
+            self.llm_provider = llm_provider or self._create_default_provider()
+            self.llm_provider_manager = None
         
     def _create_default_provider(self) -> BaseLLMProvider:
         """
@@ -71,6 +77,40 @@ class EvolutionEngine:
             "No API keys found for LLM providers. "
             "Please set OPENAI_API_KEY or ANTHROPIC_API_KEY environment variables."
         )
+        
+    def _get_provider_for_node(self, db: Session, node: ProcessNode, default_provider: BaseLLMProvider) -> BaseLLMProvider:
+        """
+        Get the appropriate LLM provider for a node based on its role's model.
+        
+        Args:
+            db: Database session
+            node: Process node
+            default_provider: Default provider to use if no specific model is found
+            
+        Returns:
+            LLM provider instance
+        """
+        if not self.llm_provider_manager:
+            return default_provider
+            
+        # Get the role for this node
+        if not node.role:
+            return default_provider
+            
+        # Query the database to get the role's model
+        from agir_db.models.process_role import ProcessRole
+        role = db.query(ProcessRole).filter(ProcessRole.id == node.role).first()
+        
+        if not role or not hasattr(role, 'model') or not role.model:
+            # If role has no model specified, try to get the model from assigned_to user if available
+            if hasattr(node, 'assigned_to') and node.assigned_to:
+                user = db.query(User).filter(User.username == node.assigned_to).first()
+                if user and hasattr(user, 'llm_model') and user.llm_model:
+                    return self.llm_provider_manager.get_provider(user.llm_model)
+            return default_provider
+            
+        # Use the model specified for the role
+        return self.llm_provider_manager.get_provider(role.model)
         
     def run_evolution_from_file(self, file_path: str) -> bool:
         """
@@ -396,174 +436,71 @@ class EvolutionEngine:
         process_id: Any = None
     ) -> Optional[Tuple[ProcessNode, str, Optional[ProcessNode]]]:
         """
-        Process a single node in the process.
+        Process a node in the evolution process.
         
         Args:
             db: Database session
             process: Process instance
             node: Current node to process
-            target_user: Target user
+            target_user: Target user for the process
             history: Conversation history
-            process_id: 数据库中的进程ID
+            process_id: ID of the process in the database
             
         Returns:
-            Tuple of (processed_node, response, next_node) or None if failed
+            Optional tuple of (node, response, next_node)
         """
-        logger.info(f"Processing node: {node.id} - {node.name}")
+        logger.info(f"Processing node: {node.name}")
         
-        # Ensure node.role is a string
-        if not isinstance(node.role, str):
-            node.role = str(node.role)
-        
-        # 保存节点执行记录到数据库
-        node_record_id = None
-        if process_id:
-            try:
-                # 使用process_instance_step表记录节点执行
-                from agir_db.models.process_instance_step import ProcessInstanceStep
-                
-                # 查找当前进程实例
-                from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
-                process_instance = db.query(ProcessInstance).filter(
-                    ProcessInstance.process_id == process_id,
-                    ProcessInstance.status.in_([ProcessInstanceStatus.RUNNING])
-                ).first()
-                
-                if process_instance:
-                    try:
-                        # Get the node_id_mapping from process_instance config
-                        config = {}
-                        if process_instance.config:
-                            config = json.loads(process_instance.config)
-                        
-                        node_id_mapping = config.get("node_id_mapping", {})
-                        
-                        # Get the database node ID for this YAML node
-                        db_node_id = node_id_mapping.get(node.id)
-                        
-                        if db_node_id:
-                            # Create the step record with the database node ID
-                            node_record = ProcessInstanceStep(
-                                instance_id=process_instance.id,
-                                node_id=db_node_id,  # Convert to UUID
-                                comment=node.description,
-                                user_id=node.assigned_to if node.assigned_to else None,
-                                action="process"  # Add a default action since it's required
-                            )
-                            db.add(node_record)
-                            db.commit()
-                            node_record_id = node_record.id
-                            logger.info(f"Created node record with ID: {node_record_id}")
-                        else:
-                            # If no mapping exists, log an error
-                            logger.error(f"No database node ID found for YAML node ID: {node.id}")
-                    except Exception as e:
-                        db.rollback()
-                        logger.error(f"Failed to create node record due to database error: {str(e)}")
-                        # Continue execution without the node record
-                        node_record_id = None
-                else:
-                    logger.warning(f"No active process instance found for process ID: {process_id}")
-            except Exception as e:
-                logger.error(f"Failed to create node record: {str(e)}")
-        
-        # Get the role
-        role = process.get_role(node.role)
-        if not role:
-            logger.error(f"Role not found for node: {node.id}, role: {node.role}")
-            self._update_node_status(db, node_record_id, "failed", error="Role not found")
-            return None
+        try:
+            # Get the appropriate LLM provider for this node
+            llm_provider = self._get_provider_for_node(db, node, self.llm_provider)
             
-        # Check if this node is assigned to the target user
-        if node.assigned_to and node.assigned_to == target_user.username:
-            logger.info(f"Node {node.id} is assigned to target user {target_user.username}")
+            # Get the role for this node
+            role_id = node.role
             
-            # Generate context for this node
+            # Check if node is assigned to a specific user or assigned to the target user
+            is_target_user = False
+            if hasattr(node, 'assigned_to') and node.assigned_to:
+                if node.assigned_to == target_user.username:
+                    is_target_user = True
+                elif node.assigned_to == "target_user":
+                    is_target_user = True
+                    
+            # Generate context for the node
             context = self._generate_node_context(process, node, history, target_user)
             
-            # Determine how to handle this node (could involve user interaction in a real system)
-            response = self._simulate_target_user_response(node, context)
-            
-        else:
-            # Create or get agent for this role
-            agent_data = {
-                "username": f"{node.role}_{node.id}",
-                "role": node.role,
-                "name": role.name,
-                "description": role.description
-            }
-            
-            agent_user = create_or_update_agent(db, agent_data, target_user.id)
-            
-            # Generate context for this node
-            context = self._generate_node_context(process, node, history, agent_user)
-            
-            # Debug information
-            logger.info(f"Agent user ID: {agent_user.id}, type: {type(agent_user.id)}")
-            logger.info(f"Agent user ID after str conversion: {str(agent_user.id)}, type: {type(str(agent_user.id))}")
-            
-            # Create agent model
-            agent = Agent(
-                id=str(agent_user.id),
-                name=role.name,
-                role=node.role,
-                description=role.description
-            )
-            
-            # Debug information
-            logger.info(f"Created agent with ID: {agent.id}, type: {type(agent.id)}")
-            
-            # Generate system prompt
-            system_prompt = role.format_system_prompt(context)
-            
-            # Generate prompt for the agent
-            prompt = self._generate_agent_prompt(node, context, history)
-            
-            # Get response from LLM
-            response = self.llm_provider.generate(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                temperature=0.7
-            )
-            
-            # Save response as memory for the agent
-            agent.add_memory(
-                content=f"In {node.name}: {response}",
-                metadata={"node_id": node.id, "process_id": process.id}
-            )
-            
-            # 保存记忆到数据库
-            try:
-                # 检查memory表是否存在
-                from agir_db.models.memory import UserMemory
-                memory = UserMemory(
-                    user_id=agent_user.id,
-                    content=f"In {node.name}: {response}",
-                    metadata=json.dumps({
-                        "node_id": node.id, 
-                        "process_id": process.id,
-                        "node_name": node.name
-                    })
+            # If node is assigned to target user, handle differently
+            response = ""
+            if is_target_user:
+                logger.info(f"Node {node.name} is assigned to target user {target_user.username}")
+                response = self._simulate_target_user_response(node, context)
+            else:
+                # Generate agent prompt
+                prompt = self._generate_agent_prompt(node, context, history)
+                
+                # Get response from LLM
+                response = llm_provider.generate(
+                    prompt=prompt,
+                    system_prompt=f"You are simulating a {node.role} in a process called {process.name}. {node.description}",
+                    temperature=0.7,
+                    max_tokens=1000
                 )
-                db.add(memory)
-                db.commit()
-                logger.info(f"Saved agent memory to database for user {agent_user.id}")
-            except Exception as e:
-                logger.error(f"Failed to save agent memory: {str(e)}")
-        
-        # 更新节点状态为已完成
-        self._update_node_status(db, node_record_id, "completed", response=response)
-        
-        # Determine next node
-        next_nodes = process.next_nodes(node.id)
-        if not next_nodes:
-            return node, response, None
+                
+            # Add to history
+            history.append({
+                "node": node.name,
+                "role": role_id,
+                "response": response
+            })
             
-        # For simplicity, just take the first next node
-        # In a real system, this could involve branching logic
-        next_node = next_nodes[0]
-        
-        return node, response, next_node
+            # Find next node if available
+            next_node = self._find_next_node(process, node)
+            
+            return (node, response, next_node)
+            
+        except Exception as e:
+            logger.error(f"Error processing node {node.name}: {str(e)}")
+            return None
     
     def _update_node_status(self, db: Session, node_record_id: Any, status: str, response: str = None, error: str = None):
         """更新节点执行记录状态"""
@@ -698,89 +635,72 @@ class EvolutionEngine:
         process_id: Any = None
     ) -> None:
         """
-        Process the evolution of the target user based on the completed process.
+        Process the evolution part of the process.
         
         Args:
             db: Database session
             process: Process instance
-            target_user: Target user
+            target_user: Target user for the process
             history: Conversation history
-            process_id: 数据库中的进程ID
+            process_id: ID of the process in the database
         """
-        logger.info(f"Processing evolution for user: {target_user.username}")
+        if not process.evolution:
+            logger.info("No evolution defined for process")
+            return
+            
+        logger.info(f"Processing evolution for process: {process.name}")
         
-        # Extract evolution method from process
-        evolution_method = process.evolution.get("method", "default")
-        evolution_description = process.evolution.get("description", "")
-        
-        # Generate a reflection prompt for the evolution
-        system_prompt = (
-            f"You are an AI mentor helping {target_user.first_name} {target_user.last_name} "
-            f"evolve their skills using the {evolution_method} method. "
-            f"Generate a thoughtful reflection on their performance and learning."
-        )
-        
-        # Create a summary of the process history
-        history_summary = "\n".join([
-            f"- In {entry['node']}, {entry['role']} said: {entry['content'][:200]}..." 
-            for entry in history
-        ])
-        
-        prompt = (
-            f"Evolution Method: {evolution_method}\n"
-            f"Evolution Description: {evolution_description}\n"
-            f"User: {target_user.first_name} {target_user.last_name}\n"
-            f"Evolution Objective: {process.target_user.get('evolution_objective', 'Improve skills')}\n\n"
-            f"Process Summary:\n{history_summary}\n\n"
-            f"Based on this experience, provide:\n"
-            f"1. A reflection on what the user has learned\n"
-            f"2. Key insights gained\n"
-            f"3. Skills that were improved\n"
-            f"4. Suggestions for further improvement\n"
-        )
-        
-        # Generate the evolution reflection
-        reflection = self.llm_provider.generate(
-            prompt=prompt,
-            system_prompt=system_prompt,
-            temperature=0.7,
-            max_tokens=2000
-        )
-        
-        # 保存进化反思到数据库
-        if process_id:
-            try:
-                # 添加调试日志
-                logger.info(f"Creating CustomField with: user_id={target_user.id}, field_name=evolution_{process_id}, field_value={reflection[:20]}...")
-                # 使用custom_fields保存进化反思
-                evolution_field = CustomField(
-                    user_id=target_user.id,
-                    field_name=f"evolution_{process_id}",
-                    field_value=reflection
-                )
-                db.add(evolution_field)
-                db.commit()
-                logger.info(f"Saved evolution reflection to database for user {target_user.id}")
+        # Get or create agent for target user
+        agent = find_agent_by_role(db, "target_user", process_id)
+        if not agent:
+            agent = create_or_update_agent(db, "target_user", process_id, target_user.username)
+            if not agent:
+                logger.error("Failed to create agent for target user")
+                return
                 
-                # 如果process_instance存在，关联evolution到进程实例
-                try:
-                    from agir_db.models.process_instance import ProcessInstance
-                    process_instance = db.query(ProcessInstance).filter(
-                        ProcessInstance.process_id == process_id
-                    ).first()
-                    
-                    if process_instance:
-                        # Update the evolution field with reflection
-                        process_instance.evolution = reflection
-                        db.commit()
-                        logger.info(f"Updated process instance with evolution reflection")
-                except Exception as e:
-                    logger.error(f"Failed to update process instance with evolution: {str(e)}")
-            except Exception as e:
-                logger.error(f"Failed to save evolution reflection: {str(e)}")
-                # 添加详细错误日志
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
+        # Generate evolution prompt
+        prompt = f"""
+        # Evolution Process for {target_user.first_name} {target_user.last_name}
+
+        You are part of an evolution process called "{process.name}".
+        Your objective: {process.target_user.get('evolution_objective', 'Improve your skills and knowledge.')}
+
+        ## Conversation History:
+        {json.dumps(history, indent=2)}
+
+        ## Your task:
+        1. Review the conversation history.
+        2. Identify strengths and weaknesses.
+        3. Generate insights and recommendations for improvement.
+        4. Create action items for future iterations.
+        """
+        
+        # Get the appropriate LLM provider for evolution
+        # For evolution, we'll use the target user's model if available
+        llm_provider = self.llm_provider
+        if self.llm_provider_manager and target_user and hasattr(target_user, 'llm_model') and target_user.llm_model:
+            llm_provider = self.llm_provider_manager.get_provider(target_user.llm_model)
+        
+        # Generate evolution response
+        try:
+            evolution_result = llm_provider.generate(
+                prompt=prompt,
+                system_prompt=f"You are an evolution agent for {target_user.first_name} {target_user.last_name}.",
+                temperature=0.7,
+                max_tokens=2000
+            )
+            
+            # Update agent with evolution results
+            agent.status = "evolved"
+            agent.description = evolution_result[:500]  # Truncate to fit in DB column
+            agent.updated = True
+            db.commit()
+            
+            logger.info("Evolution process completed successfully")
+            
+        except Exception as e:
+            logger.error(f"Error in evolution process: {str(e)}")
+            db.rollback()
         
         # Store as a custom field for the user (另一种方法，确保至少有一种成功)
         evolution_field_name = f"evolution_{process.id}"
@@ -793,17 +713,17 @@ class EvolutionEngine:
         
         if existing_field:
             # Update existing field
-            existing_field.field_value = reflection
+            existing_field.field_value = evolution_result
         else:
             # Create new field
             try:
                 # 添加调试日志
-                logger.info(f"Creating second CustomField with: user_id={target_user.id}, field_name={evolution_field_name}, field_value={reflection[:20]}...")
+                logger.info(f"Creating second CustomField with: user_id={target_user.id}, field_name={evolution_field_name}, field_value={evolution_result[:20]}...")
                 # Create new CustomField without db parameter
                 evolution_field = CustomField(
                     user_id=target_user.id,
                     field_name=evolution_field_name,
-                    field_value=reflection
+                    field_value=evolution_result
                 )
                 db.add(evolution_field)
             except Exception as e:
@@ -814,3 +734,36 @@ class EvolutionEngine:
                 return
             
         db.commit() 
+
+    def _find_next_node(self, process: Process, current_node: ProcessNode) -> Optional[ProcessNode]:
+        """
+        Find the next node in the process based on the current node.
+        
+        Args:
+            process: Process instance
+            current_node: Current node
+            
+        Returns:
+            Optional[ProcessNode]: Next node if available, None otherwise
+        """
+        if not hasattr(process, 'transitions') or not process.transitions:
+            return None
+            
+        # Find transitions where current node is the 'from' node
+        next_node_names = []
+        for transition in process.transitions:
+            if transition.get('from') == current_node.name:
+                next_node_names.append(transition.get('to'))
+                
+        if not next_node_names:
+            return None
+            
+        # Get the first next node (could be extended with branching logic)
+        next_node_name = next_node_names[0]
+        
+        # Find the node in the process nodes
+        for node in process.nodes:
+            if node.name == next_node_name:
+                return node
+                
+        return None 
