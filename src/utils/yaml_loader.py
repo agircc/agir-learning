@@ -57,13 +57,22 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
         transitions = []
         
         for transition_data in process_data.get("transitions", []):
-            # Handle transitions that use names rather than IDs
-            from_node = transition_data["from"]
-            to_node = transition_data["to"]
+            # Get from/to names from YAML
+            from_node_name = transition_data["from"]
+            to_node_name = transition_data["to"]
             
-            # If from/to are names, convert to IDs using the mapping
-            from_node_id = node_name_to_id.get(from_node, from_node)
-            to_node_id = node_name_to_id.get(to_node, to_node)
+            # Find the node IDs based on names
+            from_node_id = node_name_to_id.get(from_node_name)
+            to_node_id = node_name_to_id.get(to_node_name)
+            
+            # Skip if either node is not found
+            if not from_node_id:
+                logger.warning(f"From node not found for transition: {from_node_name}")
+                continue
+                
+            if not to_node_id:
+                logger.warning(f"To node not found for transition: {to_node_name}")
+                continue
             
             transitions.append(ProcessTransition(
                 from_node=from_node_id,
@@ -74,12 +83,33 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
         roles = []
         for role_data in process_data.get("roles", []):
             # Add model field if present
-            role_args = {
-                "id": role_data["id"],
-                "name": role_data["name"],
-                "description": role_data["description"],
-                "system_prompt_template": role_data.get("system_prompt_template", "")
-            }
+            role_args = {}
+            
+            # If id is not provided, use name as id
+            if "id" in role_data:
+                role_args["id"] = role_data["id"]
+            elif "name" in role_data:
+                # Use name as id if id is not provided
+                role_args["id"] = role_data["name"]
+            else:
+                # Skip if neither id nor name is provided
+                logger.warning("Role without id or name found, skipping")
+                continue
+                
+            # Add required fields
+            if "name" in role_data:
+                role_args["name"] = role_data["name"]
+            else:
+                # Use id as name if name is not provided
+                role_args["name"] = role_args["id"]
+                
+            if "description" in role_data:
+                role_args["description"] = role_data["description"]
+            else:
+                role_args["description"] = f"Role {role_args['name']}"
+                
+            # Add optional fields
+            role_args["system_prompt_template"] = role_data.get("system_prompt_template", "")
             
             # Add model if present
             if "model" in role_data:
@@ -90,7 +120,7 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
         return Process(
             name=process_data.get("name", "Unnamed Process"),
             description=process_data.get("description"),
-            target_user=process_data.get("target_user", {}),
+            learner=process_data.get("learner", {}),
             nodes=nodes,
             transitions=transitions,
             roles=roles,

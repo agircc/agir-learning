@@ -2,7 +2,7 @@ process:
   name: "Agent Hospital Full Cycle"
   description: "Simulates the full closed cycle of patient treatment in a virtual hospital powered by LLM agents."
 
-  target_user:
+  learner:
     username: doctor_002
     first_name: "Robert"
     last_name: "Thompson"
@@ -39,7 +39,6 @@ process:
 
     - name: "Consultation"
       role: "doctor"
-      assigned_to: "doctor_001"
       description: "Doctor listens to symptoms and decides on required medical examination."
 
     - name: "Medical Examination"
@@ -47,8 +46,7 @@ process:
       description: "Nurse performs or assists with medical tests and generates reports."
 
     - name: "Diagnosis"
-      role: "doctor"
-      assigned_to: "doctor_001"
+      role: "learner"
       description: "Doctor reviews reports and provides diagnosis."
 
     - name: "Medicine Dispensary"
@@ -60,13 +58,11 @@ process:
       description: "Patient returns home and recovers. May return if not healed."
 
     - name: "Post-Hospital Follow-up"
-      role: "doctor"
-      assigned_to: "doctor_001"
+      role: "learner"
       description: "Doctor handles patient follow-up and complaints."
 
     - name: "Reading Books"
-      role: "doctor"
-      assigned_to: "doctor_001"
+      role: "learner"
       description: "Doctor agent reads medical books to strengthen knowledge."
 
   transitions:

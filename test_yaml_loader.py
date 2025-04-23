@@ -20,10 +20,10 @@ def test_yaml_loader(file_path):
         logger.error(f"Failed to load process from {file_path}")
         return False
     
-    # Check target_user model field
-    target_user = process.target_user
-    logger.info(f"Target user: {json.dumps(target_user, indent=2)}")
-    logger.info(f"Target user model: {target_user.get('model', 'None')}")
+    # Check learner model field
+    learner = process.learner
+    logger.info(f"Target user: {json.dumps(learner, indent=2)}")
+    logger.info(f"Target user model: {learner.get('model', 'None')}")
     
     # Check roles model field
     for role in process.roles:

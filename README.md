@@ -59,8 +59,8 @@ process:
   name: "Process Name"
   description: "Process Description"
 
-  target_user:
-    username: "target_username"
+  learner:
+    username: "learnername"
     first_name: "User's First Name"
     last_name: "User's Last Name"
     # Other user attributes

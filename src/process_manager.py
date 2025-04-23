@@ -91,12 +91,12 @@ class ProcessManager:
             db = next(get_db())
             
             # 1. Create or find target user
-            target_user_id = ProcessManager._create_or_find_target_user(db, yaml_process)
-            if not target_user_id:
+            learner_id = ProcessManager._create_or_find_learner(db, yaml_process)
+            if not learner_id:
                 return None
             
             # 2. Create or find process
-            process_id = ProcessManager._create_or_find_process(db, yaml_process, created_by, target_user_id)
+            process_id = ProcessManager._create_or_find_process(db, yaml_process, created_by, learner_id)
             if not process_id:
                 return None
             
@@ -121,7 +121,7 @@ class ProcessManager:
             return None
     
     @staticmethod
-    def _create_or_find_target_user(db: Session, yaml_process: YamlProcess) -> Optional[int]:
+    def _create_or_find_learner(db: Session, yaml_process: YamlProcess) -> Optional[int]:
         """
         Create or find target user based on YAML process.
         
@@ -133,8 +133,8 @@ class ProcessManager:
             Optional[int]: ID of the target user if successful, None otherwise
         """
         try:
-            target_user_data = yaml_process.target_user
-            username = target_user_data.get("username")
+            learner_data = yaml_process.learner
+            username = learner_data.get("username")
             
             if not username:
                 logger.error("Target user username not specified in process YAML")
@@ -146,31 +146,31 @@ class ProcessManager:
             if user:
                 logger.info(f"Found existing user: {username}")
                 # Update model field if it exists in YAML
-                if "model" in target_user_data and hasattr(user, "model"):
-                    user.model = target_user_data["model"]
+                if "model" in learner_data and hasattr(user, "model"):
+                    user.model = learner_data["model"]
                     db.commit()
-                    logger.info(f"Updated user model to {target_user_data['model']}")
+                    logger.info(f"Updated user model to {learner_data['model']}")
                 return user.id
             
             # Prepare user data
             user_data = {
                 "username": username,
-                "first_name": target_user_data.get("first_name", ""),
-                "last_name": target_user_data.get("last_name", ""),
-                "email": target_user_data.get("email", f"{username}@example.com"),
+                "first_name": learner_data.get("first_name", ""),
+                "last_name": learner_data.get("last_name", ""),
+                "email": learner_data.get("email", f"{username}@example.com"),
                 "is_active": True
             }
             
             # Add model if it exists in YAML
-            if "model" in target_user_data:
-                user_data["llm_model"] = target_user_data["model"]
+            if "model" in learner_data:
+                user_data["llm_model"] = learner_data["model"]
             
             # Create new user
             user = User(**user_data)
             
             # Add additional profile data
             profile_data = {}
-            for key, value in target_user_data.items():
+            for key, value in learner_data.items():
                 if key not in ["username", "first_name", "last_name", "email", "model"]:
                     profile_data[key] = value
             
@@ -302,14 +302,22 @@ class ProcessManager:
                     logger.error("Role name not specified in YAML")
                     continue
                 
-                # Check if role exists
-                role = db.query(ProcessRole).filter(
-                    ProcessRole.process_id == process_id,
-                    ProcessRole.name == role_name
-                ).first()
+                # Log role information for debugging
+                logger.debug(f"Processing role: name='{role_name}', description='{role_description}', model='{model}'")
+                
+                # Check if role exists - use case-insensitive comparison for name
+                existing_roles = db.query(ProcessRole).filter(
+                    ProcessRole.process_id == process_id
+                ).all()
+                
+                role = None
+                for existing_role in existing_roles:
+                    if existing_role.name.lower() == role_name.lower():
+                        role = existing_role
+                        break
                 
                 if role:
-                    logger.info(f"Found existing role: {role_name}")
+                    logger.info(f"Found existing role: {role.name} (matched with '{role_name}')")
                     # Update model if it's provided
                     if model and hasattr(role, "model"):
                         role.model = model
@@ -416,14 +424,70 @@ class ProcessManager:
             bool: True if successful, False otherwise
         """
         try:
-            for transition in yaml_process.transitions:
-                from_node_id = node_id_mapping.get(transition.from_node)
-                to_node_id = node_id_mapping.get(transition.to_node)
+            # If no transitions, return early
+            if not yaml_process.transitions:
+                logger.info("No transitions defined in YAML")
+                return True
                 
-                if not from_node_id or not to_node_id:
-                    logger.warning(f"Node not found for transition: {transition.from_node} -> {transition.to_node}")
+            # Get all nodes for this process from the database
+            all_nodes = db.query(ProcessNode).filter(
+                ProcessNode.process_id == process_id
+            ).all()
+            
+            # Create a mapping of node names to database IDs
+            node_name_to_id = {}
+            for node in all_nodes:
+                node_name_to_id[node.name] = node.id
+            
+            # Log node mappings for debugging
+            logger.debug(f"Node name to ID mapping: {node_name_to_id}")
+            
+            # Process each transition
+            for transition in yaml_process.transitions:
+                from_node_name = transition.from_node
+                to_node_name = transition.to_node
+                
+                # Try to get IDs from different sources
+                from_node_id = None
+                to_node_id = None
+                
+                # First check if we already have mappings from the node ID mapping
+                if from_node_name in node_id_mapping:
+                    from_node_id = node_id_mapping[from_node_name]
+                
+                if to_node_name in node_id_mapping:
+                    to_node_id = node_id_mapping[to_node_name]
+                
+                # If not found, try the node name mapping
+                if not from_node_id and from_node_name in node_name_to_id:
+                    from_node_id = node_name_to_id[from_node_name]
+                
+                if not to_node_id and to_node_name in node_name_to_id:
+                    to_node_id = node_name_to_id[to_node_name]
+                
+                # As a last resort, case-insensitive search in node names
+                if not from_node_id:
+                    for name, id in node_name_to_id.items():
+                        if name.lower() == from_node_name.lower():
+                            from_node_id = id
+                            break
+                
+                if not to_node_id:
+                    for name, id in node_name_to_id.items():
+                        if name.lower() == to_node_name.lower():
+                            to_node_id = id
+                            break
+                
+                # Skip if either node is not found
+                if not from_node_id:
+                    logger.warning(f"From node not found for transition: {from_node_name}")
+                    continue
+                    
+                if not to_node_id:
+                    logger.warning(f"To node not found for transition: {to_node_name}")
                     continue
                 
+                # Create transition
                 db_transition = ProcessTransition(
                     process_id=process_id,
                     from_node_id=from_node_id,
@@ -431,6 +495,7 @@ class ProcessManager:
                 )
                 
                 db.add(db_transition)
+                logger.debug(f"Created transition: {from_node_name} ({from_node_id}) -> {to_node_name} ({to_node_id})")
             
             db.commit()
             logger.info(f"Created process transitions")

@@ -35,7 +35,7 @@ class Process(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     description: Optional[str] = None
-    target_user: Dict[str, Any] = Field(default_factory=dict)
+    learner: Dict[str, Any] = Field(default_factory=dict)
     nodes: List[ProcessNode] = Field(default_factory=list)
     transitions: List[ProcessTransition] = Field(default_factory=list)
     roles: List[Role] = Field(default_factory=list)
@@ -183,7 +183,7 @@ class Process(BaseModel):
         return cls(
             name=process_data.get("name", "Unnamed Process"),
             description=process_data.get("description"),
-            target_user=process_data.get("target_user", {}),
+            learner=process_data.get("learner", {}),
             nodes=nodes,
             transitions=transitions,
             roles=roles,
@@ -233,7 +233,7 @@ class Process(BaseModel):
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "target_user": self.target_user,
+            "learner": self.learner,
             "nodes": nodes_list,
             "transitions": transitions_list,
             "roles": roles_list,

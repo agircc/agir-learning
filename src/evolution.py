@@ -153,7 +153,7 @@ class EvolutionEngine:
                 logger.info(f"Found process: {db_process.name}")
                 
                 # Find the target user (initiator)
-                target_user = None
+                learner = None
                 
                 # Try to find a user who would be appropriate for this process
                 # This could be improved to check for users with specific roles/permissions
@@ -162,11 +162,11 @@ class EvolutionEngine:
                     logger.error("No active users found in the database")
                     return False
                 
-                target_user = user
-                logger.info(f"Using user {target_user.username} as target user")
+                learner = user
+                logger.info(f"Using user {learner.username} as target user")
                 
                 # Execute the process using ProcessManager
-                instance_id = ProcessManager.execute_process(process_id, target_user.id)
+                instance_id = ProcessManager.execute_process(process_id, learner.id)
                 if not instance_id:
                     logger.error("Failed to execute process")
                     return False
@@ -233,7 +233,7 @@ class EvolutionEngine:
                 
                 # Process the current node
                 while current_node:
-                    result = self._process_node(db, process, current_node, target_user, history, process_id)
+                    result = self._process_node(db, process, current_node, learner, history, process_id)
                     if not result:
                         logger.error(f"Failed to process node: {current_node.name}")
                         # Mark process as failed
@@ -259,7 +259,7 @@ class EvolutionEngine:
                         current_node = None
                 
                 # Process evolution
-                self._process_evolution(db, process, target_user, history, process_id)
+                self._process_evolution(db, process, learner, history, process_id)
                 
                 return True
                 
@@ -283,22 +283,22 @@ class EvolutionEngine:
         with SessionLocal() as db:
             try:
                 # Get or create target user first
-                target_username = process.target_user.get("username")
-                if not target_username:
+                learnername = process.learner.get("username")
+                if not learnername:
                     logger.error("Target user username not specified in process")
                     return False
                 
-                target_user, created = get_or_create_user(db, target_username, process.target_user)
+                learner, created = get_or_create_user(db, learnername, process.learner)
                 if created:
-                    logger.info(f"Created new target user: {target_username}")
+                    logger.info(f"Created new target user: {learnername}")
                 else:
-                    logger.info(f"Using existing target user: {target_username}")
+                    logger.info(f"Using existing target user: {learnername}")
                 
-                # 保存process实例到数据库，使用target_user.id作为created_by
+                # 保存process实例到数据库，使用learner.id作为created_by
                 db_process = create_process_record(db, {
                     "name": process.name,
                     "description": process.description,
-                    "created_by": str(target_user.id)  # Use target_user.id as the creator
+                    "created_by": str(learner.id)  # Use learner.id as the creator
                 })
                 logger.info(f"Created process record in database with ID: {db_process.id}")
                 
@@ -307,10 +307,10 @@ class EvolutionEngine:
                     # 将配置保存到process_instance表
                     from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
                     
-                    # Now create the process instance with target_user.id
+                    # Now create the process instance with learner.id
                     process_instance = ProcessInstance(
                         process_id=db_process.id,
-                        initiator_id=target_user.id,  # Now we have target_user.id
+                        initiator_id=learner.id,  # Now we have learner.id
                         status=ProcessInstanceStatus.RUNNING,
                         config=json.dumps(process.to_dict())
                     )
@@ -373,7 +373,7 @@ class EvolutionEngine:
                 history = []  # Conversation history
                 
                 while current_node:
-                    result = self._process_node(db, process, current_node, target_user, history, db_process.id)
+                    result = self._process_node(db, process, current_node, learner, history, db_process.id)
                     if not result:
                         logger.error(f"Failed to process node: {current_node.id}")
                         return False
@@ -406,7 +406,7 @@ class EvolutionEngine:
                         logger.error(f"Failed to update process instance status: {str(e)}")
                 
                 # Process evolution
-                self._process_evolution(db, process, target_user, history, db_process.id)
+                self._process_evolution(db, process, learner, history, db_process.id)
                 
                 logger.info(f"Evolution process completed successfully: {process.name}")
                 return True
@@ -431,7 +431,7 @@ class EvolutionEngine:
         db: Session, 
         process: Process, 
         node: ProcessNode, 
-        target_user: Any,
+        learner: Any,
         history: List[Dict[str, Any]],
         process_id: Any = None
     ) -> Optional[Tuple[ProcessNode, str, Optional[ProcessNode]]]:
@@ -442,7 +442,7 @@ class EvolutionEngine:
             db: Database session
             process: Process instance
             node: Current node to process
-            target_user: Target user for the process
+            learner: Target user for the process
             history: Conversation history
             process_id: ID of the process in the database
             
@@ -459,21 +459,21 @@ class EvolutionEngine:
             role_id = node.role
             
             # Check if node is assigned to a specific user or assigned to the target user
-            is_target_user = False
+            is_learner = False
             if hasattr(node, 'assigned_to') and node.assigned_to:
-                if node.assigned_to == target_user.username:
-                    is_target_user = True
-                elif node.assigned_to == "target_user":
-                    is_target_user = True
+                if node.assigned_to == learner.username:
+                    is_learner = True
+                elif node.assigned_to == "learner":
+                    is_learner = True
                     
             # Generate context for the node
-            context = self._generate_node_context(process, node, history, target_user)
+            context = self._generate_node_context(process, node, history, learner)
             
             # If node is assigned to target user, handle differently
             response = ""
-            if is_target_user:
-                logger.info(f"Node {node.name} is assigned to target user {target_user.username}")
-                response = self._simulate_target_user_response(node, context)
+            if is_learner:
+                logger.info(f"Node {node.name} is assigned to target user {learner.username}")
+                response = self._simulate_learner_response(node, context)
             else:
                 # Generate agent prompt
                 prompt = self._generate_agent_prompt(node, context, history)
@@ -595,7 +595,7 @@ class EvolutionEngine:
         
         return "\n".join(prompt_parts)
     
-    def _simulate_target_user_response(self, node: ProcessNode, context: Dict[str, Any]) -> str:
+    def _simulate_learner_response(self, node: ProcessNode, context: Dict[str, Any]) -> str:
         """
         Simulate a response from the target user.
         
@@ -630,7 +630,7 @@ class EvolutionEngine:
         self, 
         db: Session, 
         process: Process, 
-        target_user: Any,
+        learner: Any,
         history: List[Dict[str, Any]],
         process_id: Any = None
     ) -> None:
@@ -640,7 +640,7 @@ class EvolutionEngine:
         Args:
             db: Database session
             process: Process instance
-            target_user: Target user for the process
+            learner: Target user for the process
             history: Conversation history
             process_id: ID of the process in the database
         """
@@ -651,19 +651,19 @@ class EvolutionEngine:
         logger.info(f"Processing evolution for process: {process.name}")
         
         # Get or create agent for target user
-        agent = find_agent_by_role(db, "target_user", process_id)
+        agent = find_agent_by_role(db, "learner", process_id)
         if not agent:
-            agent = create_or_update_agent(db, "target_user", process_id, target_user.username)
+            agent = create_or_update_agent(db, "learner", process_id, learner.username)
             if not agent:
                 logger.error("Failed to create agent for target user")
                 return
                 
         # Generate evolution prompt
         prompt = f"""
-        # Evolution Process for {target_user.first_name} {target_user.last_name}
+        # Evolution Process for {learner.first_name} {learner.last_name}
 
         You are part of an evolution process called "{process.name}".
-        Your objective: {process.target_user.get('evolution_objective', 'Improve your skills and knowledge.')}
+        Your objective: {process.learner.get('evolution_objective', 'Improve your skills and knowledge.')}
 
         ## Conversation History:
         {json.dumps(history, indent=2)}
@@ -678,14 +678,14 @@ class EvolutionEngine:
         # Get the appropriate LLM provider for evolution
         # For evolution, we'll use the target user's model if available
         llm_provider = self.llm_provider
-        if self.llm_provider_manager and target_user and hasattr(target_user, 'llm_model') and target_user.llm_model:
-            llm_provider = self.llm_provider_manager.get_provider(target_user.llm_model)
+        if self.llm_provider_manager and learner and hasattr(learner, 'llm_model') and learner.llm_model:
+            llm_provider = self.llm_provider_manager.get_provider(learner.llm_model)
         
         # Generate evolution response
         try:
             evolution_result = llm_provider.generate(
                 prompt=prompt,
-                system_prompt=f"You are an evolution agent for {target_user.first_name} {target_user.last_name}.",
+                system_prompt=f"You are an evolution agent for {learner.first_name} {learner.last_name}.",
                 temperature=0.7,
                 max_tokens=2000
             )
@@ -707,7 +707,7 @@ class EvolutionEngine:
         
         # Check if we already have an evolution field for this process
         existing_field = db.query(CustomField).filter(
-            CustomField.user_id == target_user.id,
+            CustomField.user_id == learner.id,
             CustomField.field_name == evolution_field_name
         ).first()
         
@@ -718,10 +718,10 @@ class EvolutionEngine:
             # Create new field
             try:
                 # 添加调试日志
-                logger.info(f"Creating second CustomField with: user_id={target_user.id}, field_name={evolution_field_name}, field_value={evolution_result[:20]}...")
+                logger.info(f"Creating second CustomField with: user_id={learner.id}, field_name={evolution_field_name}, field_value={evolution_result[:20]}...")
                 # Create new CustomField without db parameter
                 evolution_field = CustomField(
-                    user_id=target_user.id,
+                    user_id=learner.id,
                     field_name=evolution_field_name,
                     field_value=evolution_result
                 )
