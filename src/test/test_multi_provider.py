@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from src.cli import LLMProviderManager, DummyProvider
 from src.evolution.evolution import EvolutionEngine
-from src.process_manager import ProcessManager
+from src.evolution.process_instance_manager import ProcessManager
 
 # Configure logging
 logging.basicConfig(

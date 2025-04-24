@@ -10,7 +10,7 @@ import importlib
 from agir_db.db.session import get_db, SessionLocal
 from agir_db.models import User, Process
 from agir_db.db.base_class import Base
-from ..process_manager import ProcessManager
+from ..evolution.process_instance_manager import ProcessManager
 
 # 加载环境变量
 load_dotenv()

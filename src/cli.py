@@ -13,7 +13,7 @@ from src.db.init_process_from_yaml import init_process_from_yaml
 from src.evolution.run_evolution_with_id import run_evolution_with_id
 
 from .evolution.evolution import EvolutionEngine
-from .process_manager import ProcessManager  # Import the new ProcessManager
+from .evolution.process_instance_manager import ProcessManager  # Import the new ProcessManager
 from .llms import OpenAIProvider, AnthropicProvider, OllamaProvider
 from .db import check_database
 from .llms.llm_provider_manager import LLMProviderManager

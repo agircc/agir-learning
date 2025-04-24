@@ -22,7 +22,7 @@ load_dotenv()
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 # Import ProcessManager
-from src.process_manager import ProcessManager
+from src.evolution.process_instance_manager import ProcessManager
 
 def main():
     """Test the ProcessManager implementation"""

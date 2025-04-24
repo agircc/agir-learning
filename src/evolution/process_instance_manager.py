@@ -17,7 +17,7 @@ from agir_db.models.process import Process, ProcessNode, ProcessTransition
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.process_instance_step import ProcessInstanceStep
 
-from .models.process import Process as YamlProcess
+from ..models.process import Process as YamlProcess
 
 logger = logging.getLogger(__name__)
 

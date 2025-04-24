@@ -23,7 +23,7 @@ from src.models.agent import Agent
 from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
 from src.utils.database import get_or_create_user, find_user_by_role, create_process_record, find_or_create_learner
 from src.utils.yaml_loader import load_process_from_file
-from src.process_manager import ProcessManager  # Import the new ProcessManager
+from src.evolution.process_instance_manager import ProcessManager  # Import the new ProcessManager
 
 # Configure logging
 logging.basicConfig(
@@ -54,7 +54,7 @@ class EvolutionEngine:
         self.llm_provider = llm_provider
         
         # Initialize the process manager
-        from src.process_manager import ProcessManager
+        from src.evolution.process_instance_manager import ProcessManager
         self.process_manager = ProcessManager()
     
     def _generate_node_context(
