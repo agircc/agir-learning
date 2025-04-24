@@ -27,52 +27,6 @@ class ProcessManager:
     Manages the creation and execution of processes.
     """        
     
-    @staticmethod
-    def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
-        """
-        Execute a process.
-        
-        Args:
-            process_id: ID of the process
-            initiator_id: ID of the initiator (target user)
-            
-        Returns:
-            Optional[int]: ID of the process instance if successful, None otherwise
-        """
-        try:
-            db = next(get_db())
-            
-            # 1. Create process instance
-            instance_id = ProcessManager._create_process_instance(db, process_id, initiator_id)
-            if not instance_id:
-                return None
-            
-            # 2. Get initial node and create first step
-            initial_node = ProcessManager._get_initial_node(db, process_id)
-            if not initial_node:
-                logger.error(f"No initial node found for process: {process_id}")
-                return None
-            
-            # Create the first step
-            step_id = ProcessManager._create_process_instance_step(
-                db, instance_id, initial_node.id, initiator_id
-            )
-            
-            if not step_id:
-                return None
-            
-            # Update instance with current node
-            instance = db.query(ProcessInstance).filter(ProcessInstance.id == instance_id).first()
-            instance.current_node_id = initial_node.id
-            db.commit()
-            
-            logger.info(f"Process instance {instance_id} started with initial node {initial_node.id}")
-            
-            return instance_id
-            
-        except Exception as e:
-            logger.error(f"Failed to execute process: {str(e)}")
-            return None
     
     
     
