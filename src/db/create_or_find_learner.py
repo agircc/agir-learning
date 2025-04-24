@@ -1,10 +1,12 @@
 import logging
+import json
 
 from sqlalchemy.orm import Session
 from src.db.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.user import User
+from src.db.data_store import set_learner
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,17 @@ def create_or_find_learner(db: Session, learner_data: Dict[str, Any]) -> Optiona
                     user.model = learner_data["model"]
                     db.commit()
                     logger.info(f"Updated user model to {learner_data['model']}")
+                
+                # Store learner data in data_store
+                learner_info = {
+                    "id": user.id,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "email": user.email
+                }
+                set_learner(learner_info)
+                
                 return user.id
             
             # Prepare user data
@@ -66,6 +79,16 @@ def create_or_find_learner(db: Session, learner_data: Dict[str, Any]) -> Optiona
             db.add(user)
             db.commit()
             logger.info(f"Created new user: {username} with ID: {user.id}")
+            
+            # Store learner data in data_store
+            learner_info = {
+                "id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email": user.email
+            }
+            set_learner(learner_info)
             
             return user.id
             

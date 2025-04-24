@@ -38,3 +38,4 @@ def set_process_transitions(data):
 
 def get_process_transitions():
     return _process_transitions
+

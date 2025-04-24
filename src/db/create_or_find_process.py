@@ -5,16 +5,19 @@ from src.db.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union 
 from agir_db.db.session import get_db
 from agir_db.models.process import Process
+from agir_db.models.user import User
+from src.db.data_store import set_process
 
 logger = logging.getLogger(__name__)
 
-def create_or_find_process(db: Session, process_name: Optional[str], created_by: Optional[str] = None, default_user_id: Optional[int] = None) -> Optional[int]:
+def create_or_find_process(db: Session, process_name: str, description: str, created_by: Optional[str] = None, default_user_id: Optional[int] = None) -> Optional[int]:
     """
     Create or find process based on YAML process.
     
     Args:
         db: Database session
-        yaml_process: YAML process object
+        process_name: Name of the process
+        description: Description of the process
         created_by: Username of creator (optional)
         default_user_id: User ID to use as default creator if created_by is None
         
@@ -31,6 +34,16 @@ def create_or_find_process(db: Session, process_name: Optional[str], created_by:
         
         if process:
             logger.info(f"Found existing process: {process_name}")
+            
+            # Store process data in data_store
+            process_info = {
+                "id": process.id,
+                "name": process.name,
+                "description": process.description,
+                "created_by": process.created_by
+            }
+            set_process(process_info)
+            
             return process.id
         
         # If created_by is None, use default_user_id or find the first admin user
@@ -61,13 +74,22 @@ def create_or_find_process(db: Session, process_name: Optional[str], created_by:
         # Create new process with the determined creator_id
         process = Process(
             name=process_name,
-            description=yaml_process.description,
+            description=description,
             created_by=creator_id
         )
         
         db.add(process)
         db.commit()
         logger.info(f"Created new process: {process_name} with ID: {process.id}, creator ID: {creator_id}")
+        
+        # Store process data in data_store
+        process_info = {
+            "id": process.id,
+            "name": process.name,
+            "description": process.description,
+            "created_by": process.created_by
+        }
+        set_process(process_info)
         
         return process.id
         

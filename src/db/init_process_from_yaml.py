@@ -44,7 +44,7 @@ def init_process_from_yaml(yaml_file_path: str, created_by: Optional[str] = None
                 return None
             
             # 2. Create or find process
-            process_id = create_or_find_process(db, yaml_process.name, created_by, learner_id)
+            process_id = create_or_find_process(db, yaml_process.name, yaml_process.description, created_by, learner_id)
             if not process_id:
                 return None
             
