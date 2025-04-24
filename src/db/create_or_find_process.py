@@ -10,7 +10,7 @@ from src.db.data_store import set_process
 
 logger = logging.getLogger(__name__)
 
-def create_or_find_process(db: Session, process_name: str, description: str, created_by: Optional[str] = None, default_user_id: Optional[int] = None) -> Optional[int]:
+def create_or_find_process(db: Session, process_name: str, description: str, learner_role: str, created_by: Optional[str] = None, default_user_id: Optional[int] = None) -> Optional[int]:
     """
     Create or find process based on YAML process.
     
@@ -18,6 +18,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, cre
         db: Database session
         process_name: Name of the process
         description: Description of the process
+        learner_role: Role of the learner
         created_by: Username of creator (optional)
         default_user_id: User ID to use as default creator if created_by is None
         
@@ -40,6 +41,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, cre
                 "id": process.id,
                 "name": process.name,
                 "description": process.description,
+                "learner_role": process.learner_role,
                 "created_by": process.created_by
             }
             set_process(process_info)
@@ -75,7 +77,8 @@ def create_or_find_process(db: Session, process_name: str, description: str, cre
         process = Process(
             name=process_name,
             description=description,
-            created_by=creator_id
+            created_by=creator_id,
+            learner_role=learner_role
         )
         
         db.add(process)

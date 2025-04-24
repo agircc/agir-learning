@@ -50,6 +50,7 @@ def run_evolution_with_id(process_id: int) -> bool:
       
       
       # Run the evolution process
-      self._process_evolution(db, process, learner, process_id)
-      
+    #   self._process_evolution(db, process, learner, process_id)
+      from src.evolution.execute_process import execute_process
+      execute_process(process_id, learner['id'])
       return True

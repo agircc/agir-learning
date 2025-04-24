@@ -1,6 +1,7 @@
 process:
   name: "Agent Hospital Full Cycle"
   description: "Simulates the full closed cycle of patient treatment in a virtual hospital powered by LLM agents."
+  learner_role: "doctor"
 
   learner:
     username: doctor_002
@@ -23,6 +24,9 @@ process:
     - name: "nurse"
       model: "phi"
       description: "Nurse agent for triage, registration, and examinations."
+    - name: "doctor"
+      model: "phi"
+      description: "Doctor agent for diagnosis, treatment, and follow-up."
 
   nodes:
     - name: "Disease Onset"
@@ -38,7 +42,7 @@ process:
       description: "Patient registers and waits for doctor consultation."
 
     - name: "Consultation"
-      role: "learner"
+      role: "doctor"
       description: "Doctor listens to symptoms and decides on required medical examination."
 
     - name: "Medical Examination"
@@ -46,7 +50,7 @@ process:
       description: "Nurse performs or assists with medical tests and generates reports."
 
     - name: "Diagnosis"
-      role: "learner"
+      role: "doctor"
       description: "Doctor reviews reports and provides diagnosis."
 
     - name: "Medicine Dispensary"
@@ -58,11 +62,11 @@ process:
       description: "Patient returns home and recovers. May return if not healed."
 
     - name: "Post-Hospital Follow-up"
-      role: "learner"
+      role: "doctor"
       description: "Doctor handles patient follow-up and complaints."
 
     - name: "Reading Books"
-      role: "learner"
+      role: "doctor"
       description: "Doctor agent reads medical books to strengthen knowledge."
 
   transitions:
