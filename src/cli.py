@@ -38,18 +38,6 @@ def parse_args():
     )
     
     parser.add_argument(
-        '--model',
-        choices=['openai', 'anthropic', 'ollama', 'dummy'],
-        default='openai',
-        help='Default LLM provider to use (default: openai)'
-    )
-    
-    parser.add_argument(
-        '--model-name',
-        help='Specific model name to use with the default provider'
-    )
-    
-    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Enable verbose logging'
