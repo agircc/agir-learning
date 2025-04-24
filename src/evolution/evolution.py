@@ -21,7 +21,7 @@ from src.llms.llm_provider_manager import LLMProviderManager  # 明确从agir_db
 from src.models.process import Process, ProcessNode
 from src.models.agent import Agent
 from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from src.utils.database import get_or_create_user, create_user, find_user_by_role, create_process_record, find_or_create_learner
+from src.utils.database import get_or_create_user, find_user_by_role, create_process_record, find_or_create_learner
 from src.utils.yaml_loader import load_process_from_file
 from src.process_manager import ProcessManager  # Import the new ProcessManager
 
