@@ -8,7 +8,7 @@ from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.process_role import ProcessRole
 from agir_db.models.process_role_user import ProcessRoleUser
-from src.db.data_store import set_learner
+from src.db.data_store import get_learner, get_process, set_learner
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,12 @@ def create_process_role_user(db: Session, role: str, process_id: Any, username: 
     Returns:
         User instance
     """
+    learner = get_learner()
+    process = get_process()
+
+    if process.learner_role == role:
+        return learner
+    
     # Generate username if not provided
     if not username:
         username = f"{role}_{process_id}"
@@ -36,6 +42,7 @@ def create_process_role_user(db: Session, role: str, process_id: Any, username: 
         logger.info(f"Found existing user with username {username}")
         return existing_user
     
+
     # Create new user
     logger.info(f"Creating new user for role {role}: {username}")
     
