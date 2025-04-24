@@ -24,12 +24,13 @@ def create_or_find_process_roles(db: Session, process_id: int, roles: List[Union
     try:
         if not roles:
             logger.warning("No roles defined in process YAML")
-            set_process_roles({})
+            set_process_roles([])
             return {}
         
         # Create role ID mapping
         role_id_mapping = {}
         
+        process_roles = []
         # Process each role
         for role_data in roles:
             role_name = None
@@ -59,10 +60,18 @@ def create_or_find_process_roles(db: Session, process_id: int, roles: List[Union
                 ProcessRole.process_id == process_id
             ).all()
             
+
+
             role = None
             for existing_role in existing_roles:
                 if existing_role.name.lower() == role_name.lower():
                     role = existing_role
+                    process_roles.append({
+                        "id": existing_role.id,
+                        "name": existing_role.name,
+                        "description": existing_role.description,
+                        "model": existing_role.model
+                    })
                     break
             
             if role:
@@ -88,13 +97,19 @@ def create_or_find_process_roles(db: Session, process_id: int, roles: List[Union
                 role = ProcessRole(**role_data)
                 db.add(role)
                 db.commit()
+                process_roles.append({
+                    "id": role.id,
+                    "name": role.name,
+                    "description": role.description,
+                    "model": role.model
+                })
                 logger.info(f"Created new role: {role_name} with ID: {role.id}")
             
             # Add to mapping
             role_id_mapping[role_name] = role.id
         
-        # Store role data in data_store
-        set_process_roles(role_id_mapping)
+            # Store role data in data_store
+            set_process_roles(process_roles)
         
         return role_id_mapping
         
