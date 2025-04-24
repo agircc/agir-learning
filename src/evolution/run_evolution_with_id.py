@@ -48,10 +48,8 @@ def run_evolution_with_id(process_id: int) -> bool:
           agent = create_process_role_user(db, role_name, process_id, username, role_data.get("model", None))
           logger.info(f"Created user: {agent.username} (ID: {agent.id})")
       
-      # Initialize empty history for the process
-      history = []
       
       # Run the evolution process
-      self._process_evolution(db, process, learner, history, process_id)
+      self._process_evolution(db, process, learner, process_id)
       
       return True

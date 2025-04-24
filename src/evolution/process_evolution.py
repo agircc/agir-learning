@@ -9,11 +9,10 @@ from src.db.create_process_role_user import create_process_role_user
 from src.db.data_store import get_learner, get_process, get_process_nodes, get_process_roles
 logger = logging.getLogger(__name__)
 
-def _process_evolution(
+def process_evolution(
   db: Session, 
   process: Process, 
   learner: Any,
-  history: List[Dict[str, Any]],
   process_id: Any = None
 ) -> None:
   """
@@ -29,6 +28,7 @@ def _process_evolution(
   Raises:
       ValueError: If learner has no model specified
   """
+  history = []
   # Check if process is a dictionary (from get_process) or a Process object
   is_dict = isinstance(process, dict)
   
@@ -43,11 +43,7 @@ def _process_evolution(
   logger.info(f"Processing evolution for process: {process_name}")
   
   # Get or create agent for learner user
-  agent = find_user_by_role(db, "learner", process_id)
-  if not agent:
-      agent = create_user(db, "learner", process_id, learner.username)
-      if not agent:
-          raise ValueError(f"Failed to create agent for learner {learner.username}")
+  agent = 
           
   # Safely access learner data
   if is_dict:
