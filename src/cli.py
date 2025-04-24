@@ -9,7 +9,7 @@ import logging
 from dotenv import load_dotenv
 
 from src.db.check_database_tables import check_database_tables
-from src.db.init_process_from_yaml import create_process_from_yaml
+from src.db.init_process_from_yaml import init_process_from_yaml
 
 from .evolution import EvolutionEngine
 from .process_manager import ProcessManager  # Import the new ProcessManager
@@ -116,7 +116,7 @@ def main():
     
     # Create process from YAML file
     logger.info(f"Creating process from file: {args.process_file}")
-    process_id = create_process_from_yaml(args.process_file)
+    process_id = init_process_from_yaml(args.process_file)
     
     if not process_id:
         logger.error("Failed to create process from YAML file")
