@@ -10,8 +10,9 @@ from dotenv import load_dotenv
 
 from src.db.check_database_tables import check_database_tables
 from src.db.init_process_from_yaml import init_process_from_yaml
+from src.evolution.run_evolution_with_id import run_evolution_with_id
 
-from .evolution import EvolutionEngine
+from .evolution.evolution import EvolutionEngine
 from .process_manager import ProcessManager  # Import the new ProcessManager
 from .llms import OpenAIProvider, AnthropicProvider, OllamaProvider
 from .db import check_database
@@ -118,11 +119,9 @@ def main():
         sys.exit(0)
     
     try:        
-        engine = EvolutionEngine()
-        
         # Run evolution process, now using the ID rather than loading from file again
         logger.info(f"Running evolution process with ID: {process_id}")
-        success = engine.run_evolution_with_id(process_id)
+        success = run_evolution_with_id(process_id)
         
         if success:
             logger.info("Evolution process completed successfully")

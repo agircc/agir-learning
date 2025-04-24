@@ -17,13 +17,13 @@ from agir_db.models.process import Process as DBProcess, ProcessNode as DBProces
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.custom_field import CustomField
 
-from .llms.llm_provider_manager import LLMProviderManager  # 明确从agir_db包导入CustomField
-from .models.process import Process, ProcessNode
-from .models.agent import Agent
-from .llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from .utils.database import get_or_create_user, create_user, find_user_by_role, create_process_record, find_or_create_learner
-from .utils.yaml_loader import load_process_from_file
-from .process_manager import ProcessManager  # Import the new ProcessManager
+from src.llms.llm_provider_manager import LLMProviderManager  # 明确从agir_db包导入CustomField
+from src.models.process import Process, ProcessNode
+from src.models.agent import Agent
+from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
+from src.utils.database import get_or_create_user, create_user, find_user_by_role, create_process_record, find_or_create_learner
+from src.utils.yaml_loader import load_process_from_file
+from src.process_manager import ProcessManager  # Import the new ProcessManager
 
 # Configure logging
 logging.basicConfig(
@@ -163,128 +163,7 @@ class EvolutionEngine:
             
         return self.run_evolution(process)
         
-    def run_evolution_with_id(self, process_id: int) -> bool:
-        """
-        Run an evolution process for a process with the given ID
-        
-        Args:
-            process_id: The database ID of the process
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        # Create database session to fetch the process
-        with SessionLocal() as db:
-            self.db = db  # Store db in instance for helper methods that need it
-            
-            # Get the process data
-            process = self.process_manager.get_process(process_id)
-            
-            if not process:
-                logger.error(f"Process not found: {process_id}")
-                return False
-            
-            # Check for learner configuration directly from process
-            learner_config = None
-            
-            # First try to get learner from process directly (this comes from the YAML)
-            if "learner" in process and process["learner"]:
-                learner_config = process["learner"]
-                logger.info(f"Using learner from process configuration: {learner_config.get('username')}")
-            
-            # If no learner found directly, try from config section
-            if not learner_config:
-                # Load process configuration - handle the case where config is None
-                if "config" not in process or process["config"] is None:
-                    logger.warning(f"No configuration found for process {process_id}.")
-                    process_config = {}
-                else:
-                    process_config = process["config"]
-                    if isinstance(process_config, str):
-                        try:
-                            process_config = json.loads(process_config)
-                        except Exception as e:
-                            logger.error(f"Failed to parse process configuration: {str(e)}")
-                            return False
-                
-                # Try to get learner from config
-                if isinstance(process_config, dict) and "learner" in process_config and process_config["learner"]:
-                    learner_config = process_config["learner"]
-                    logger.info(f"Using learner from process config: {learner_config.get('username')}")
-            
-            # If still no learner config, use default
-            if not learner_config:
-                logger.warning("No learner configuration found in the process. Using default.")
-                learner_config = {"username": "default_learner"}
-            
-            # Get process name with fallback
-            process_name = process.get("name", f"Process {process_id}") if isinstance(process, dict) else f"Process {process_id}"
-            logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
-                
-            logger.info(f"Looking up learner from config: {learner_config}")
-            
-            # Find or create the learner user
-            learner = find_or_create_learner(db, learner_config)
-            logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
-            
-            # Load roles from the config and create users
-            roles_config = {}
-            if "roles" in process and process["roles"]:
-                roles_config = process["roles"]
-            
-            # Handle roles_config in different formats (array or dictionary)
-            if isinstance(roles_config, list):
-                # If roles_config is a list of role objects
-                for role in roles_config:
-                    # For list format, each role should be a dictionary with at least 'name' or 'id'
-                    if isinstance(role, dict):
-                        role_name = role.get('name') or role.get('id')
-                        role_data = role
-                    else:
-                        # If it's not a dict, try to extract name/id as attribute
-                        role_name = getattr(role, 'name', None) or getattr(role, 'id', None)
-                        # Convert object to dict for easier handling
-                        role_data = vars(role) if hasattr(role, '__dict__') else {'name': role_name}
-                    
-                    if not role_name or role_name.lower() == "learner":
-                        # Skip if no name/id or if it's the learner role
-                        continue
-                    
-                    logger.info(f"Creating agent for role: {role_name}")
-                    username = role_data.get("username", f"{role_name}_{process_id}")
-                    agent = create_user(db, role_name, process_id, username)
-                    logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
-                    
-                    # Update agent's model if specified
-                    if "model" in role_data and hasattr(agent, "llm_model"):
-                        agent.llm_model = role_data["model"]
-                        db.commit()
-                        logger.info(f"Updated {role_name}'s model to {role_data['model']}")
-            elif isinstance(roles_config, dict):
-                # If roles_config is a dictionary mapping role names to role data
-                for role_name, role_data in roles_config.items():
-                    if role_name.lower() == "learner":
-                        # Skip the learner role as it's already handled
-                        continue
-                        
-                    logger.info(f"Creating agent for role: {role_name}")
-                    username = role_data.get("username", f"{role_name}_{process_id}")
-                    agent = create_user(db, role_name, process_id, username)
-                    logger.info(f"Created agent: {agent.username} (ID: {agent.id})")
-                    
-                    # Update agent's model if specified
-                    if "model" in role_data and hasattr(agent, "llm_model"):
-                        agent.llm_model = role_data["model"]
-                        db.commit()
-                        logger.info(f"Updated {role_name}'s model to {role_data['model']}")
-            
-            # Initialize empty history for the process
-            history = []
-            
-            # Run the evolution process
-            self._process_evolution(db, process, learner, history, process_id)
-            
-            return True
+    
         
     def run_evolution(self, process: Process) -> bool:
         """
