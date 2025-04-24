@@ -5,6 +5,7 @@ from src.db.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.process_role import ProcessRole
+from src.db.data_store import set_process_roles
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ def create_or_find_process_roles(db: Session, process_id: int, roles: List[Union
     try:
         if not roles:
             logger.warning("No roles defined in process YAML")
+            set_process_roles({})
             return {}
         
         # Create role ID mapping
@@ -90,6 +92,9 @@ def create_or_find_process_roles(db: Session, process_id: int, roles: List[Union
             
             # Add to mapping
             role_id_mapping[role_name] = role.id
+        
+        # Store role data in data_store
+        set_process_roles(role_id_mapping)
         
         return role_id_mapping
         

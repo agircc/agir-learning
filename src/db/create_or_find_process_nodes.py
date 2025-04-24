@@ -5,6 +5,7 @@ from src.db.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.process import ProcessNode
+from src.db.data_store import set_process_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,23 @@ def create_or_find_process_nodes(
     try:
         node_id_mapping = {}
         
+        # Fetch existing nodes for this process to avoid duplicates
+        existing_nodes = db.query(ProcessNode).filter(
+            ProcessNode.process_id == process_id
+        ).all()
+        
+        # Create mapping of existing node names to node objects
+        existing_node_map = {node.name.lower(): node for node in existing_nodes}
+        
         for i, node in enumerate(nodes):
+            # Check if node already exists (case-insensitive)
+            existing_node = existing_node_map.get(node.name.lower())
+            
+            if existing_node:
+                logger.info(f"Found existing node: {existing_node.name}")
+                node_id_mapping[node.name] = existing_node.id
+                continue
+                
             # Special handling for "learner" role - don't try to find a role_id
             role_id = None
             if node.role != "learner":
@@ -53,7 +70,10 @@ def create_or_find_process_nodes(
             node_id_mapping[node.name] = db_node.id
         
         db.commit()
-        logger.info(f"Created {len(node_id_mapping)} process nodes")
+        logger.info(f"Created or found {len(node_id_mapping)} process nodes")
+        
+        # Store nodes data in data_store
+        set_process_nodes(node_id_mapping)
         
         return node_id_mapping
         

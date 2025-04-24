@@ -5,6 +5,7 @@ from src.db.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.process import ProcessTransition
+from src.db.data_store import set_process_transitions
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,24 @@ def create_or_find_process_transitions(
         # If no transitions, return early
         if not transitions:
             logger.info("No transitions defined in YAML")
+            set_process_transitions({})
             return True
         
         # Log node mappings for debugging
         logger.debug(f"Node name to ID mapping: {node_id_mapping}")
+        
+        # Fetch existing transitions for this process
+        existing_transitions = db.query(ProcessTransition).filter(
+            ProcessTransition.process_id == process_id
+        ).all()
+        
+        # Create set of existing transition tuples (from_node_id, to_node_id)
+        existing_transition_set = {
+            (t.from_node_id, t.to_node_id) for t in existing_transitions
+        }
+        
+        # Store transition mapping for data_store
+        transition_mapping = {}
         
         # Process each transition
         for transition in transitions:
@@ -53,6 +68,16 @@ def create_or_find_process_transitions(
                 logger.warning(f"To node not found for transition: {to_node_name}")
                 continue
             
+            # Check if transition already exists
+            if (from_node_id, to_node_id) in existing_transition_set:
+                logger.info(f"Transition already exists: {from_node_name} -> {to_node_name}")
+                transition_key = f"{from_node_name}_{to_node_name}"
+                transition_mapping[transition_key] = {
+                    'from_node_id': from_node_id,
+                    'to_node_id': to_node_id
+                }
+                continue
+            
             # Create transition
             db_transition = ProcessTransition(
                 process_id=process_id,
@@ -62,9 +87,19 @@ def create_or_find_process_transitions(
             
             db.add(db_transition)
             logger.debug(f"Created transition: {from_node_name} ({from_node_id}) -> {to_node_name} ({to_node_id})")
+            
+            # Store in transition mapping
+            transition_key = f"{from_node_name}_{to_node_name}"
+            transition_mapping[transition_key] = {
+                'from_node_id': from_node_id,
+                'to_node_id': to_node_id
+            }
         
         db.commit()
-        logger.info(f"Created process transitions")
+        logger.info(f"Created or found process transitions")
+        
+        # Store transitions data in data_store
+        set_process_transitions(transition_mapping)
         
         return True
         
