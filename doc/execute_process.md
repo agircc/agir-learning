@@ -20,7 +20,10 @@ process_transtions 上有 process id, from_node_id, to_node_id
 
 将 llm 生成的 data 保存在 process instance step 表上的 comment 字段上
 
-## 6. 找到下一个 node，按照上面的流程 2-5，创建下一个 process instance step
+## 6. 根据 process transition 找到下一个 node
+找到的 transition 上如果有 condition, 需要找到这个 node 之前的 node 的 process instance step 获得情况，再根据 condition 决定下一个 node
+
+按照上面的流程 3-5，创建下一个 process instance step
 找到这个 step 对应的 user，找到对应的 model，请求响应的 llm
 
 请求 llm 时，提供上一个 process instance step 的 comment 信息
