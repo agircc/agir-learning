@@ -17,6 +17,7 @@ from agir_db.schemas.process import ProcessNodeDTO
 
 from src.db.create_process_role_user import create_process_role_user
 from src.evolution.process_manager.generate_llm_response import generate_llm_response
+from src.evolution.process_manager.get_next_node import get_next_node
 from src.llms.llm_provider_manager import LLMProviderManager
 
 from ..models.process import Process as YamlProcess
@@ -294,7 +295,7 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
             
             logger.info(f"Current node in the circle: {current_node}")
             # 6. Find next node
-            next_node = ProcessManager._get_next_node(db, process_id, current_node.id)
+            next_node = get_next_node(db, process_id, current_node.id, instance_id)
             
             # If no next node, we've reached the end
             if not next_node:

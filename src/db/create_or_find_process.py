@@ -5,6 +5,7 @@ from src.db.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union 
 from agir_db.db.session import get_db
 from agir_db.models.process import Process
+from agir_db.schemas.process import ProcessDTO
 from agir_db.models.user import User
 from src.db.data_store import set_process
 
@@ -37,13 +38,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, lea
             logger.info(f"Found existing process: {process_name}")
             
             # Store process data in data_store
-            process_info = {
-                "id": process.id,
-                "name": process.name,
-                "description": process.description,
-                "learner_role": process.learner_role,
-                "created_by": process.created_by
-            }
+            process_info = ProcessDTO.model_validate(process)
             set_process(process_info)
             
             return process.id
@@ -86,12 +81,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, lea
         logger.info(f"Created new process: {process_name} with ID: {process.id}, creator ID: {creator_id}")
         
         # Store process data in data_store
-        process_info = {
-            "id": process.id,
-            "name": process.name,
-            "description": process.description,
-            "created_by": process.created_by
-        }
+        process_info = ProcessDTO.model_validate(process)
         set_process(process_info)
         
         return process.id

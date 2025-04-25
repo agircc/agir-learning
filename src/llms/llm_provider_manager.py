@@ -13,13 +13,9 @@ from agir_db.models.process import Process as DBProcess, ProcessNode as DBProces
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.custom_field import CustomField
 
-from src.llms.llm_provider_manager import LLMProviderManager  # 明确从agir_db包导入CustomField
 from src.models.process import Process, ProcessNode
 from src.models.agent import Agent
 from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from src.utils.database import get_or_create_user, find_user_by_role, create_process_record, find_or_create_learner
-from src.utils.yaml_loader import load_process_from_file
-from src.evolution.process_instance_manager import ProcessManager  # Import the new ProcessManager
 
 # Configure logging
 logging.basicConfig(
