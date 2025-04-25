@@ -34,6 +34,7 @@ class Process(BaseModel):
     """
     id: Optional[str] = None
     name: str
+    learner_role: str
     description: Optional[str] = None
     learner: Dict[str, Any] = Field(default_factory=dict)
     nodes: List[ProcessNode] = Field(default_factory=list)

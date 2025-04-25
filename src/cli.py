@@ -131,7 +131,7 @@ def main():
             sys.exit(1)
             
     except Exception as e:
-        logger.error(f"Error in evolution process: {str(e)}")
+        logger.error(f"CLI Error in evolution process: {str(e)}")
         sys.exit(1)
 
 

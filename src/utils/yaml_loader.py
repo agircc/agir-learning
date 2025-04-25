@@ -104,6 +104,7 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
         return Process(
             name=process_data.get("name", "Unnamed Process"),
             description=process_data.get("description"),
+            learner_role=process_data.get("learner_role"),
             learner=process_data.get("learner", {}),
             nodes=nodes,
             transitions=transitions,

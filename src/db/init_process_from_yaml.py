@@ -65,5 +65,5 @@ def init_process_from_yaml(yaml_file_path: str, created_by: Optional[str] = None
             return process_id
             
         except Exception as e:
-            logger.error(f"Failed to create process: {str(e)}")
+            logger.error(f"Failed to initialize process from {yaml_file_path}: {str(e)}")
             return None

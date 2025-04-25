@@ -22,9 +22,9 @@ def run_evolution_with_id(process_id: int) -> bool:
       
       # Find or create the learner user
       learner = get_learner()
-      logger.info(f"Using learner: {learner['username']} (ID: {learner['id']})")
+      logger.info(f"Learner: {learner}")
+      logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
       
-
       roles_config = get_process_roles()
       logger.info(f"Roles config is a list: {roles_config}")
       # If roles_config is a list of role objects
@@ -46,11 +46,12 @@ def run_evolution_with_id(process_id: int) -> bool:
           logger.info(f"Creating user for role: {role_name}")
           username = role_data.get("username", f"{role_name}_{process_id}")
           agent = create_process_role_user(db, role_name, process_id, username, role_data.get("model", None))
+          logger.info(f"Agent: {agent}")
           logger.info(f"Created user: {agent.username} (ID: {agent.id})")
       
       
       # Run the evolution process
     #   self._process_evolution(db, process, learner, process_id)
       from src.evolution.execute_process import execute_process
-      execute_process(process_id, learner['id'])
+      execute_process(process_id, learner.id)
       return True
