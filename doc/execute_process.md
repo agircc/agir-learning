@@ -23,6 +23,9 @@ process_transtions 上有 process id, from_node_id, to_node_id
 ## 6. 根据 process transition 找到下一个 node
 找到的 transition 上如果有 condition, 需要找到这个 node 之前的 node 的 process instance step 获得情况，再根据 condition 决定下一个 node
 
+有的时候 一个 from_node_id 可能在不同的 condition 下会对应多个 to_node_id, 比如对 Post-Hospital Follow-up 有可能病人康复了，to_node 就是 case closed， 如果病人没有康复就是 triage.
+怎么判断病人有没有康复，可以查找 From node 的前一个 node，比如这里的 Recovery，从 这个 node 对应的 process_instance_step 上的 comment 传给 llm 检查是否是康复了，还是没康复。从而最终决定 to node.
+
 按照上面的流程 3-5，创建下一个 process instance step
 找到这个 step 对应的 user，找到对应的 model，请求响应的 llm
 

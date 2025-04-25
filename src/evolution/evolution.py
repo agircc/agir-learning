@@ -1,7 +1,6 @@
 """
 Evolution module - handles the main evolution process
 """
-
 import os
 import logging
 import json

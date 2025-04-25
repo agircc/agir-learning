@@ -223,42 +223,6 @@ class ProcessManager:
             db.rollback()
             logger.error(f"Failed to create process instance step: {str(e)}")
             return None
-    
-    @staticmethod
-    def _get_next_node(db: Session, process_id: int, current_node_id: int) -> Optional[ProcessNode]:
-        """
-        Get the next node in a process.
-        
-        Args:
-            db: Database session
-            process_id: ID of the process
-            current_node_id: ID of the current node
-            
-        Returns:
-            Optional[ProcessNode]: Next node if found, None otherwise
-        """
-        try:
-            # Find transition from current node
-            transition = db.query(ProcessTransition).filter(
-                ProcessTransition.process_id == process_id,
-                ProcessTransition.from_node_id == current_node_id
-            ).first()
-            
-            if not transition:
-                logger.info(f"No transitions found from node {current_node_id} - this may be the final node")
-                return None
-            
-            # Get the next node
-            next_node = db.query(ProcessNode).filter(ProcessNode.id == transition.to_node_id).first()
-            if not next_node:
-                logger.error(f"Next node not found: {transition.to_node_id}")
-                return None
-            
-            return ProcessNodeDTO.model_validate(next_node)
-            
-        except Exception as e:
-            logger.error(f"Failed to get next node: {str(e)}")
-            return None
  
 def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
     """
