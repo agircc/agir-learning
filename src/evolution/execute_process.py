@@ -259,43 +259,6 @@ class ProcessManager:
             logger.error(f"Failed to get next node: {str(e)}")
             return None
     
-    @staticmethod
-    def _generate_llm_response(node: ProcessNode, previous_steps: List[ProcessInstanceStep]) -> Optional[str]:
-        """
-        Generate LLM response for a node.
-        
-        Args:
-            node: Process node
-            previous_steps: Previous steps in the process
-            
-        Returns:
-            Optional[str]: Generated response if successful, None otherwise
-        """
-        try:
-            # Create context from previous steps
-            context = {
-                "node_name": node.name,
-                "node_description": node.description,
-                "history": []
-            }
-            
-            # Add previous step data to history
-            for step in previous_steps:
-                if step.comment:
-                    context["history"].append({
-                        "step_id": step.id,
-                        "node_id": step.node_id,
-                        "user_id": step.user_id,
-                        "content": step.comment
-                    })
-            
-            # For this simple implementation, we'll just return a placeholder
-            # In a real implementation, you would use an actual LLM provider
-            return f"Generated response for node {node.name}: {node.description}"
-            
-        except Exception as e:
-            logger.error(f"Failed to generate LLM response: {str(e)}")
-            return None
 
 def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
     """
