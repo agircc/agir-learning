@@ -61,47 +61,50 @@ process:
       role: "patient"
       description: "Patient returns home and recovers. May return if not healed."
 
+    - name: "Recovery"
+      role: "patient"
+      description: "Patient successfully recovers after treatment and completes the healthcare cycle."
+
     - name: "Post-Hospital Follow-up"
       role: "doctor"
       description: "Doctor handles patient follow-up and complaints."
 
-    - name: "Reading Books"
+    - name: "Case Closed"
       role: "doctor"
-      description: "Doctor agent reads medical books to strengthen knowledge."
+      description: "Patient follow-up is complete with no significant issues. Case is closed."
 
   transitions:
     - from: Disease Onset
       to: Triage
+
     - from: Triage
       to: Registration
+
     - from: Registration
       to: Consultation
+
     - from: Consultation
       to: Medical Examination
+
     - from: Medical Examination
       to: Diagnosis
+
     - from: Diagnosis
       to: Medicine Dispensary
+
     - from: Medicine Dispensary
       to: Convalescence
+
     - from: Convalescence
+      to: Recovery
+
+    - from: Recovery
       to: Post-Hospital Follow-up
-    - from: Convalescence
-      to: Triage
+
     - from: Post-Hospital Follow-up
       to: Triage
-    - from: Diagnosis
-      to: Reading Books
+      condition: "Patient raises significant complaints or experiences recurrence of illness."
 
-  evolution:
-    method: "MedAgent-Zero"
-    description: "Doctors evolve by treating patient agents and learning from both successes (case base) and failures (experience base)."
-    knowledge_sources:
-      - "Medical Case Base"
-      - "Experience Base"
-      - "Medical Textbooks"
-
-  department_coverage:
-    clinical_departments: 21
-    diseases_supported: 339
-    note: "Supports all major medical workflows in diagnosis and treatment."
+    - from: Post-Hospital Follow-up
+      to: Case Closed
+      condition: "Follow-up shows no significant issues; patient is healthy."
