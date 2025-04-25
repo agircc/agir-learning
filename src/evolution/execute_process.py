@@ -13,6 +13,7 @@ from agir_db.models.process import Process, ProcessNode, ProcessTransition
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.process_instance_step import ProcessInstanceStep
 from agir_db.models.process_role_user import ProcessRoleUser
+from agir_db.schemas.process import ProcessNodeDTO
 
 from src.db.create_process_role_user import create_process_role_user
 from src.llms.llm_provider_manager import LLMProviderManager
@@ -87,7 +88,7 @@ class ProcessManager:
             # These are potential starting nodes
             for node in all_nodes:
                 if node.id not in to_node_ids:
-                    return node
+                    return ProcessNodeDTO.model_validate(node)
             
             # If no clear starting node, return the first node
             logger.warning(f"No clear starting node found for process: {process_id}, using first node")
@@ -252,7 +253,7 @@ class ProcessManager:
                 logger.error(f"Next node not found: {transition.to_node_id}")
                 return None
             
-            return next_node
+            return ProcessNodeDTO.model_validate(next_node)
             
         except Exception as e:
             logger.error(f"Failed to get next node: {str(e)}")
@@ -321,6 +322,7 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
             logger.error(f"No initial node found for process: {process_id}")
             return None
         
+        logger.info(f"Current node: {current_node}")
         # Initialize process instance with current node
         instance = db.query(ProcessInstance).filter(ProcessInstance.id == instance_id).first()
         instance.current_node_id = current_node.id
@@ -363,6 +365,7 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
             instance.current_node_id = current_node.id
             db.commit()
             
+            logger.info(f"Current node in the circle: {current_node}")
             # 6. Find next node
             next_node = ProcessManager._get_next_node(db, process_id, current_node.id)
             
