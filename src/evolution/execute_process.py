@@ -16,6 +16,7 @@ from agir_db.models.process_role_user import ProcessRoleUser
 from agir_db.schemas.process import ProcessNodeDTO
 
 from src.db.create_process_role_user import create_process_role_user
+from src.evolution.process_manager.generate_llm_response import generate_llm_response
 from src.llms.llm_provider_manager import LLMProviderManager
 
 from ..models.process import Process as YamlProcess
@@ -258,8 +259,7 @@ class ProcessManager:
         except Exception as e:
             logger.error(f"Failed to get next node: {str(e)}")
             return None
-    
-
+ 
 def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
     """
     Execute a process from start to finish.
@@ -309,7 +309,7 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
                 return None
             
             # 5. Generate LLM response for this node
-            response = ProcessManager._generate_llm_response(current_node, all_steps)
+            response = generate_llm_response(db, current_node, user, all_steps)
             
             # Create step with generated data
             step_id = ProcessManager._create_process_instance_step(
