@@ -7,6 +7,7 @@ from agir_db.models.process import Process, ProcessNode, ProcessTransition
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.process_instance_step import ProcessInstanceStep
 from src.llms.llm_provider_manager import LLMProviderManager
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 def generate_llm_response(db: Session, node: ProcessNode, current_node_role: ProcessRole, user: User, previous_steps: List[ProcessInstanceStep]) -> Optional[str]:
@@ -69,7 +70,7 @@ Task: {node.description}
       prompt += f"Please respond as {user.username} for the current step: {node.name}\n"
       
       # Call the LLM provider to generate a response
-      response = provider.generate_text(prompt)
+      response = provider.generate(prompt)
       
       logger.info(f"Generated LLM response for node {node.name} with user {user.username}")
       

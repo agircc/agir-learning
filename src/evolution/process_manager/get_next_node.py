@@ -104,7 +104,7 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
           
           # Get LLM response
           llm_manager = LLMProviderManager()
-          response = llm_manager.generate_text(prompt, max_tokens=50)
+          response = llm_manager.generate(prompt, max_tokens=50)
           
           # Find the transition based on LLM response
           for t in transitions:

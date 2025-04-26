@@ -16,6 +16,7 @@ from agir_db.models.custom_field import CustomField
 from src.models.process import Process, ProcessNode
 from src.models.agent import Agent
 from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
+from src.llms.ollama import OllamaProvider
 
 # Configure logging
 logging.basicConfig(
@@ -180,7 +181,7 @@ class LLMProviderManager:
             return "openai"
         elif model_name in ["claude", "claude-3", "claude-3-opus", "claude-3-sonnet"] or model_name.startswith("claude-"):
             return "anthropic"
-        elif model_name in ["llama", "phi", "mixtral", "mistral"] or model_name.startswith("llama-") or model_name.startswith("phi-"):
+        elif model_name in ["llama", "phi", "phi:latest", "mixtral", "mistral"] or model_name.startswith("llama-") or model_name.startswith("phi-"):
             return "ollama"
         else:
             raise ValueError(f"Could not determine provider type for model: {model_name}")

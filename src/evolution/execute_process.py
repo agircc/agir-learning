@@ -20,8 +20,6 @@ from src.evolution.process_manager.generate_llm_response import generate_llm_res
 from src.evolution.process_manager.get_next_node import get_next_node
 from src.llms.llm_provider_manager import LLMProviderManager
 
-from ..models.process import Process as YamlProcess
-
 logger = logging.getLogger(__name__)
 
 class ProcessManager:
@@ -237,13 +235,15 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
         Optional[int]: ID of the process instance if successful, None otherwise
     """
     try:
+        logger.info(f"Step 0")
         db = next(get_db())
-        
+        logger.info(f"Step 1")
         # 1. Create process instance
         instance_id = ProcessManager._create_process_instance(db, process_id, initiator_id)
         if not instance_id:
             return None
         
+        logger.info(f"Step 2")
         # 2. Get initial node and create first step
         current_node = ProcessManager._get_initial_node(db, process_id)
         if not current_node:
@@ -251,6 +251,9 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
             return None
         
         logger.info(f"Current node: {current_node}")
+
+
+        logger.info(f"Step 3")
         # Initialize process instance with current node
         instance = db.query(ProcessInstance).filter(ProcessInstance.id == instance_id).first()
         instance.current_node_id = current_node.id
@@ -274,7 +277,7 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
                 return None
             
             # 5. Generate LLM response for this node
-            response = generate_llm_response(db, current_node, user, all_steps)
+            response = generate_llm_response(db, current_node, role, user, all_steps)
             
             # Create step with generated data
             step_id = ProcessManager._create_process_instance_step(

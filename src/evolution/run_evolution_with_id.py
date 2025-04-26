@@ -48,10 +48,12 @@ def run_evolution_with_id(process_id: int) -> bool:
           agent = create_process_role_user(db, role_name, process_id, username, role_data.get("model", None))
           logger.info(f"Agent: {agent}")
           logger.info(f"Created user: {agent.username} (ID: {agent.id})")
+          logger.info(f"Step xxx")
       
       
       # Run the evolution process
     #   self._process_evolution(db, process, learner, process_id)
       from src.evolution.execute_process import execute_process
+      logger.info(f"Step !!!!")
       execute_process(process_id, learner.id)
       return True

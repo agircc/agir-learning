@@ -28,9 +28,9 @@ def create_process_role_user(db: Session, role: str, process_id: Any, username: 
     learner = get_learner()
     process = get_process()
 
-    logger.info(f"Process learner role: {process.get('learner_role')}")
+    logger.info(f"Process learner role: {process.learner_role}")
     logger.info(f"Role: {role}")
-    if process.get("learner_role") == role:
+    if process.learner_role == role:
         return learner
     # Generate username if not provided
     if not username:

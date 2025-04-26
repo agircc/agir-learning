@@ -10,7 +10,7 @@ process:
     gender: "MALE"
     birth_date: "1979-01-01" 
     profession: "Dermatologist"
-    model: "phi"
+    model: "phi:latest"
     skills:
       - "Diagnosis"
       - "Treatment Planning"
@@ -19,13 +19,13 @@ process:
 
   roles:
     - name: "patient"
-      model: "phi"
+      model: "phi:latest"
       description: "Patient agent with medical history, symptoms."
     - name: "nurse"
-      model: "phi"
+      model: "phi:latest"
       description: "Nurse agent for triage, registration, and examinations."
     - name: "doctor"
-      model: "phi"
+      model: "phi:latest"
       description: "Doctor agent for diagnosis, treatment, and follow-up."
 
   nodes:
