@@ -298,7 +298,7 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
             
             logger.info(f"Current node in the circle: {current_node}")
             # 6. Find next node
-            next_node = get_next_node(db, process_id, current_node.id, instance_id)
+            next_node = get_next_node(db, process_id, current_node.id, instance_id, user)
             
             # If no next node, we've reached the end
             if not next_node:

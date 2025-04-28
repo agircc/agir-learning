@@ -40,6 +40,7 @@ def create_or_find_learner(db: Session, learner_data: Dict[str, Any]) -> Optiona
                     username=user.username,
                     first_name=user.first_name,
                     last_name=user.last_name,
+                    llm_model=user.llm_model,
                     email=user.email
                 )
                 set_learner(learner_info)

@@ -21,7 +21,7 @@ from src.llms.llm_provider_manager import LLMProviderManager
 
 logger = logging.getLogger(__name__)
 
-def get_next_node(db: Session, process_id: int, current_node_id: int, instance_id: int) -> Optional[ProcessNode]:
+def get_next_node(db: Session, process_id: int, current_node_id: int, instance_id: int, user: User) -> Optional[ProcessNode]:
   """
   Get the next node in a process based on conditions.
   
@@ -61,7 +61,7 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
       
       # Find the current step in the process instance
       current_step = db.query(ProcessInstanceStep).filter(
-          ProcessInstanceStep.process_instance_id == instance_id,
+          ProcessInstanceStep.instance_id == instance_id,
           ProcessInstanceStep.node_id == current_node_id
       ).first()
       
@@ -71,7 +71,7 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
       
       # Find the previous step to get context
       previous_step = db.query(ProcessInstanceStep).filter(
-          ProcessInstanceStep.process_instance_id == instance_id,
+          ProcessInstanceStep.instance_id == instance_id,
           ProcessInstanceStep.created_at < current_step.created_at
       ).order_by(ProcessInstanceStep.created_at.desc()).first()
       
@@ -104,7 +104,9 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
           
           # Get LLM response
           llm_manager = LLMProviderManager()
-          response = llm_manager.generate(prompt, max_tokens=50)
+          logger.info(f"User LLM model: {user}")
+          provider = llm_manager.get_provider(user.llm_model)
+          response = provider.generate(prompt, max_tokens=50)
           
           # Find the transition based on LLM response
           for t in transitions:
