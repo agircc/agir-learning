@@ -106,7 +106,7 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
           llm_manager = LLMProviderManager()
           logger.info(f"User LLM model: {user}")
           provider = llm_manager.get_provider(user.llm_model)
-          response = provider.generate(prompt, max_tokens=50)
+          response = provider.generate(prompt)
           
           # Find the transition based on LLM response
           for t in transitions:
