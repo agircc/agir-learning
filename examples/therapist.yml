@@ -30,35 +30,35 @@ process:
 
   nodes:
     - name: "Distress Emergence"
-      role: "client"
+      participants: ["client"]
       description: "Client experiences emotional distress and decides to seek therapy."
 
     - name: "Intake Interview"
-      role: "intake_coordinator"
+      participants: ["intake_coordinator", "client"]
       description: "Coordinator collects client background, reasons for therapy, and assigns a therapist."
 
     - name: "Initial Assessment"
-      role: "therapist"
+      participants: ["therapist", "client"]
       description: "Therapist conducts first session to assess needs, establish rapport, and define goals."
 
     - name: "Therapeutic Sessions"
-      role: "therapist"
+      participants: ["therapist", "client"]
       description: "Ongoing therapy sessions using appropriate techniques to address client issues."
 
     - name: "Progress Review"
-      role: "therapist"
+      participants: ["therapist", "client"]
       description: "Therapist reviews progress, adjusts plan, or introduces new techniques."
 
     - name: "Therapy Termination"
-      role: "therapist"
+      participants: ["therapist", "client"]
       description: "Therapist and client agree on ending therapy, reflect on growth, and discuss aftercare."
 
     - name: "Post-Therapy Reflection"
-      role: "client"
+      participants: ["client"]
       description: "Client applies insights in daily life, may seek follow-up if new issues arise."
 
     - name: "Case Closure"
-      role: "therapist"
+      participants: ["therapist"]
       description: "Client maintains well-being; no further sessions required. Case closed."
 
   transitions:
