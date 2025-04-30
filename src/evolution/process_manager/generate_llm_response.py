@@ -33,12 +33,12 @@ def generate_llm_response(db: Session, node: ProcessNode, current_node_role: Pro
       
       # Add previous step data to history
       for step in previous_steps:
-          if step.comment:
+          if step.generated_text:
               context["history"].append({
                   "step_id": step.id,
                   "node_id": step.node_id,
                   "user_id": step.user_id,
-                  "content": step.comment
+                  "content": step.generated_text
               })
       
       # Get the appropriate LLM model from the user

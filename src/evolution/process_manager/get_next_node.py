@@ -76,11 +76,11 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
       ).order_by(ProcessInstanceStep.created_at.desc()).first()
       
       context = ""
-      if previous_step and previous_step.comment:
-          context = previous_step.comment
+      if previous_step and previous_step.generated_text:
+          context = previous_step.generated_text
       
-      if current_step.comment:
-          context += f"\n\nCurrent status: {current_step.comment}"
+      if current_step.generated_text:
+          context += f"\n\nCurrent status: {current_step.generated_text}"
       
       # Use LLM to evaluate conditions and determine the next node
       selected_transition = None

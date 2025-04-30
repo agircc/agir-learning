@@ -186,7 +186,7 @@ class ProcessManager:
         instance_id: int, 
         node_id: int, 
         user_id: Optional[int] = None,
-        comment: Optional[str] = None
+        generated_text: Optional[str] = None
     ) -> Optional[int]:
         """
         Create a process instance step.
@@ -196,7 +196,7 @@ class ProcessManager:
             instance_id: ID of the process instance
             node_id: ID of the process node
             user_id: ID of the user (optional)
-            comment: Comment/data from LLM (optional)
+            generated_text: Comment/data from LLM (optional)
             
         Returns:
             Optional[int]: ID of the process instance step if successful, None otherwise
@@ -207,7 +207,7 @@ class ProcessManager:
                 node_id=node_id,
                 user_id=user_id,
                 action="process",
-                comment=comment
+                generated_text=generated_text
             )
             
             db.add(step)
