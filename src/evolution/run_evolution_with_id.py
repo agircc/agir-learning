@@ -2,8 +2,8 @@ import logging
 
 from agir_db.db.session import SessionLocal, get_db
 
-from src.db.create_process_role_user import create_process_role_user
-from src.db.data_store import get_learner, get_process, get_process_nodes, get_process_roles
+from src.construction.create_process_role_user import create_process_role_user
+from src.construction.data_store import get_learner, get_process, get_process_nodes, get_process_roles
 logger = logging.getLogger(__name__)
 
 def run_evolution_with_id(process_id: int) -> bool:

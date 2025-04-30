@@ -2,13 +2,13 @@ import logging
 import json
 
 from sqlalchemy.orm import Session
-from src.db.check_database_tables import check_database_tables
+from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.process_role import ProcessRole
 from agir_db.models.process_role_user import ProcessRoleUser
-from src.db.data_store import get_learner, get_process, set_learner
+from src.construction.data_store import get_learner, get_process, set_learner
 
 logger = logging.getLogger(__name__)
 

@@ -1,11 +1,11 @@
 import logging
 
-from src.db.create_or_find_learner import create_or_find_learner
-from src.db.create_or_find_process import create_or_find_process
-from src.db.create_or_find_process_roles import create_or_find_process_roles
-from src.db.create_or_find_process_nodes import create_or_find_process_nodes
-from src.db.create_or_find_process_transitions import create_or_find_process_transitions
-from src.db.check_database_tables import check_database_tables
+from src.construction.create_or_find_learner import create_or_find_learner
+from src.construction.create_or_find_process import create_or_find_process
+from src.construction.create_or_find_process_roles import create_or_find_process_roles
+from src.construction.create_or_find_process_nodes import create_or_find_process_nodes
+from src.construction.create_or_find_process_transitions import create_or_find_process_transitions
+from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from src.utils.yaml_loader import load_process_from_file
 from agir_db.db.session import get_db

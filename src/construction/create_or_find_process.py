@@ -1,13 +1,13 @@
 import logging
 
 from sqlalchemy.orm import Session
-from src.db.check_database_tables import check_database_tables
+from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union 
 from agir_db.db.session import get_db
 from agir_db.models.process import Process
 from agir_db.schemas.process import ProcessDTO
 from agir_db.models.user import User
-from src.db.data_store import set_process
+from src.construction.data_store import set_process
 
 logger = logging.getLogger(__name__)
 

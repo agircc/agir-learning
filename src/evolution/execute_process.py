@@ -15,7 +15,7 @@ from agir_db.models.process_instance_step import ProcessInstanceStep
 from agir_db.models.process_role_user import ProcessRoleUser
 from agir_db.schemas.process import ProcessNodeDTO
 
-from src.db.create_process_role_user import create_process_role_user
+from src.construction.create_process_role_user import create_process_role_user
 from src.evolution.process_manager.generate_llm_response import generate_llm_response
 from src.evolution.process_manager.get_next_node import get_next_node
 from src.llms.llm_provider_manager import LLMProviderManager

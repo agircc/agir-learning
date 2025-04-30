@@ -5,8 +5,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from agir_db.db.session import SessionLocal, get_db
 from agir_db.models.process import Process
 
-from src.db.create_process_role_user import create_process_role_user
-from src.db.data_store import get_learner, get_process, get_process_nodes, get_process_roles
+from src.construction.create_process_role_user import create_process_role_user
+from src.construction.data_store import get_learner, get_process, get_process_nodes, get_process_roles
 logger = logging.getLogger(__name__)
 
 def process_evolution(
