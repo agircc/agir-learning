@@ -16,7 +16,7 @@ from agir_db.models.process_role_user import ProcessRoleUser
 from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.chat_participant import ChatParticipant
 from agir_db.models.chat_message import ChatMessage
-from agir_db.schemas.process import ProcessNodeDTO
+from agir_db.schemas.process import ProcessNodeInDBBase
 
 from src.construction.create_process_role_user import create_process_role_user
 from src.evolution.process_manager.generate_llm_response import generate_llm_response
@@ -91,7 +91,7 @@ class ProcessManager:
             # These are potential starting nodes
             for node in all_nodes:
                 if node.id not in to_node_ids:
-                    return ProcessNodeDTO.model_validate(node)
+                    return ProcessNodeInDBBase.model_validate(node)
             
             # If no clear starting node, return the first node
             logger.warning(f"No clear starting node found for process: {process_id}, using first node")

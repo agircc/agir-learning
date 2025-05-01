@@ -13,7 +13,7 @@ from agir_db.models.process import Process, ProcessNode, ProcessTransition
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.process_instance_step import ProcessInstanceStep
 from agir_db.models.process_role_user import ProcessRoleUser
-from agir_db.schemas.process import ProcessNodeDTO
+from agir_db.schemas.process import ProcessNodeInDBBase
 
 from src.construction.create_process_role_user import create_process_role_user
 from src.evolution.process_manager.generate_llm_response import generate_llm_response
@@ -51,7 +51,7 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
           if not next_node:
               logger.error(f"Next node not found: {transitions[0].to_node_id}")
               return None
-          return ProcessNodeDTO.model_validate(next_node)
+          return ProcessNodeInDBBase.model_validate(next_node)
       
       # Get the current node's data
       current_node = db.query(ProcessNode).filter(ProcessNode.id == current_node_id).first()
@@ -130,7 +130,7 @@ def get_next_node(db: Session, process_id: int, current_node_id: int, instance_i
           logger.error(f"Next node not found: {selected_transition.to_node_id}")
           return None
       
-      return ProcessNodeDTO.model_validate(next_node)
+      return ProcessNodeInDBBase.model_validate(next_node)
       
   except Exception as e:
       logger.error(f"Failed to get next node: {str(e)}")
