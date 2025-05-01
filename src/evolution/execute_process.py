@@ -9,10 +9,13 @@ from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.process_role import ProcessRole
-from agir_db.models.process import Process, ProcessNode, ProcessTransition
+from agir_db.models.process import Process, ProcessNode, ProcessTransition, ProcessNodeRole
 from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
 from agir_db.models.process_instance_step import ProcessInstanceStep
 from agir_db.models.process_role_user import ProcessRoleUser
+from agir_db.models.chat_conversation import ChatConversation
+from agir_db.models.chat_participant import ChatParticipant
+from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.process import ProcessNodeDTO
 
 from src.construction.create_process_role_user import create_process_role_user
@@ -99,33 +102,42 @@ class ProcessManager:
             return None
     
     @staticmethod
-    def _get_node_role(db: Session, node_id: int) -> Optional[ProcessRole]:
+    def _get_node_roles(db: Session, node_id: int) -> List[ProcessRole]:
         """
-        Get the role associated with a node.
+        Get all roles associated with a node.
         
         Args:
             db: Database session
             node_id: ID of the node
             
         Returns:
-            Optional[ProcessRole]: Role if found, None otherwise
+            List[ProcessRole]: Roles associated with the node
         """
         try:
-            node = db.query(ProcessNode).filter(ProcessNode.id == node_id).first()
-            if not node or not node.role_id:
-                logger.error(f"Node not found or has no role: {node_id}")
-                return None
+            # Get all role IDs for this node from the ProcessNodeRole table
+            node_roles = db.query(ProcessNodeRole).filter(
+                ProcessNodeRole.process_node_id == node_id
+            ).all()
             
-            role = db.query(ProcessRole).filter(ProcessRole.id == node.role_id).first()
-            if not role:
-                logger.error(f"Role not found for node: {node_id}")
-                return None
+            if not node_roles:
+                logger.error(f"No roles found for node: {node_id}")
+                return []
             
-            return role
+            # Get the actual ProcessRole objects
+            roles = []
+            for node_role in node_roles:
+                role = db.query(ProcessRole).filter(
+                    ProcessRole.id == node_role.process_role_id
+                ).first()
+                
+                if role:
+                    roles.append(role)
+            
+            return roles
             
         except Exception as e:
-            logger.error(f"Failed to get node role: {str(e)}")
-            return None
+            logger.error(f"Failed to get node roles: {str(e)}")
+            return []
     
     @staticmethod
     def _get_or_create_role_user(db: Session, role_id: int, process_instance_id: int) -> Optional[User]:
@@ -222,6 +234,186 @@ class ProcessManager:
             db.rollback()
             logger.error(f"Failed to create process instance step: {str(e)}")
             return None
+
+    @staticmethod
+    def _create_conversation(db: Session, node: ProcessNode, instance_id: int, role_users: List[Tuple[ProcessRole, User]]) -> Optional[ChatConversation]:
+        """
+        Create a conversation for a multi-role node.
+        
+        Args:
+            db: Database session
+            node: Process node
+            instance_id: ID of the process instance
+            role_users: List of tuples containing role and user instances
+            
+        Returns:
+            Optional[ChatConversation]: Conversation if created, None otherwise
+        """
+        try:
+            # Create conversation
+            conversation = ChatConversation(
+                title=f"Conversation for {node.name} - Instance {instance_id}",
+                created_by=role_users[0][1].id  # Use first user as creator
+            )
+            
+            db.add(conversation)
+            db.flush()
+            
+            # Add all users as participants
+            for role, user in role_users:
+                participant = ChatParticipant(
+                    conversation_id=conversation.id,
+                    user_id=user.id
+                )
+                db.add(participant)
+            
+            db.commit()
+            db.refresh(conversation)
+            
+            logger.info(f"Created conversation with ID: {conversation.id} for node: {node.name}")
+            
+            return conversation
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to create conversation: {str(e)}")
+            return None
+
+    @staticmethod
+    def _conduct_multi_turn_conversation(
+        db: Session, 
+        conversation: ChatConversation, 
+        node: ProcessNode, 
+        role_users: List[Tuple[ProcessRole, User]], 
+        max_turns: int = 10
+    ) -> Optional[str]:
+        """
+        Conduct a multi-turn conversation between multiple roles.
+        
+        Args:
+            db: Database session
+            conversation: Chat conversation
+            node: Process node
+            role_users: List of tuples containing role and user instances
+            max_turns: Maximum number of conversation turns
+            
+        Returns:
+            Optional[str]: Summary of the conversation if successful, None otherwise
+        """
+        try:
+            # Initialize LLM provider manager
+            llm_provider_manager = LLMProviderManager()
+            
+            # Start conversation with a message from the first role
+            first_role, first_user = role_users[0]
+            
+            # Start with node description as first message
+            initial_message = ChatMessage(
+                conversation_id=conversation.id,
+                sender_id=first_user.id,
+                content=f"Let's start our discussion about: {node.description}. As {first_user.username}, I'll begin."
+            )
+            
+            db.add(initial_message)
+            db.commit()
+            
+            # Keep track of messages
+            messages = [initial_message]
+            
+            # Conduct conversation
+            conversation_complete = False
+            turn_count = 0
+            
+            while not conversation_complete and turn_count < max_turns:
+                # For each role, generate a response
+                for i, (role, user) in enumerate(role_users):
+                    # Skip the first role in the first turn as they already sent the initial message
+                    if turn_count == 0 and i == 0:
+                        continue
+                    
+                    # Get the model for this role
+                    model_name = user.llm_model
+                    provider = llm_provider_manager.get_provider(model_name)
+                    
+                    # Build context from previous messages
+                    conversation_history = ""
+                    for msg in messages:
+                        sender = db.query(User).filter(User.id == msg.sender_id).first()
+                        conversation_history += f"{sender.username}: {msg.content}\n\n"
+                    
+                    # Build prompt
+                    prompt = f"""You are an AI assistant playing the role of {user.username} in a conversation.
+
+Node: {node.name}
+Task: {node.description}
+
+Previous conversation:
+{conversation_history}
+
+Please respond as {user.username}. Keep your response natural and conversational.
+If the conversation seems complete or if there's a natural stopping point, include the phrase "I THINK WE'VE REACHED A CONCLUSION" at the end of your message.
+"""
+                    
+                    # Generate response
+                    response = provider.generate(prompt)
+                    
+                    # Add message to conversation
+                    message = ChatMessage(
+                        conversation_id=conversation.id,
+                        sender_id=user.id,
+                        content=response
+                    )
+                    
+                    db.add(message)
+                    db.commit()
+                    messages.append(message)
+                    
+                    # Check if conversation is complete
+                    if "I THINK WE'VE REACHED A CONCLUSION" in response:
+                        conversation_complete = True
+                        break
+                
+                turn_count += 1
+                
+                # If we've reached max turns, conclude the conversation
+                if turn_count >= max_turns:
+                    logger.warning(f"Conversation for node {node.name} reached maximum turns ({max_turns})")
+                    final_message = ChatMessage(
+                        conversation_id=conversation.id,
+                        sender_id=first_user.id,
+                        content="We've had an extensive discussion. Let's conclude this conversation."
+                    )
+                    
+                    db.add(final_message)
+                    db.commit()
+                    messages.append(final_message)
+            
+            # Generate summary of the conversation
+            conversation_history = ""
+            for msg in messages:
+                sender = db.query(User).filter(User.id == msg.sender_id).first()
+                conversation_history += f"{sender.username}: {msg.content}\n\n"
+            
+            # Use the first user's model to generate a summary
+            model_name = role_users[0][1].llm_model
+            provider = llm_provider_manager.get_provider(model_name)
+            
+            summary_prompt = f"""Summarize the following conversation in a concise paragraph:
+
+{conversation_history}
+
+Provide a summary that captures the key points discussed and any conclusions reached.
+"""
+            
+            summary = provider.generate(summary_prompt)
+            
+            logger.info(f"Completed multi-turn conversation for node: {node.name}")
+            
+            return f"Conversation summary: {summary}\n\nFull conversation:\n{conversation_history}"
+            
+        except Exception as e:
+            logger.error(f"Failed to conduct multi-turn conversation: {str(e)}")
+            return f"Error in conversation: {str(e)}"
  
 def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
     """
@@ -264,41 +456,87 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
         
         # Continue processing nodes until we reach the end
         while current_node:
-            # 3. Get role associated with the node
-            role = ProcessManager._get_node_role(db, current_node.id)
-            if not role:
-                logger.error(f"Failed to get role for node: {current_node.id}")
+            # 3. Get all roles associated with the node
+            roles = ProcessManager._get_node_roles(db, current_node.id)
+            if not roles:
+                logger.error(f"Failed to get roles for node: {current_node.id}")
                 return None
             
-            # 4. Get or create user for this role
-            user = ProcessManager._get_or_create_role_user(db, role.id, instance_id)
-            if not user:
-                logger.error(f"Failed to get or create user for role: {role.id}")
-                return None
+            # 4. Get or create users for each role
+            role_users = []
+            for role in roles:
+                user = ProcessManager._get_or_create_role_user(db, role.id, instance_id)
+                if not user:
+                    logger.error(f"Failed to get or create user for role: {role.id}")
+                    return None
+                role_users.append((role, user))
             
-            # 5. Generate LLM response for this node
-            response = generate_llm_response(db, current_node, role, user, all_steps)
+            # 5. If there's only one role, generate a simple response
+            if len(role_users) == 1:
+                role, user = role_users[0]
+                response = generate_llm_response(db, current_node, role, user, all_steps)
+                
+                # Create step with generated data
+                step_id = ProcessManager._create_process_instance_step(
+                    db, instance_id, current_node.id, user.id, response
+                )
+                
+                if not step_id:
+                    logger.error(f"Failed to create step for node: {current_node.id}")
+                    return None
+                
+                # Add step to history
+                step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
+                all_steps.append(step)
             
-            # Create step with generated data
-            step_id = ProcessManager._create_process_instance_step(
-                db, instance_id, current_node.id, user.id, response
-            )
-            
-            if not step_id:
-                logger.error(f"Failed to create step for node: {current_node.id}")
-                return None
-            
-            # Add step to history
-            step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
-            all_steps.append(step)
+            # 6. If there are multiple roles, conduct a multi-turn conversation
+            else:
+                # Create conversation
+                conversation = ProcessManager._create_conversation(db, current_node, instance_id, role_users)
+                if not conversation:
+                    logger.error(f"Failed to create conversation for node: {current_node.id}")
+                    return None
+                
+                # Conduct multi-turn conversation
+                conversation_result = ProcessManager._conduct_multi_turn_conversation(
+                    db, conversation, current_node, role_users
+                )
+                
+                # Create a step for each role to record their participation
+                for role, user in role_users:
+                    step_id = ProcessManager._create_process_instance_step(
+                        db, instance_id, current_node.id, user.id, 
+                        f"Participated in conversation for node: {current_node.name}"
+                    )
+                    
+                    if not step_id:
+                        logger.error(f"Failed to create step for node: {current_node.id} and user: {user.id}")
+                        continue
+                    
+                    # Add step to history
+                    step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
+                    all_steps.append(step)
+                
+                # Create a final step with the conversation result
+                step_id = ProcessManager._create_process_instance_step(
+                    db, instance_id, current_node.id, role_users[0][1].id, conversation_result
+                )
+                
+                if not step_id:
+                    logger.error(f"Failed to create final step for node: {current_node.id}")
+                    return None
+                
+                # Add final step to history
+                step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
+                all_steps.append(step)
             
             # Update instance with current node
             instance.current_node_id = current_node.id
             db.commit()
             
             logger.info(f"Current node in the circle: {current_node}")
-            # 6. Find next node
-            next_node = get_next_node(db, process_id, current_node.id, instance_id, user)
+            # 7. Find next node
+            next_node = get_next_node(db, process_id, current_node.id, instance_id, role_users[0][1])
             
             # If no next node, we've reached the end
             if not next_node:
