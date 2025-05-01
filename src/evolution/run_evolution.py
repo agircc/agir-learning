@@ -6,7 +6,7 @@ from src.construction.create_process_role_user import create_process_role_user
 from src.construction.data_store import get_learner, get_process, get_process_nodes, get_process_roles
 logger = logging.getLogger(__name__)
 
-def run_evolution_with_id(process_id: int) -> bool:
+def run_evolution(process_id: int) -> bool:
   # Create database session to fetch the process
   with SessionLocal() as db:
       # Get the process data

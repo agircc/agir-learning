@@ -13,7 +13,7 @@ load_dotenv()
 
 from src.construction.check_database_tables import check_database_tables
 from src.construction.construction import construction
-from src.evolution.run_evolution_with_id import run_evolution_with_id
+from src.evolution.run_evolution import run_evolution
 
 from src.evolution.evolution import EvolutionEngine
 from src.evolution.process_instance_manager import ProcessManager  # Import the new ProcessManager
@@ -127,7 +127,7 @@ def main():
     try:        
         # Run evolution process, now using the ID rather than loading from file again
         logger.info(f"Running evolution process with ID: {process_id}")
-        success = run_evolution_with_id(process_id)
+        success = run_evolution(process_id)
         
         if success:
             logger.info("Evolution process completed successfully")
