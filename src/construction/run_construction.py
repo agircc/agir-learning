@@ -12,7 +12,7 @@ from agir_db.db.session import get_db
 
 logger = logging.getLogger(__name__)
 
-def construction(yaml_file_path: str, created_by: Optional[str] = None) -> Optional[int]:
+def run_construction(yaml_file_path: str, created_by: Optional[str] = None) -> Optional[int]:
         """
         Create a process from a YAML file.
         

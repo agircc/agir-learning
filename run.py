@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.construction.check_database_tables import check_database_tables
-from src.construction.construction import construction
+from src.construction.run_construction import run_construction
 from src.evolution.run_evolution import run_evolution
 
 from src.evolution.evolution import EvolutionEngine
@@ -103,7 +103,7 @@ def main():
             
         # Create process from YAML file
         logger.info(f"Creating process from file: {args.process_file}")
-        process_id = construction(args.process_file)
+        process_id = run_construction(args.process_file)
         
         if not process_id:
             logger.error("Failed to create process from YAML file")
