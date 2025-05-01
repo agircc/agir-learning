@@ -8,6 +8,9 @@ import argparse
 import logging
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 from src.construction.check_database_tables import check_database_tables
 from src.construction.init_process_from_yaml import init_process_from_yaml
 from src.evolution.run_evolution_with_id import run_evolution_with_id
@@ -17,14 +20,6 @@ from src.evolution.process_instance_manager import ProcessManager  # Import the 
 from src.llms import OpenAIProvider, AnthropicProvider, OllamaProvider
 from src.construction import check_database
 from src.llms.llm_provider_manager import LLMProviderManager
-
-# Load environment variables
-load_dotenv()
-
-print("Environment variables:")
-print(f"SQLALCHEMY_DATABASE_URI = {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
-print(f"DATABASE_URL = {os.environ.get('DATABASE_URL')}")
-print(f"OLLAMA_URL = {os.environ.get('OLLAMA_URL')}")
 
 # Configure logging
 logging.basicConfig(
