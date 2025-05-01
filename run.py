@@ -33,14 +33,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-try:
-    from agir_db.db.session import get_db, SessionLocal
-    # Get a database session for CustomFieldAdapter
-    db = next(get_db())
-except Exception as e:
-    print(f"Failed to get database session: {str(e)}")
-    db = None
-
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description='Evolution Process')
@@ -155,4 +147,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main() 
+    sys.exit(main()) 

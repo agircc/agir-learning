@@ -1,4 +1,5 @@
 import logging
+import os
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.process_role import ProcessRole
@@ -17,7 +18,14 @@ def check_database_tables() -> bool:
         bool: True if all required tables exist, False otherwise
     """
     try:
+        print("Environment variables check database tables:")
+        print(f"SQLALCHEMY_DATABASE_URI = {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
+        print(f"DATABASE_URL = {os.environ.get('DATABASE_URL')}")
+        print(f"OLLAMA_URL = {os.environ.get('OLLAMA_URL')}")
+
         db = next(get_db())
+        print("Database connection successful:  ")
+        print(db)
         
         tables_to_check = [
             (User, "user"),
