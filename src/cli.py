@@ -21,6 +21,11 @@ from .llms.llm_provider_manager import LLMProviderManager
 # Load environment variables
 load_dotenv()
 
+print("Environment variables:")
+print(f"SQLALCHEMY_DATABASE_URI = {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
+print(f"DATABASE_URL = {os.environ.get('DATABASE_URL')}")
+print(f"OLLAMA_URL = {os.environ.get('OLLAMA_URL')}")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +33,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+try:
+    from agir_db.db.session import get_db, SessionLocal
+    # Get a database session for CustomFieldAdapter
+    db = next(get_db())
+except Exception as e:
+    print(f"Failed to get database session: {str(e)}")
+    db = None
 
 def parse_args():
     """Parse command-line arguments."""
