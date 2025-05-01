@@ -74,6 +74,19 @@ def parse_args():
         help='Only setup the process in the database without executing it'
     )
     
+    parser.add_argument(
+        '--mode',
+        choices=['init', 'run', 'all'],
+        default='all',
+        help='Execution mode: init (only initialize process), run (only run evolution), all (both)'
+    )
+    
+    parser.add_argument(
+        '--process-id',
+        type=int,
+        help='Process ID for run mode (required when mode=run)'
+    )
+    
     return parser.parse_args()
 
 def main():
@@ -84,11 +97,6 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Check if process file exists
-    if not os.path.exists(args.process_file):
-        logger.error(f"Process file not found: {args.process_file}")
-        sys.exit(1)
-    
     # Check database tables using the ProcessManager
     if not args.skip_db_check:
         logger.info("Checking database tables...")
@@ -97,19 +105,36 @@ def main():
             sys.exit(1)
         logger.info("Database tables check passed")
     
-    # Create process from YAML file
-    logger.info(f"Creating process from file: {args.process_file}")
-    process_id = init_process_from_yaml(args.process_file)
+    process_id = None
     
-    if not process_id:
-        logger.error("Failed to create process from YAML file")
-        sys.exit(1)
+    # Handle different execution modes
+    if args.mode in ['init', 'all']:
+        # Check if process file exists
+        if not os.path.exists(args.process_file):
+            logger.error(f"Process file not found: {args.process_file}")
+            sys.exit(1)
+            
+        # Create process from YAML file
+        logger.info(f"Creating process from file: {args.process_file}")
+        process_id = init_process_from_yaml(args.process_file)
+        
+        if not process_id:
+            logger.error("Failed to create process from YAML file")
+            sys.exit(1)
+        
+        logger.info(f"Process created with ID: {process_id}")
     
-    logger.info(f"Process created with ID: {process_id}")
+    # For run mode, use the provided process_id
+    if args.mode == 'run':
+        if args.process_id is None:
+            logger.error("Process ID is required for run mode. Use --process-id to specify.")
+            sys.exit(1)
+        process_id = args.process_id
+        logger.info(f"Using provided process ID: {process_id}")
     
-    # If setup-only flag is set, exit here
-    if args.setup_only:
-        logger.info("Setup-only flag set, exiting without executing process")
+    # Skip evolution if in init-only mode or setup-only flag is set
+    if args.mode == 'init' or args.setup_only:
+        logger.info("Setup-only flag set or init mode selected, exiting without executing process")
         sys.exit(0)
     
     try:        

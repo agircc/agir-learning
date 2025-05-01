@@ -36,17 +36,17 @@ pip install -r requirements.txt
 ### Running Evolution Process
 
 ```bash
-# Using default OpenAI GPT-4 model
-python run_evolution.py examples/doctor.yml
+# 仅初始化进程
+python run.py path/to/process.yml --mode init
 
-# Using Anthropic's Claude model
-python run_evolution.py examples/doctor.yml --model anthropic
+# 仅运行已有进程
+python run.py path/to/process.yml --mode run --process-id 123
 
-# Specify model name
-python run_evolution.py examples/doctor.yml --model openai --model-name gpt-4-turbo
+# 初始化进程并运行（默认行为）
+python run.py path/to/process.yml
 
-# Enable verbose logging
-python run_evolution.py examples/doctor.yml -v
+# 或者明确指定
+python run.py path/to/process.yml --mode all
 ```
 
 ### Environment Variables
