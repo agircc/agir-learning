@@ -82,7 +82,8 @@ def create_or_find_process_transitions(
             db_transition = ProcessTransition(
                 process_id=process_id,
                 from_node_id=from_node_id,
-                to_node_id=to_node_id
+                to_node_id=to_node_id,
+                condition=transition.condition
             )
             
             db.add(db_transition)

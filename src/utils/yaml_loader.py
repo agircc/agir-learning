@@ -66,7 +66,8 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
             # Use the original node names for transitions - they will be resolved at database creation time
             transitions.append(ProcessTransition(
                 from_node=transition_data["from"],
-                to_node=transition_data["to"]
+                to_node=transition_data["to"],
+                condition=transition_data.get("condition", "")
             ))
             
         # Prepare roles
