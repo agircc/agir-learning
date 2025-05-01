@@ -6,7 +6,7 @@ import os
 import logging
 import yaml
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from ..models.process import Process, ProcessNode, ProcessTransition
 from ..models.role import Role
@@ -45,10 +45,16 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
             node_id = str(i+1)  # Use 1-indexed IDs
             node_name_to_id[node_name] = node_id
             
+            # Handle roles as a list instead of a single role
+            roles = node_data.get("roles", [])
+            # For backwards compatibility, check if "role" is present and add it
+            if "role" in node_data and node_data["role"] not in roles:
+                roles.append(node_data["role"])
+            
             nodes.append(ProcessNode(
                 id=node_id,
                 name=node_name,
-                role=node_data["role"],
+                roles=roles,  # Use the roles list
                 description=node_data["description"],
                 assigned_to=node_data.get("assigned_to")
             ))

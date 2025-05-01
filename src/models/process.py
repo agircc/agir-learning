@@ -15,7 +15,7 @@ class ProcessNode(BaseModel):
     """
     id: str
     name: str
-    role: str
+    roles: List[str] = Field(default_factory=list)
     description: str
     assigned_to: Optional[str] = None
 
@@ -26,6 +26,7 @@ class ProcessTransition(BaseModel):
     """
     from_node: str
     to_node: str
+    condition: Optional[str] = None
 
 
 class Process(BaseModel):
@@ -170,10 +171,16 @@ class Process(BaseModel):
         # Prepare nodes
         nodes = []
         for node_data in process_data.get("nodes", []):
+            # Handle roles as a list instead of a single role
+            roles = node_data.get("roles", [])
+            # For backwards compatibility, check if "role" is present and add it
+            if "role" in node_data and node_data["role"] not in roles:
+                roles.append(node_data["role"])
+                
             nodes.append(ProcessNode(
                 id=node_data["id"],
                 name=node_data["name"],
-                role=node_data["role"],
+                roles=roles,
                 description=node_data["description"],
                 assigned_to=node_data.get("assigned_to")
             ))
@@ -183,7 +190,8 @@ class Process(BaseModel):
         for transition_data in process_data.get("transitions", []):
             transitions.append(ProcessTransition(
                 from_node=transition_data["from"],
-                to_node=transition_data["to"]
+                to_node=transition_data["to"],
+                condition=transition_data.get("condition")
             ))
             
         # Prepare roles

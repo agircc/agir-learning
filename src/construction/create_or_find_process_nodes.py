@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
-from agir_db.models.process import ProcessNode
+from agir_db.models.process import ProcessNode, ProcessNodeRole
 from src.construction.data_store import set_process_nodes
 
 logger = logging.getLogger(__name__)
@@ -44,30 +44,45 @@ def create_or_find_process_nodes(
             
             if existing_node:
                 logger.info(f"Found existing node: {existing_node.name}")
-                node_id_mapping[node.name] = existing_node.id
-                continue
+                node_id = existing_node.id
+                # Delete existing node-role relationships to recreate them
+                db.query(ProcessNodeRole).filter(
+                    ProcessNodeRole.process_node_id == node_id
+                ).delete()
+            else:
+                # Create new node without role_id (multiple roles are handled by ProcessNodeRole)
+                db_node = ProcessNode(
+                    process_id=process_id,
+                    name=node.name,
+                    description=node.description,
+                    node_type="STANDARD"  # Default node type
+                )
                 
-            # Special handling for "learner" role - don't try to find a role_id
-            role_id = None
-            if node.role != "learner":
+                db.add(db_node)
+                db.flush()  # Get the ID without committing
+                node_id = db_node.id
+            
+            # Now handle multiple roles for this node
+            for role_name in node.roles:
+                if role_name == "learner":
+                    # Special handling for "learner" role
+                    continue
+                
                 # Get the role ID from the mapping
-                role_id = role_id_mapping.get(node.role)
+                role_id = role_id_mapping.get(role_name)
                 if not role_id:
-                    logger.warning(f"Role not found for node: {node.name}, role: {node.role}")
-            
-            db_node = ProcessNode(
-                process_id=process_id,
-                name=node.name,
-                description=node.description,
-                role_id=role_id,
-                node_type="STANDARD"  # Default node type
-            )
-            
-            db.add(db_node)
-            db.flush()  # Get the ID without committing
+                    logger.warning(f"Role not found for node: {node.name}, role: {role_name}")
+                    continue
+                
+                # Create node-role relationship
+                node_role = ProcessNodeRole(
+                    process_node_id=node_id,
+                    process_role_id=role_id
+                )
+                db.add(node_role)
             
             # In the YAML file, nodes don't have explicit IDs, so use the name as key
-            node_id_mapping[node.name] = db_node.id
+            node_id_mapping[node.name] = node_id
         
         db.commit()
         logger.info(f"Created or found {len(node_id_mapping)} process nodes")
