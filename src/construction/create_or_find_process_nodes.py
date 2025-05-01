@@ -45,10 +45,6 @@ def create_or_find_process_nodes(
             if existing_node:
                 logger.info(f"Found existing node: {existing_node.name}")
                 node_id = existing_node.id
-                # Delete existing node-role relationships to recreate them
-                db.query(ProcessNodeRole).filter(
-                    ProcessNodeRole.process_node_id == node_id
-                ).delete()
             else:
                 # Create new node without role_id (multiple roles are handled by ProcessNodeRole)
                 db_node = ProcessNode(
@@ -74,12 +70,20 @@ def create_or_find_process_nodes(
                     logger.warning(f"Role not found for node: {node.name}, role: {role_name}")
                     continue
                 
-                # Create node-role relationship
-                node_role = ProcessNodeRole(
-                    process_node_id=node_id,
-                    process_role_id=role_id
-                )
-                db.add(node_role)
+                # Check if node-role relationship already exists
+                existing_node_role = db.query(ProcessNodeRole).filter(
+                    ProcessNodeRole.process_node_id == node_id,
+                    ProcessNodeRole.process_role_id == role_id
+                ).first()
+                
+                if not existing_node_role:
+                    # Create node-role relationship only if it doesn't exist
+                    node_role = ProcessNodeRole(
+                        process_node_id=node_id,
+                        process_role_id=role_id
+                    )
+                    db.add(node_role)
+                    logger.info(f"Created node-role relationship for node: {node.name}, role: {role_name}")
             
             # In the YAML file, nodes don't have explicit IDs, so use the name as key
             node_id_mapping[node.name] = node_id
