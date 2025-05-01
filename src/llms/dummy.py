@@ -1,3 +1,6 @@
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DummyProvider:
     """用于调试的模拟LLM提供者"""
