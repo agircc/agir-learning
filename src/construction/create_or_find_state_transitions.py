@@ -31,8 +31,10 @@ def create_or_find_state_transitions(
         success = True
         
         for transition in transitions:
-            from_state_name = transition.get("from")
-            to_state_name = transition.get("to")
+            print("Transition: ")
+            print(transition)
+            from_state_name = transition.from_state_name
+            to_state_name = transition.to_state_name
             
             if not from_state_name or not to_state_name:
                 logger.error("Transition from/to state names are required")
@@ -68,7 +70,7 @@ def create_or_find_state_transitions(
                 scenario_id=scenario_id,
                 from_state_id=from_state_id,
                 to_state_id=to_state_id,
-                condition=transition.get("condition", "")
+                condition=transition.condition
             )
             
             db.add(transition_obj)
@@ -83,7 +85,7 @@ def create_or_find_state_transitions(
                 "to_state_id": state_id_mapping[to_name]
             }
             for transition in transitions
-            for from_name, to_name in [(transition.get("from"), transition.get("to"))]
+            for from_name, to_name in [(transition.from_state_name, transition.to_state_name)]
             if from_name in state_id_mapping and to_name in state_id_mapping
         }
         set_state_transitions(transitions_map)

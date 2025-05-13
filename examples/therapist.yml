@@ -62,32 +62,32 @@ scenario:
       description: "Client maintains well-being; no further sessions required. Case closed."
 
   transitions:
-    - from: Distress Emergence
-      to: Intake Interview
+    - from_state_name: Distress Emergence
+      to_state_name: Intake Interview
 
-    - from: Intake Interview
-      to: Initial Assessment
+    - from_state_name: Intake Interview
+      to_state_name: Initial Assessment
 
-    - from: Initial Assessment
-      to: Therapeutic Sessions
+    - from_state_name: Initial Assessment
+      to_state_name: Therapeutic Sessions
 
-    - from: Therapeutic Sessions
-      to: Progress Review
+    - from_state_name: Therapeutic Sessions
+      to_state_name: Progress Review
 
-    - from: Progress Review
-      to: Therapeutic Sessions
+    - from_state_name: Progress Review
+      to_state_name: Therapeutic Sessions
 
-    - from: Progress Review
-      to: Therapy Termination
+    - from_state_name: Progress Review
+      to_state_name: Therapy Termination
       condition: "Goals are met and client shows stable improvement."
 
-    - from: Therapy Termination
-      to: Post-Therapy Reflection
+    - from_state_name: Therapy Termination
+      to_state_name: Post-Therapy Reflection
 
-    - from: Post-Therapy Reflection
-      to: Intake Interview
+    - from_state_name: Post-Therapy Reflection
+      to_state_name: Intake Interview
       condition: "Client experiences relapse or new psychological concerns."
 
-    - from: Post-Therapy Reflection
-      to: Case Closure
+    - from_state_name: Post-Therapy Reflection
+      to_state_name: Case Closure
       condition: "Client adapts well and reports continued growth."

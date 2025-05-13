@@ -65,8 +65,8 @@ def load_scenario_from_file(file_path: str) -> Optional[Scenario]:
         for transition_data in scenario_data.get("transitions", []):
             # Use the original state names for transitions - they will be resolved at database creation time
             transitions.append(StateTransition(
-                from_state=transition_data["from"],
-                to_state=transition_data["to"],
+                from_state_name=transition_data["from_state_name"],
+                to_state_name=transition_data["to_state_name"],
                 condition=transition_data.get("condition", "")
             ))
             

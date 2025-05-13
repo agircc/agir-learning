@@ -33,8 +33,8 @@ class StateTransition(BaseModel):
         to_state: ID of the target state
         condition: Optional condition for the transition
     """
-    from_state: str
-    to_state: str
+    from_state_name: str
+    to_state_name: str
     condition: str = ""
 
 
@@ -204,8 +204,8 @@ class Scenario(BaseModel):
         transitions = []
         for transition_data in scenario_data.get("transitions", []):
             transitions.append(StateTransition(
-                from_state=transition_data["from"],
-                to_state=transition_data["to"],
+                from_state_name=transition_data["from_state_name"],
+                to_state_name=transition_data["to_state_name"],
                 condition=transition_data.get("condition", "")
             ))
         
