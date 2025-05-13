@@ -18,7 +18,7 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.scenario import StateInDBBase
 
-from src.construction.create_agent_assignment import create_agent_assignment
+from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 
 from .scenario_manager.get_next_state import get_next_state
 from .scenario_manager.generate_llm_response import generate_llm_response

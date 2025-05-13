@@ -2,7 +2,7 @@ import logging
 
 from agir_db.db.session import SessionLocal, get_db
 
-from src.construction.create_agent_assignment import create_agent_assignment
+from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 from src.construction.data_store import get_learner, get_scenario, get_states, get_agent_roles
 logger = logging.getLogger(__name__)
 
