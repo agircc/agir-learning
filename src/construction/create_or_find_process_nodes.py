@@ -1,102 +1,101 @@
 import logging
-
+from uuid import uuid4
 from sqlalchemy.orm import Session
 from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
-from agir_db.models.process import ProcessNode, ProcessNodeRole
+from agir_db.models.scenario import State, StateRole
 from src.construction.data_store import set_process_nodes
 
 logger = logging.getLogger(__name__)
 
-def create_or_find_process_nodes(
-    db: Session, 
-    process_id: int, 
-    nodes: List[Any],
-    role_id_mapping: Dict[str, int]
-) -> Optional[Dict[str, int]]:
+def create_or_find_process_nodes(db: Session, process_id: int, nodes_data: List[Dict[str, Any]]) -> bool:
     """
-    Create process nodes from YAML process.
+    Create or find process nodes based on YAML process nodes.
     
     Args:
         db: Database session
         process_id: ID of the process
-        nodes: List of nodes
-        role_id_mapping: Mapping of YAML role IDs to database role IDs
+        nodes_data: List of node data from YAML
         
     Returns:
-        Optional[Dict[str, int]]: Mapping of YAML node names to database node IDs if successful, None otherwise
+        bool: True if successful, False otherwise
     """
     try:
-        node_id_mapping = {}
+        # Keep track of node IDs for lookup
+        node_ids = {}
         
-        # Fetch existing nodes for this process to avoid duplicates
-        existing_nodes = db.query(ProcessNode).filter(
-            ProcessNode.process_id == process_id
-        ).all()
-        
-        # Create mapping of existing node names to node objects
-        existing_node_map = {node.name.lower(): node for node in existing_nodes}
-        
-        for i, node in enumerate(nodes):
-            # Check if node already exists (case-insensitive)
-            existing_node = existing_node_map.get(node.name.lower())
+        # Create nodes
+        for node_data in nodes_data:
+            name = node_data.get("name")
+            if not name:
+                logger.error("Node name is required")
+                return False
             
-            if existing_node:
-                logger.info(f"Found existing node: {existing_node.name}")
-                node_id = existing_node.id
-            else:
-                # Create new node without role_id (multiple roles are handled by ProcessNodeRole)
-                db_node = ProcessNode(
-                    process_id=process_id,
-                    name=node.name,
-                    description=node.description,
-                    node_type="STANDARD"  # Default node type
-                )
-                
-                db.add(db_node)
-                db.flush()  # Get the ID without committing
-                node_id = db_node.id
+            # Check if node exists
+            node = db.query(State).filter(
+                State.scenario_id == process_id,
+                State.name == name
+            ).first()
             
-            # Now handle multiple roles for this node
-            for role_name in node.roles:
-                if role_name == "learner":
-                    # Special handling for "learner" role
-                    continue
-                
-                # Get the role ID from the mapping
-                role_id = role_id_mapping.get(role_name)
-                if not role_id:
-                    logger.warning(f"Role not found for node: {node.name}, role: {role_name}")
-                    continue
-                
-                # Check if node-role relationship already exists
-                existing_node_role = db.query(ProcessNodeRole).filter(
-                    ProcessNodeRole.process_node_id == node_id,
-                    ProcessNodeRole.process_role_id == role_id
-                ).first()
-                
-                if not existing_node_role:
-                    # Create node-role relationship only if it doesn't exist
-                    node_role = ProcessNodeRole(
-                        process_node_id=node_id,
-                        process_role_id=role_id
+            if node:
+                logger.info(f"Node already exists: {name}")
+                node_ids[name] = node.id
+                continue
+            
+            # Create node
+            node = State(
+                scenario_id=process_id,
+                name=name,
+                description=node_data.get("description", ""),
+                role=node_data.get("role", ""),
+                is_required=node_data.get("is_required", True),
+                external_id=str(uuid4())
+            )
+            
+            db.add(node)
+            db.flush()  # Get ID without committing
+            
+            logger.info(f"Created node: {name} with ID: {node.id}")
+            node_ids[name] = node.id
+            
+            # Handle node roles if present
+            roles_data = node_data.get("roles", [])
+            if roles_data:
+                for role_data in roles_data:
+                    role_name = role_data.get("name")
+                    if not role_name:
+                        continue
+                    
+                    # Check if node role exists
+                    node_role = db.query(StateRole).filter(
+                        StateRole.state_id == node.id,
+                        StateRole.name == role_name
+                    ).first()
+                    
+                    if node_role:
+                        logger.info(f"Node role already exists: {role_name} for node: {name}")
+                        continue
+                    
+                    # Create node role
+                    node_role = StateRole(
+                        state_id=node.id,
+                        name=role_name,
+                        description=role_data.get("description", "")
                     )
+                    
                     db.add(node_role)
-                    logger.info(f"Created node-role relationship for node: {node.name}, role: {role_name}")
-            
-            # In the YAML file, nodes don't have explicit IDs, so use the name as key
-            node_id_mapping[node.name] = node_id
+                    logger.info(f"Created node role: {role_name} for node: {name}")
         
         db.commit()
-        logger.info(f"Created or found {len(node_id_mapping)} process nodes")
+        logger.info(f"All nodes created successfully for process: {process_id}")
         
         # Store nodes data in data_store
-        set_process_nodes(node_id_mapping)
+        set_process_nodes(node_ids)
         
-        return node_id_mapping
+        return True
         
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to create process nodes: {str(e)}")
-        return None
+        logger.error(f"Failed to create or find process nodes: {str(e)}")
+        return False

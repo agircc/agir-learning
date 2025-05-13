@@ -1,119 +1,75 @@
 import logging
 
 from sqlalchemy.orm import Session
-from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
-from agir_db.models.process_role import ProcessRole
+from agir_db.models.agent_role import AgentRole
 from src.construction.data_store import set_process_roles
 
 logger = logging.getLogger(__name__)
 
-def create_or_find_process_roles(db: Session, process_id: int, roles: List[Union[Dict[str, Any], Any]]) -> Optional[Dict[str, int]]:
+def create_or_find_process_roles(
+    db: Session, 
+    process_id: int, 
+    roles_data: List[Dict[str, str]]
+) -> Optional[Dict[str, int]]:
     """
-    Create roles for a process based on YAML process.
+    Create or find process roles based on YAML process roles.
     
     Args:
         db: Database session
         process_id: ID of the process
-        roles: List of roles
+        roles_data: List of role data from YAML
         
     Returns:
-        Optional[Dict[str, int]]: Mapping of role names to IDs if successful, None otherwise
+        Optional[Dict[str, int]]: Mapping of YAML role names to database role IDs if successful, None otherwise
     """
     try:
-        if not roles:
-            logger.warning("No roles defined in process YAML")
-            set_process_roles([])
-            return {}
-        
-        # Create role ID mapping
         role_id_mapping = {}
         
-        process_roles = []
-        # Process each role
-        for role_data in roles:
-            role_name = None
-            role_description = None
-            model = None
-            
-            # Handle both formats (dict and Role object)
-            if isinstance(role_data, dict):
-                role_name = role_data.get("name") or role_data.get("id")
-                role_description = role_data.get("description", "")
-                model = role_data.get("model", "")  # Get model from role data
-            else:
-                role_name = role_data.name or role_data.id
-                role_description = role_data.description
-                # Try to get model from role object attributes
-                model = getattr(role_data, "model", "") if hasattr(role_data, "model") else ""
-            
+        # Create special learner role if not in roles_data
+        has_learner = any(role.get("name") == "learner" for role in roles_data)
+        if not has_learner:
+            # Add learner role automatically
+            roles_data.append({"name": "learner", "description": "Learner role"})
+        
+        for role_data in roles_data:
+            role_name = role_data.get("name")
             if not role_name:
-                logger.error("Role name not specified in YAML")
+                logger.error("Role name is required")
                 continue
             
-            # Log role information for debugging
-            logger.debug(f"Processing role: name='{role_name}', description='{role_description}', model='{model}'")
+            # Check if role exists
+            existing = db.query(AgentRole).filter(
+                AgentRole.scenario_id == process_id,
+                AgentRole.name == role_name
+            ).first()
             
-            # Check if role exists - use case-insensitive comparison for name
-            existing_roles = db.query(ProcessRole).filter(
-                ProcessRole.process_id == process_id
-            ).all()
+            if existing:
+                logger.info(f"Role already exists: {role_name}")
+                role_id_mapping[role_name] = existing.id
+                continue
             
-
-
-            role = None
-            for existing_role in existing_roles:
-                if existing_role.name.lower() == role_name.lower():
-                    role = existing_role
-                    process_roles.append({
-                        "id": existing_role.id,
-                        "name": existing_role.name,
-                        "description": existing_role.description,
-                        "model": existing_role.model
-                    })
-                    break
+            # Create role
+            role = AgentRole(
+                scenario_id=process_id,
+                name=role_name,
+                description=role_data.get("description", ""),
+                model=role_data.get("model", "")
+            )
             
-            if role:
-                logger.info(f"Found existing role: {role.name} (matched with '{role_name}')")
-                # Update model if it's provided
-                if model and hasattr(role, "model"):
-                    role.model = model
-                    db.commit()
-                    logger.info(f"Updated role model to {model}")
-            else:
-                # Create role data
-                role_data = {
-                    "process_id": process_id,
-                    "name": role_name,
-                    "description": role_description
-                }
-                
-                # Add model if it exists
-                if model:
-                    role_data["model"] = model
-                
-                # Create role
-                role = ProcessRole(**role_data)
-                db.add(role)
-                db.commit()
-                process_roles.append({
-                    "id": role.id,
-                    "name": role.name,
-                    "description": role.description,
-                    "model": role.model
-                })
-                logger.info(f"Created new role: {role_name} with ID: {role.id}")
+            db.add(role)
+            db.flush()  # Get ID without committing
             
-            # Add to mapping
             role_id_mapping[role_name] = role.id
+            logger.info(f"Created role: {role_name} with ID: {role.id}")
         
-            # Store role data in data_store
-            set_process_roles(process_roles)
+        db.commit()
+        logger.info(f"Created or found {len(role_id_mapping)} process roles")
         
         return role_id_mapping
         
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to create roles: {str(e)}")
+        logger.error(f"Failed to create process roles: {str(e)}")
         return None

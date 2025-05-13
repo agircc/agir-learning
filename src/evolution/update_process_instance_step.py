@@ -1,29 +1,46 @@
-def update_process_instance_step(self, db: Session, node_record_id: Any, status: str, response: str = None, error: str = None):
-  """更新节点执行记录状态"""
-  if not node_record_id:
-      return
-      
-  try:
-      # 使用process_instance_step表更新状态
-      from agir_db.models.process_instance_step import ProcessInstanceStep
-      node_record = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == node_record_id).first()
-      if node_record:
-          # Check if the model has a status field before trying to update it
-          if hasattr(node_record, 'status'):
-              node_record.status = status
-          else:
-              # If status field doesn't exist, log a warning
-              logger.warning(f"ProcessInstanceStep model doesn't have a status field, skipping status update")
-          
-          # Update response if the field exists and a value is provided
-          if response and hasattr(node_record, 'response'):
-              node_record.response = response
-          
-          # Update error if the field exists and a value is provided
-          if error and hasattr(node_record, 'error'):
-              node_record.error = error
-          
-          db.commit()
-          logger.info(f"Updated node record {node_record_id}")
-  except Exception as e:
-      logger.error(f"Failed to update node record status: {str(e)}")
+"""
+Update process instance step with response message
+"""
+
+import logging
+from typing import Dict, Any, List, Optional, Union
+from sqlalchemy.orm import Session
+from agir_db.models.step import Step
+
+logger = logging.getLogger(__name__)
+
+def update_process_instance_step(
+    db: Session,
+    step_id: int,
+    response_message: str
+) -> Optional[int]:
+    """
+    Updates a process instance step with the response message.
+    
+    Args:
+        db: Database session
+        step_id: ID of the ProcessInstanceStep
+        response_message: Message to add to the step
+        
+    Returns:
+        Optional[int]: ID of the updated step if successful, None otherwise
+    """
+    try:
+        # Get the step
+        step = db.query(Step).filter(Step.id == step_id).first()
+        if not step:
+            logger.error(f"Step not found with ID: {step_id}")
+            return None
+        
+        # Update the step
+        step.response = response_message
+        
+        db.commit()
+        logger.info(f"Updated step {step_id} with response message")
+        
+        return step_id
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update step: {str(e)}")
+        return None

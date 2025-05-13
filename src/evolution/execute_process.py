@@ -1,27 +1,28 @@
-import os
+"""
+Execute process - handles running a specific process instance
+"""
+
 import logging
+import time
 import json
 import uuid
 from typing import Dict, Any, List, Optional, Tuple, Union
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-
 from agir_db.db.session import get_db
 from agir_db.models.user import User
-from agir_db.models.process_role import ProcessRole
-from agir_db.models.process import Process, ProcessNode, ProcessTransition, ProcessNodeRole
-from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
-from agir_db.models.process_instance_step import ProcessInstanceStep
-from agir_db.models.process_role_user import ProcessRoleUser
+from agir_db.models.agent_role import AgentRole
+from agir_db.models.scenario import Scenario, State, StateTransition, StateRole
+from agir_db.models.episode import Episode, EpisodeStatus
+from agir_db.models.step import Step
+from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
-from agir_db.schemas.process import ProcessNodeInDBBase
+from agir_db.schemas.scenario import StateInDBBase
 
-from src.construction.create_process_role_user import create_process_role_user
-from src.evolution.coversation.conduct_multi_turn_conversation import conduct_multi_turn_conversation
-from src.evolution.coversation.create_conversation import create_conversation
-from src.evolution.process_manager.generate_llm_response import generate_llm_response
-from src.evolution.process_manager.get_next_node import get_next_node
-from src.llms.llm_provider_manager import LLMProviderManager
+from .process_manager.get_next_node import get_next_node
+from .process_manager.generate_llm_response import generate_llm_response
+from .llm_learner_generate_response import learner_generate_response
+from .llm_role_user_generate_response import role_user_generate_response
+from ..llms.llm_provider_manager import LLMProviderManager
 
 logger = logging.getLogger(__name__)
 

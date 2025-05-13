@@ -8,10 +8,10 @@ from typing import Dict, Any, List, Optional, Tuple
 import logging
 from sqlalchemy.orm import Session
 from agir_db.models.user import User
-from agir_db.models.process import Process as DBProcess
+from agir_db.models.scenario import Scenario as DBScenario
 from agir_db.models.custom_field import CustomField
-from agir_db.models.process_role import ProcessRole
-from agir_db.models.process_role_user import ProcessRoleUser
+from agir_db.models.agent_role import AgentRole
+from agir_db.models.agent_assignment import AgentAssignment
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ def find_or_create_learner(db: Session, learner_data: Dict[str, Any]) -> User:
 
 def find_user_by_role(db: Session, role: str, process_id: Optional[Any] = None) -> Optional[User]:
     """
-    Find a user by role and optionally process ID using the process_role_users table.
+    Find a user by role and optionally process ID using the agent_assignments table.
     
     Args:
         db: Database session
@@ -124,27 +124,27 @@ def find_user_by_role(db: Session, role: str, process_id: Optional[Any] = None) 
     query = db.query(User)
     
     if process_id is not None:
-        # Use process_role_users to find users with this role in this process
+        # Use agent_assignments to find users with this role in this process
         query = query.join(
-            ProcessRoleUser, 
-            User.id == ProcessRoleUser.user_id
+            AgentAssignment, 
+            User.id == AgentAssignment.user_id
         ).join(
-            ProcessRole,
-            ProcessRoleUser.process_role_id == ProcessRole.id
+            AgentRole,
+            AgentAssignment.role_id == AgentRole.id
         ).filter(
-            ProcessRole.name == role,
-            ProcessRole.process_id == process_id
+            AgentRole.name == role,
+            AgentRole.scenario_id == process_id
         )
     else:
         # If no process_id specified, just find any user with this role
         query = query.join(
-            ProcessRoleUser, 
-            User.id == ProcessRoleUser.user_id
+            AgentAssignment, 
+            User.id == AgentAssignment.user_id
         ).join(
-            ProcessRole,
-            ProcessRoleUser.process_role_id == ProcessRole.id
+            AgentRole,
+            AgentAssignment.role_id == AgentRole.id
         ).filter(
-            ProcessRole.name == role
+            AgentRole.name == role
         )
     
     user = query.first()
@@ -157,7 +157,7 @@ def find_user_by_role(db: Session, role: str, process_id: Optional[Any] = None) 
     return None
 
 
-def create_process_record(db: Session, process_data: Dict[str, Any]) -> DBProcess:
+def create_process_record(db: Session, process_data: Dict[str, Any]) -> DBScenario:
     """
     Create a process record in the database
     
@@ -166,7 +166,7 @@ def create_process_record(db: Session, process_data: Dict[str, Any]) -> DBProces
         process_data: Process data, should include 'name', 'description', and optionally 'created_by'
         
     Returns:
-        DBProcess instance
+        DBScenario instance
     """
     logger.info(f"Creating process record: {process_data.get('name', 'Unnamed')}")
     
@@ -183,7 +183,7 @@ def create_process_record(db: Session, process_data: Dict[str, Any]) -> DBProces
             raise ValueError("No active users found to use as process creator. Please create a user first.")
     
     # Create process record
-    process_record = DBProcess(
+    process_record = DBScenario(
         name=process_data.get("name", "Unnamed Process"),
         description=process_data.get("description", ""),
         created_by=created_by

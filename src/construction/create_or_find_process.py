@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union 
 from agir_db.db.session import get_db
-from agir_db.models.process import Process
-from agir_db.schemas.process import ProcessDTO
+from agir_db.models.scenario import Scenario
+from agir_db.schemas.scenario import ScenarioDTO
 from agir_db.models.user import User
 from src.construction.data_store import set_process
 
@@ -28,9 +28,9 @@ def create_or_find_process(db: Session, process_name: str, description: str, lea
     """
     try:
         # Check if process exists
-        query = db.query(Process).filter(Process.name == process_name)
+        query = db.query(Scenario).filter(Scenario.name == process_name)
         if created_by:
-            query = query.filter(Process.created_by == created_by)
+            query = query.filter(Scenario.created_by == created_by)
             
         process = query.first()
         
@@ -38,7 +38,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, lea
             logger.info(f"Found existing process: {process_name}")
             
             # Store process data in data_store
-            process_info = ProcessDTO.model_validate(process)
+            process_info = ScenarioDTO.model_validate(process)
             set_process(process_info)
             
             return process.id
@@ -69,7 +69,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, lea
                 return None
         
         # Create new process with the determined creator_id
-        process = Process(
+        process = Scenario(
             name=process_name,
             description=description,
             created_by=creator_id,
@@ -81,7 +81,7 @@ def create_or_find_process(db: Session, process_name: str, description: str, lea
         logger.info(f"Created new process: {process_name} with ID: {process.id}, creator ID: {creator_id}")
         
         # Store process data in data_store
-        process_info = ProcessDTO.model_validate(process)
+        process_info = ScenarioDTO.model_validate(process)
         set_process(process_info)
         
         return process.id

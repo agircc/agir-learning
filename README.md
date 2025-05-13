@@ -16,8 +16,8 @@ The core purpose of AGIR Learning is to **accelerate skill development through s
 ### Key Concepts
 
 - **Learner**: The primary user whose skills are being developed through the process. In the database, a learner is a record in the user table.
-- **Process**: A structured sequence of interactions designed as a learning experience for specific skills.
-- **Agents**: AI participants in the process represented by different roles (stored as users in the database).
+- **Scenario**: A structured sequence of interactions designed as a learning experience for specific skills.
+- **Agents**: AI participants in the scenario represented by different roles (stored as users in the database).
 - **Evolution**: The mechanism by which the learner's skills improve through experiences, feedback, and guided reflection.
 
 ## Installation
@@ -64,9 +64,9 @@ ANTHROPIC_API_KEY=your_anthropic_key
 Process YAML files define the evolution experience:
 
 ```yaml
-process:
-  name: "Process Name"
-  description: "Process Description"
+scenario:
+  name: "Scenario Name"
+  description: "Scenario Description"
 
   # The learner is the central user whose skills are being developed
   learner:
@@ -86,17 +86,17 @@ process:
       model: "phi"
       description: "Nurse agent for triage, registration, and examinations."
 
-  # Nodes are the steps in the process
-  nodes:
-    - name: "Node Name"
-      role: "role_name"  # Role this node belongs to
-      description: "Node Description"
-      # If role is "learner", this node represents actions by the learner
+  # States are the steps in the process
+  states:
+    - name: "State Name"
+      role: "role_name"  # Role this state belongs to
+      description: "State Description"
+      # If role is "learner", this state represents actions by the learner
 
-  # Transitions define the flow between nodes
+  # Transitions define the flow between states
   transitions:
-    - from: "First Node Name"
-      to: "Second Node Name"
+    - from: "First State Name"
+      to: "Second State Name"
     # More transitions
 
   # Evolution defines how the learner improves
@@ -118,7 +118,7 @@ This system is designed around the central concept of a **learner** - a user who
    - All interactions are designed to benefit this user's development
 
 2. **Multi-Provider LLM Architecture**:
-   - Each role in the process can be assigned a different LLM model
+   - Each role in the scenario can be assigned a different LLM model
    - The learner can have their own designated model
    - This allows for efficient resource allocation (powerful models for complex tasks, simpler models for basic interactions)
 
@@ -126,9 +126,9 @@ This system is designed around the central concept of a **learner** - a user who
    - All agents in the system, including the learner, are stored in the user table
    - This unified approach ensures consistent user handling and evolution tracking
 
-## Process Creation Flow
+## Scenario Creation Flow
 
-The system follows these steps when creating a process:
+The system follows these steps when creating a scenario:
 
 1. **Database Validation**
    - Check if required database tables exist
@@ -139,40 +139,40 @@ The system follows these steps when creating a process:
    - Check if the learner exists in the user table based on username
    - If not found, create a new user record
 
-3. **Process Creation**
-   - Check if a process with the given name and creator already exists
-   - If not found, create a new process record
+3. **Scenario Creation**
+   - Check if a scenario with the given name and creator already exists
+   - If not found, create a new scenario record
 
-4. **Process Roles Creation**
-   - For each role defined in the YAML, create a process role record
+4. **Agent Roles Creation**
+   - For each role defined in the YAML, create an agent role record
    - Special handling for the "learner" role which references the main user
 
-5. **Process Nodes Creation**
-   - For each node defined in the YAML, create a process node record
-   - Special handling for nodes with role="learner" - these represent learner actions
+5. **States Creation**
+   - For each state defined in the YAML, create a state record
+   - Special handling for states with role="learner" - these represent learner actions
 
-6. **Process Transitions Creation**
-   - For each transition defined in the YAML, create a process transition record
+6. **State Transitions Creation**
+   - For each transition defined in the YAML, create a state transition record
    - Transitions define the flow of the learning experience
 
-## Process Execution Flow
+## Episode Execution Flow
 
-When executing a process, the system follows these steps:
+When executing a scenario, the system follows these steps:
 
-1. **Process Instance Creation**
-   - Create a process instance record linked to the process and learner
+1. **Episode Creation**
+   - Create an episode record linked to the scenario and learner
    - Set initial status to RUNNING
 
-2. **Process Instance Steps**
-   - Start with the first node in the process
-   - For each node:
-     - Create a process instance step record
+2. **Episode Steps**
+   - Start with the first state in the scenario
+   - For each state:
+     - Create a step record
      - Use the appropriate LLM model based on role or learner configuration
-     - Generate responses and advance through the process
+     - Generate responses and advance through the scenario
 
 3. **Evolution Generation**
-   - After completing all nodes
-   - Generate evolution insights based on the process history
+   - After completing all states
+   - Generate evolution insights based on the episode history
    - Update the learner with new knowledge/skills
    - Store evolution data in the database for future reference
 
@@ -200,7 +200,7 @@ Project Root/
     ├── models/             # Data models
     │   ├── __init__.py     # Models initialization
     │   ├── agent.py        # Agent model
-    │   ├── process.py      # Process model
+    │   ├── scenario.py     # Scenario model
     │   └── role.py         # Role model
     ├── process_manager.py  # Process management and execution
     └── utils/              # Utility functions
@@ -218,11 +218,11 @@ Project Root/
 3. Add the provider to `src/llms/__init__.py`
 4. Update the `LLMProviderManager` in `src/cli.py` to support the new provider
 
-### Creating Custom Processes
+### Creating Custom Scenarios
 
 1. Create a new YAML file based on the examples
-2. Define the learner, nodes, transitions, roles, and evolution method
-3. Run the process using the CLI
+2. Define the learner, states, transitions, roles, and evolution method
+3. Run the scenario using the CLI
 
 ## Development Notes
 
