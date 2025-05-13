@@ -42,16 +42,22 @@ def get_next_state(db: Session, scenario_id: int, current_state_id: int, episode
       ).all()
       
       if not transitions:
-          logger.info(f"No transitions found from state {current_state_id} - this may be the final state")
+          logger.info(f"No transitions found from state {current_state_id} in scenario {scenario_id} - this may be the final state")
           return None
       
       # If only one transition without condition, return the destination state
       if len(transitions) == 1 and not transitions[0].condition:
           next_state = db.query(State).filter(State.id == transitions[0].to_state_id).first()
           if not next_state:
-              logger.error(f"Next state not found: {transitions[0].to_state_id}")
+              logger.error(f"Next state with ID {transitions[0].to_state_id} not found in database")
               return None
-          return StateInDBBase.model_validate(next_state)
+          try:
+              return StateInDBBase.model_validate(next_state)
+          except Exception as validation_error:
+              logger.error(f"Failed to validate state model: {str(validation_error)}")
+              # Fallback to returning the raw state if validation fails
+              logger.warning(f"Returning raw state as fallback for state ID: {next_state.id}")
+              return next_state
       
       # Get the current state's data
       current_state = db.query(State).filter(State.id == current_state_id).first()

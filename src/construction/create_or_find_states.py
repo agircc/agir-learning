@@ -76,8 +76,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                     # Create state_role entry
                     state_role = StateRole(
                         state_id=state.id,
-                        agent_role_id=agent_role_id,
-                        created_at=None  # Let it be set automatically
+                        agent_role_id=agent_role_id
                     )
                     db.add(state_role)
                     logger.info(f"Created state_role for state: {name} and role: {role_name}")
@@ -92,8 +91,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                     if agent_role:
                         state_role = StateRole(
                             state_id=state.id,
-                            agent_role_id=agent_role.id,
-                            created_at=None  # Let it be set automatically
+                            agent_role_id=agent_role.id
                         )
                         db.add(state_role)
                         logger.info(f"Created state_role for state: {name} and role: {role_name}")
@@ -110,8 +108,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                         # Create state_role entry
                         state_role = StateRole(
                             state_id=state.id,
-                            agent_role_id=agent_role_id,
-                            created_at=None  # Let it be set automatically
+                            agent_role_id=agent_role_id
                         )
                         db.add(state_role)
                         logger.info(f"Created state_role for state: {name} and role: {role_name}")
@@ -126,8 +123,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                         if agent_role:
                             state_role = StateRole(
                                 state_id=state.id,
-                                agent_role_id=agent_role.id,
-                                created_at=None  # Let it be set automatically
+                                agent_role_id=agent_role.id
                             )
                             db.add(state_role)
                             logger.info(f"Created state_role for state: {name} and role: {role_name}")

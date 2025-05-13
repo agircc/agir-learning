@@ -47,6 +47,8 @@ def generate_llm_response(db: Session, state: State, current_state_role: AgentRo
       if not model_name:
           if current_state_role and hasattr(current_state_role, 'model') and current_state_role.model:
               model_name = current_state_role.model
+          else:
+              logger.warning(f"No LLM model specified for user {user.username} or role. Using default model: {model_name}")
       
       logger.info(f"Using model {model_name} for state {state.name}")
       

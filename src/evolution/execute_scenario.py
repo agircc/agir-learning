@@ -345,6 +345,12 @@ def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
                 # Update the step with conversation results
                 step.generated_text = conversation_result
                 db.commit()
+                
+                # Also update episode status to mark this state as processed
+                episode = db.query(Episode).filter(Episode.id == episode_id).first()
+                if episode:
+                    episode.last_updated = time.time()
+                    db.commit()
             
             # Update episode with current state
             episode.current_state_id = current_state.id
