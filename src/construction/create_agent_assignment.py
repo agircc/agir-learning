@@ -1,0 +1,112 @@
+import logging
+from uuid import uuid4
+from sqlalchemy.orm import Session
+from typing import Dict, Any, List, Optional, Tuple, Union
+from agir_db.db.session import get_db
+from agir_db.models.user import User
+from agir_db.models.agent_role import AgentRole
+from agir_db.models.agent_assignment import AgentAssignment
+from src.construction.data_store import get_learner, get_scenario, set_learner
+
+logger = logging.getLogger(__name__)
+
+def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: Optional[str] = None, model: Optional[str] = None) -> User:
+    """
+    Create a user for a specific role and scenario and associate them in agent_assignments.
+    
+    Args:
+        db: Database session
+        role: Role name
+        scenario_id: ID of the scenario
+        username: Username (optional, will be generated if None)
+        model: LLM model to use (optional)
+        
+    Returns:
+        User: Created or found user
+    """
+    try:
+        scenario = get_scenario()
+        
+        # Check if this is the learner role
+        logger.info(f"Scenario learner role: {scenario.learner_role}")
+        
+        if scenario.learner_role == role:
+            # Use existing learner
+            learner = get_learner()
+            if learner:
+                logger.info(f"Using existing learner: {learner.username}")
+                user = db.query(User).filter(User.id == learner.id).first()
+                if user:
+                    return user
+        
+        # Generate username if not provided
+        if not username:
+            username = f"{role}_{scenario_id}"
+        
+        # Find or create user
+        user = db.query(User).filter(User.username == username).first()
+        
+        if not user:
+            # Create new user
+            user = User(
+                username=username,
+                first_name=role,
+                last_name=str(scenario_id)[:8],
+                email=f"{username}@agir.ai",
+                is_active=True
+            )
+            
+            # Set model if provided
+            if model and hasattr(user, 'llm_model'):
+                user.llm_model = model
+                
+            db.add(user)
+            db.flush()  # Get ID without committing
+            
+            logger.info(f"Created new user: {username} with ID: {user.id}")
+        
+        # Find the agent role
+        agent_role = db.query(AgentRole).filter(
+            AgentRole.scenario_id == scenario_id,
+            AgentRole.name == role
+        ).first()
+        
+        if not agent_role:
+            logger.warning(f"Role '{role}' not found for scenario {scenario_id}. Creating a default role.")
+            
+            agent_role = AgentRole(
+                scenario_id=scenario_id,
+                name=role,
+                description=f"Auto-created role for {role}"
+            )
+            
+            db.add(agent_role)
+            db.flush()
+        
+        # Create role-user association if it doesn't exist
+        existing_assignment = db.query(AgentAssignment).filter(
+            AgentAssignment.role_id == agent_role.id,
+            AgentAssignment.user_id == user.id
+        ).first()
+        
+        if not existing_assignment:
+            agent_assignment = AgentAssignment(
+                role_id=agent_role.id,
+                user_id=user.id
+            )
+            
+            db.add(agent_assignment)
+            logger.info(f"Created agent assignment for user {user.username} with role {role}")
+        
+        db.commit()
+        
+        if scenario.learner_role == role:
+            # Store as learner
+            set_learner(user)
+        
+        return user
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create agent assignment: {str(e)}")
+        raise

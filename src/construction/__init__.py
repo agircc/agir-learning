@@ -8,9 +8,9 @@ import logging
 from dotenv import load_dotenv
 import importlib
 from agir_db.db.session import get_db, SessionLocal
-from agir_db.models import User, Process
+from agir_db.models import User, Scenario
 from agir_db.db.base_class import Base
-from ..evolution.process_instance_manager import ProcessManager
+from ..evolution.episode_manager import EpisodeManager
 
 # 加载环境变量
 load_dotenv()
@@ -44,8 +44,8 @@ def check_database() -> bool:
         bool: True if database is configured correctly, False otherwise
     """
     try:
-        # Use ProcessManager to check database tables
-        return ProcessManager.check_database_tables()
+        # Use EpisodeManager to check database tables
+        return EpisodeManager.check_database_tables()
     except Exception as e:
         logger.error(f"Database check failed: {str(e)}")
         return False
@@ -86,4 +86,4 @@ def run_migrations():
         logger.error(f"Database migration failed: {str(e)}")
         return False
 
-__all__ = ["get_db", "SessionLocal", "User", "Process", "check_database", "run_migrations"] 
+__all__ = ["get_db", "SessionLocal", "User", "Scenario", "check_database", "run_migrations"] 

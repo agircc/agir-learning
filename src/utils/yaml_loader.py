@@ -8,21 +8,21 @@ import yaml
 import uuid
 from typing import Dict, Any, Optional, List
 
-from ..models.process import Process, ProcessNode, ProcessTransition
+from ..models.scenario import Scenario, State, StateTransition
 from ..models.role import Role
 
 logger = logging.getLogger(__name__)
 
 
-def load_process_from_file(file_path: str) -> Optional[Process]:
+def load_scenario_from_file(file_path: str) -> Optional[Scenario]:
     """
-    Load a process from a YAML file.
+    Load a scenario from a YAML file.
     
     Args:
         file_path: Path to the YAML file
         
     Returns:
-        Process instance or None if loading failed
+        Scenario instance or None if loading failed
     """
     try:
         if not os.path.exists(file_path):
@@ -33,46 +33,46 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
             yaml_content = f.read()
             
         data = yaml.safe_load(yaml_content)
-        process_data = data.get("process", {})
+        scenario_data = data.get("scenario", {}) or data.get("process", {})  # Support both new and old format
         
-        # Extract nodes. They don't have explicit IDs in the YAML,
+        # Extract states. They don't have explicit IDs in the YAML,
         # so we'll use their names as IDs for now
-        node_name_to_id = {}
-        nodes = []
+        state_name_to_id = {}
+        states = []
         
-        for i, node_data in enumerate(process_data.get("nodes", [])):
-            node_name = node_data["name"]
-            node_id = str(i+1)  # Use 1-indexed IDs
-            node_name_to_id[node_name] = node_id
+        for i, state_data in enumerate(scenario_data.get("states", []) or scenario_data.get("nodes", [])):  # Support both new and old format
+            state_name = state_data["name"]
+            state_id = str(i+1)  # Use 1-indexed IDs
+            state_name_to_id[state_name] = state_id
             
             # Handle roles as a list instead of a single role
-            roles = node_data.get("roles", [])
+            roles = state_data.get("roles", [])
             # For backwards compatibility, check if "role" is present and add it
-            if "role" in node_data and node_data["role"] not in roles:
-                roles.append(node_data["role"])
+            if "role" in state_data and state_data["role"] not in roles:
+                roles.append(state_data["role"])
             
-            nodes.append(ProcessNode(
-                id=node_id,
-                name=node_name,
+            states.append(State(
+                id=state_id,
+                name=state_name,
                 roles=roles,  # Use the roles list
-                description=node_data["description"],
-                assigned_to=node_data.get("assigned_to")
+                description=state_data["description"],
+                assigned_to=state_data.get("assigned_to")
             ))
             
-        # Handle transitions, which use node names in the YAML
+        # Handle transitions, which use state names in the YAML
         transitions = []
         
-        for transition_data in process_data.get("transitions", []):
-            # Use the original node names for transitions - they will be resolved at database creation time
-            transitions.append(ProcessTransition(
-                from_node=transition_data["from"],
-                to_node=transition_data["to"],
+        for transition_data in scenario_data.get("transitions", []):
+            # Use the original state names for transitions - they will be resolved at database creation time
+            transitions.append(StateTransition(
+                from_state=transition_data["from"],
+                to_state=transition_data["to"],
                 condition=transition_data.get("condition", "")
             ))
             
         # Prepare roles
         roles = []
-        for role_data in process_data.get("roles", []):
+        for role_data in scenario_data.get("roles", []):
             # Add model field if present
             role_args = {}
             
@@ -108,17 +108,17 @@ def load_process_from_file(file_path: str) -> Optional[Process]:
                 
             roles.append(Role(**role_args))
             
-        return Process(
-            name=process_data.get("name", "Unnamed Process"),
-            description=process_data.get("description"),
-            learner_role=process_data.get("learner_role"),
-            learner=process_data.get("learner", {}),
-            nodes=nodes,
+        return Scenario(
+            name=scenario_data.get("name", "Unnamed Scenario"),
+            description=scenario_data.get("description"),
+            learner_role=scenario_data.get("learner_role"),
+            learner=scenario_data.get("learner", {}),
+            states=states,
             transitions=transitions,
             roles=roles,
-            evolution=process_data.get("evolution", {})
+            evolution=scenario_data.get("evolution", {})
         )
         
     except Exception as e:
-        logger.error(f"Failed to load process from file: {str(e)}")
+        logger.error(f"Failed to load scenario from file: {str(e)}")
         return None 

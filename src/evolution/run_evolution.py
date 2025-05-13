@@ -2,30 +2,30 @@ import logging
 
 from agir_db.db.session import SessionLocal, get_db
 
-from src.construction.create_process_role_user import create_process_role_user
-from src.construction.data_store import get_learner, get_process, get_process_nodes, get_process_roles
+from src.construction.create_agent_assignment import create_agent_assignment
+from src.construction.data_store import get_learner, get_scenario, get_states, get_agent_roles
 logger = logging.getLogger(__name__)
 
-def run_evolution(process_id: int) -> bool:
-  # Create database session to fetch the process
+def run_evolution(scenario_id: int) -> bool:
+  # Create database session to fetch the scenario
   with SessionLocal() as db:
-      # Get the process data
-      process = get_process()
+      # Get the scenario data
+      scenario = get_scenario()
       
-      if not process:
-          logger.error(f"Process not found: {process_id}")
+      if not scenario:
+          logger.error(f"Scenario not found: {scenario_id}")
           return False
       
-      # Get process name with fallback
-      process_name = process.get("name", f"Process {process_id}") if isinstance(process, dict) else f"Process {process_id}"
-      logger.info(f"Running evolution for process: {process_name} (ID: {process_id})")
+      # Get scenario name with fallback
+      scenario_name = scenario.get("name", f"Scenario {scenario_id}") if isinstance(scenario, dict) else f"Scenario {scenario_id}"
+      logger.info(f"Running evolution for scenario: {scenario_name} (ID: {scenario_id})")
       
       # Find or create the learner user
       learner = get_learner()
       logger.info(f"Learner: {learner}")
       logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
       
-      roles_config = get_process_roles()
+      roles_config = get_agent_roles()
       logger.info(f"Roles config is a list: {roles_config}")
       # If roles_config is a list of role objects
       for role in roles_config:
@@ -44,8 +44,8 @@ def run_evolution(process_id: int) -> bool:
               continue
           
           logger.info(f"Creating user for role: {role_name}")
-          username = role_data.get("username", f"{role_name}_{process_id}")
-          agent = create_process_role_user(db, role_name, process_id, username, role_data.get("model", None))
+          username = role_data.get("username", f"{role_name}_{scenario_id}")
+          agent = create_agent_assignment(db, role_name, scenario_id, username, role_data.get("model", None))
           logger.info(f"Agent: {agent}")
           logger.info(f"Created user: {agent.username} (ID: {agent.id})")
           logger.info(f"Step xxx")
@@ -53,7 +53,7 @@ def run_evolution(process_id: int) -> bool:
       
       # Run the evolution process
     #   self._process_evolution(db, process, learner, process_id)
-      from src.evolution.execute_process import execute_process
+      from src.evolution.execute_scenario import execute_scenario
       logger.info(f"Step !!!!")
-      execute_process(process_id, learner.id)
+      execute_scenario(scenario_id, learner.id)
       return True
