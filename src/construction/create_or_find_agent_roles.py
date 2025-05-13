@@ -26,15 +26,13 @@ def create_or_find_agent_roles(
     """
     try:
         role_id_mapping = {}
-        
-        # Create special learner role if not in roles_data
-        has_learner = any(role.get("name") == "learner" for role in roles_data)
-        if not has_learner:
-            # Add learner role automatically
-            roles_data.append({"name": "learner", "description": "Learner role"})
+        print("Roles data: ")
+        print(roles_data)
         
         for role_data in roles_data:
-            role_name = role_data.get("name")
+            print("Role data: ")
+            print(role_data)
+            role_name = role_data.name
             if not role_name:
                 logger.error("Role name is required")
                 continue
@@ -54,8 +52,8 @@ def create_or_find_agent_roles(
             role = AgentRole(
                 scenario_id=scenario_id,
                 name=role_name,
-                description=role_data.get("description", ""),
-                model=role_data.get("model", "")
+                description=role_data.description,
+                model=role_data.model
             )
             
             db.add(role)
@@ -72,8 +70,8 @@ def create_or_find_agent_roles(
             {
                 "id": role_id,
                 "name": role_name,
-                "description": roles_data[i].get("description", "") if i < len(roles_data) else "",
-                "model": roles_data[i].get("model", "") if i < len(roles_data) else ""
+                "description": roles_data[i].description if i < len(roles_data) else "",
+                "model": roles_data[i].model if i < len(roles_data) else ""
             }
             for i, (role_name, role_id) in enumerate(role_id_mapping.items())
         ]
