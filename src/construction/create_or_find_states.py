@@ -5,7 +5,8 @@ from src.construction.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.scenario import State, StateRole
-from src.construction.data_store import set_states
+from agir_db.models.agent_role import AgentRole
+from src.construction.data_store import set_states, get_agent_roles
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,14 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
         # Keep track of state IDs for lookup
         state_ids = {}
         
+        # Get agent_roles mapping for creating state_roles
+        agent_roles_mapping = get_agent_roles()
+        if not agent_roles_mapping:
+            logger.warning("No agent roles found in data store. State roles may not be created properly.")
+        
         # Create states
         for state_data in states_data:
-            name = state_data.get("name")
+            name = state_data.name
             if not name:
                 logger.error("State name is required")
                 return None
@@ -43,14 +49,14 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                 state_ids[name] = state.id
                 continue
             
-            # Create state
+            print("State data: ")
+            print(state_data)
+            
+            # Create state without role (we'll handle roles separately)
             state = State(
                 scenario_id=scenario_id,
                 name=name,
-                description=state_data.get("description", ""),
-                role=state_data.get("role", ""),
-                is_required=state_data.get("is_required", True),
-                external_id=str(uuid4())
+                description=state_data.description,
             )
             
             db.add(state)
@@ -59,33 +65,74 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
             logger.info(f"Created state: {name} with ID: {state.id}")
             state_ids[name] = state.id
             
-            # Handle state roles if present
-            roles_data = state_data.get("roles", [])
-            if roles_data:
-                for role_data in roles_data:
-                    role_name = role_data.get("name")
-                    if not role_name:
-                        continue
-                    
-                    # Check if state role exists
-                    state_role = db.query(StateRole).filter(
-                        StateRole.state_id == state.id,
-                        StateRole.name == role_name
-                    ).first()
-                    
-                    if state_role:
-                        logger.info(f"State role already exists: {role_name} for state: {name}")
-                        continue
-                    
-                    # Create state role
+            # Handle state roles
+            # Check if we have a single role or multiple roles
+            if hasattr(state_data, 'role') and state_data.role:
+                # Single role case (doctor.yml format)
+                role_name = state_data.role
+                # Get the agent_role_id from our mapping
+                if agent_roles_mapping and role_name in agent_roles_mapping:
+                    agent_role_id = agent_roles_mapping[role_name]
+                    # Create state_role entry
                     state_role = StateRole(
                         state_id=state.id,
-                        name=role_name,
-                        description=role_data.get("description", "")
+                        agent_role_id=agent_role_id,
+                        created_at=None  # Let it be set automatically
                     )
-                    
                     db.add(state_role)
-                    logger.info(f"Created state role: {role_name} for state: {name}")
+                    logger.info(f"Created state_role for state: {name} and role: {role_name}")
+                else:
+                    logger.warning(f"Role {role_name} not found in agent_roles mapping. Looking up in database.")
+                    # Try to find the role in the database
+                    agent_role = db.query(AgentRole).filter(
+                        AgentRole.scenario_id == scenario_id,
+                        AgentRole.name == role_name
+                    ).first()
+                    
+                    if agent_role:
+                        state_role = StateRole(
+                            state_id=state.id,
+                            agent_role_id=agent_role.id,
+                            created_at=None  # Let it be set automatically
+                        )
+                        db.add(state_role)
+                        logger.info(f"Created state_role for state: {name} and role: {role_name}")
+                    else:
+                        logger.error(f"Role {role_name} not found in database for state: {name}")
+            
+            # Handle multiple roles (therapist.yml format)
+            if hasattr(state_data, 'roles') and state_data.roles:
+                roles = state_data.roles
+                for role_name in roles:
+                    # Get the agent_role_id from our mapping
+                    if agent_roles_mapping and role_name in agent_roles_mapping:
+                        agent_role_id = agent_roles_mapping[role_name]
+                        # Create state_role entry
+                        state_role = StateRole(
+                            state_id=state.id,
+                            agent_role_id=agent_role_id,
+                            created_at=None  # Let it be set automatically
+                        )
+                        db.add(state_role)
+                        logger.info(f"Created state_role for state: {name} and role: {role_name}")
+                    else:
+                        logger.warning(f"Role {role_name} not found in agent_roles mapping. Looking up in database.")
+                        # Try to find the role in the database
+                        agent_role = db.query(AgentRole).filter(
+                            AgentRole.scenario_id == scenario_id,
+                            AgentRole.name == role_name
+                        ).first()
+                        
+                        if agent_role:
+                            state_role = StateRole(
+                                state_id=state.id,
+                                agent_role_id=agent_role.id,
+                                created_at=None  # Let it be set automatically
+                            )
+                            db.add(state_role)
+                            logger.info(f"Created state_role for state: {name} and role: {role_name}")
+                        else:
+                            logger.error(f"Role {role_name} not found in database for state: {name}")
         
         db.commit()
         logger.info(f"All states created successfully for scenario: {scenario_id}")
