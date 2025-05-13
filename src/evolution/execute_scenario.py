@@ -1,5 +1,5 @@
 """
-Execute process - handles running a specific process instance
+Execute scenario - handles running a specific episode
 """
 
 import logging
@@ -26,109 +26,109 @@ from ..llms.llm_provider_manager import LLMProviderManager
 
 logger = logging.getLogger(__name__)
 
-class ProcessManager:
+class ScenarioManager:
     """
-    Manages the creation and execution of processes.
+    Manages the creation and execution of scenarios.
     """
     
     @staticmethod
-    def _create_process_instance(db: Session, process_id: int, initiator_id: int) -> Optional[int]:
+    def _create_episode(db: Session, scenario_id: int, initiator_id: int) -> Optional[int]:
         """
-        Create a process instance.
+        Create an episode.
         
         Args:
             db: Database session
-            process_id: ID of the process
+            scenario_id: ID of the scenario
             initiator_id: ID of the initiator
             
         Returns:
-            Optional[int]: ID of the process instance if successful, None otherwise
+            Optional[int]: ID of the episode if successful, None otherwise
         """
         try:
-            instance = ProcessInstance(
-                process_id=process_id,
+            episode = Episode(
+                scenario_id=scenario_id,
                 initiator_id=initiator_id,
-                status=ProcessInstanceStatus.RUNNING
+                status=EpisodeStatus.RUNNING
             )
             
-            db.add(instance)
+            db.add(episode)
             db.commit()
-            db.refresh(instance)
+            db.refresh(episode)
             
-            logger.info(f"Created process instance with ID: {instance.id}")
-            return instance.id
+            logger.info(f"Created episode with ID: {episode.id}")
+            return episode.id
             
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to create process instance: {str(e)}")
+            logger.error(f"Failed to create episode: {str(e)}")
             return None
     
     @staticmethod
-    def _get_initial_node(db: Session, process_id: int) -> Optional[ProcessNode]:
+    def _get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
         """
-        Get the initial node of a process.
+        Get the initial state of a scenario.
         
         Args:
             db: Database session
-            process_id: ID of the process
+            scenario_id: ID of the scenario
             
         Returns:
-            Optional[ProcessNode]: Initial node if found, None otherwise
+            Optional[State]: Initial state if found, None otherwise
         """
         try:
-            # Get all nodes in the process
-            all_nodes = db.query(ProcessNode).filter(ProcessNode.process_id == process_id).all()
-            if not all_nodes:
-                logger.error(f"No nodes found for process: {process_id}")
+            # Get all states in the scenario
+            all_states = db.query(State).filter(State.scenario_id == scenario_id).all()
+            if not all_states:
+                logger.error(f"No states found for scenario: {scenario_id}")
                 return None
             
-            # Get all 'to' nodes in transitions
-            to_nodes = db.query(ProcessTransition.to_node_id).filter(
-                ProcessTransition.process_id == process_id
+            # Get all 'to' states in transitions
+            to_states = db.query(StateTransition.to_state_id).filter(
+                StateTransition.scenario_id == scenario_id
             ).all()
-            to_node_ids = {t[0] for t in to_nodes}
+            to_state_ids = {t[0] for t in to_states}
             
-            # Find nodes that are not 'to' nodes in any transition
-            # These are potential starting nodes
-            for node in all_nodes:
-                if node.id not in to_node_ids:
-                    return ProcessNodeInDBBase.model_validate(node)
+            # Find states that are not 'to' states in any transition
+            # These are potential starting states
+            for state in all_states:
+                if state.id not in to_state_ids:
+                    return StateInDBBase.model_validate(state)
             
-            # If no clear starting node, return the first node
-            logger.warning(f"No clear starting node found for process: {process_id}, using first node")
-            return all_nodes[0]
+            # If no clear starting state, return the first state
+            logger.warning(f"No clear starting state found for scenario: {scenario_id}, using first state")
+            return all_states[0]
             
         except Exception as e:
-            logger.error(f"Failed to get initial node: {str(e)}")
+            logger.error(f"Failed to get initial state: {str(e)}")
             return None
     
     @staticmethod
-    def _get_node_roles(db: Session, node_id: int) -> List[ProcessRole]:
+    def _get_state_roles(db: Session, state_id: int) -> List[AgentRole]:
         """
-        Get all roles associated with a node.
+        Get all roles associated with a state.
         
         Args:
             db: Database session
-            node_id: ID of the node
+            state_id: ID of the state
             
         Returns:
-            List[ProcessRole]: Roles associated with the node
+            List[AgentRole]: Roles associated with the state
         """
         try:
-            # Get all role IDs for this node from the ProcessNodeRole table
-            node_roles = db.query(ProcessNodeRole).filter(
-                ProcessNodeRole.process_node_id == node_id
+            # Get all role IDs for this state from the StateRole table
+            state_roles = db.query(StateRole).filter(
+                StateRole.state_id == state_id
             ).all()
             
-            if not node_roles:
-                logger.error(f"No roles found for node: {node_id}")
+            if not state_roles:
+                logger.error(f"No roles found for state: {state_id}")
                 return []
             
-            # Get the actual ProcessRole objects
+            # Get the actual AgentRole objects
             roles = []
-            for node_role in node_roles:
-                role = db.query(ProcessRole).filter(
-                    ProcessRole.id == node_role.process_role_id
+            for state_role in state_roles:
+                role = db.query(AgentRole).filter(
+                    AgentRole.id == state_role.agent_role_id
                 ).first()
                 
                 if role:
@@ -137,89 +137,89 @@ class ProcessManager:
             return roles
             
         except Exception as e:
-            logger.error(f"Failed to get node roles: {str(e)}")
+            logger.error(f"Failed to get state roles: {str(e)}")
             return []
     
     @staticmethod
-    def _get_or_create_role_user(db: Session, role_id: int, process_instance_id: int) -> Optional[User]:
+    def _get_or_create_agent_assignment(db: Session, role_id: int, episode_id: int) -> Optional[User]:
         """
-        Get or create a user for a role in a process instance.
+        Get or create a user for a role in an episode.
         
         Args:
             db: Database session
             role_id: ID of the role
-            process_instance_id: ID of the process instance
+            episode_id: ID of the episode
             
         Returns:
             Optional[User]: User if found or created, None otherwise
         """
         try:
-            # Try to find existing role-user mapping for this process instance
-            instance = db.query(ProcessInstance).filter(ProcessInstance.id == process_instance_id).first()
-            if not instance:
-                logger.error(f"Process instance not found: {process_instance_id}")
+            # Try to find existing agent assignment for this episode
+            episode = db.query(Episode).filter(Episode.id == episode_id).first()
+            if not episode:
+                logger.error(f"Episode not found: {episode_id}")
                 return None
             
-            role = db.query(ProcessRole).filter(ProcessRole.id == role_id).first()
+            role = db.query(AgentRole).filter(AgentRole.id == role_id).first()
             if not role:
                 logger.error(f"Role not found: {role_id}")
                 return None
             
-            # Check if role-user mapping exists
-            role_user = db.query(ProcessRoleUser).filter(
-                ProcessRoleUser.role_id == role_id
+            # Check if agent assignment exists
+            agent_assignment = db.query(AgentAssignment).filter(
+                AgentAssignment.agent_role_id == role_id
             ).first()
             
-            if role_user:
+            if agent_assignment:
                 # User exists for this role
-                user = db.query(User).filter(User.id == role_user.user_id).first()
+                user = db.query(User).filter(User.id == agent_assignment.user_id).first()
                 if user:
                     logger.info(f"Found existing user {user.username} for role {role.name}")
                     return user
             
             # Create a new user for this role
-            logger.info(f"Creating new user for role {role.name} in process {instance.process_id}")
-            user = create_process_role_user(
+            logger.info(f"Creating new user for role {role.name} in scenario {episode.scenario_id}")
+            user = create_agent_assignment(
                 db, 
                 role.name, 
-                instance.process_id, 
-                username=f"{role.name}_{instance.id}",
+                episode.scenario_id, 
+                username=f"{role.name}_{episode.id}",
                 model=getattr(role, 'model', None)
             )
             
             return user
             
         except Exception as e:
-            logger.error(f"Failed to get or create role user: {str(e)}")
+            logger.error(f"Failed to get or create agent assignment: {str(e)}")
             return None
     
     @staticmethod
-    def _create_process_instance_step(
+    def _create_step(
         db: Session, 
-        instance_id: int, 
-        node_id: int, 
+        episode_id: int, 
+        state_id: int, 
         user_id: Optional[int] = None,
         generated_text: Optional[str] = None
     ) -> Optional[int]:
         """
-        Create a process instance step.
+        Create a step.
         
         Args:
             db: Database session
-            instance_id: ID of the process instance
-            node_id: ID of the process node
+            episode_id: ID of the episode
+            state_id: ID of the state
             user_id: ID of the user (optional)
             generated_text: Comment/data from LLM (optional)
             
         Returns:
-            Optional[int]: ID of the process instance step if successful, None otherwise
+            Optional[int]: ID of the step if successful, None otherwise
         """
         try:
-            step = ProcessInstanceStep(
-                instance_id=instance_id,
-                node_id=node_id,
+            step = Step(
+                episode_id=episode_id,
+                state_id=state_id,
                 user_id=user_id,
-                action="process",
+                action="scenario",
                 generated_text=generated_text
             )
             
@@ -227,70 +227,70 @@ class ProcessManager:
             db.commit()
             db.refresh(step)
             
-            logger.info(f"Created process instance step with ID: {step.id}")
+            logger.info(f"Created step with ID: {step.id}")
             
             return step.id
             
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to create process instance step: {str(e)}")
+            logger.error(f"Failed to create step: {str(e)}")
             return None
 
     
 
     
  
-def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
+def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
     """
-    Execute a process from start to finish.
+    Execute a scenario from start to finish.
     
     Args:
-        process_id: ID of the process
+        scenario_id: ID of the scenario
         initiator_id: ID of the initiator
         
     Returns:
-        Optional[int]: ID of the process instance if successful, None otherwise
+        Optional[int]: ID of the episode if successful, None otherwise
     """
     try:
         logger.info(f"Step 0")
         db = next(get_db())
         logger.info(f"Step 1")
-        # 1. Create process instance
-        instance_id = ProcessManager._create_process_instance(db, process_id, initiator_id)
-        if not instance_id:
+        # 1. Create episode
+        episode_id = ScenarioManager._create_episode(db, scenario_id, initiator_id)
+        if not episode_id:
             return None
         
         logger.info(f"Step 2")
-        # 2. Get initial node and create first step
-        current_node = ProcessManager._get_initial_node(db, process_id)
-        if not current_node:
-            logger.error(f"No initial node found for process: {process_id}")
+        # 2. Get initial state and create first step
+        current_state = ScenarioManager._get_initial_state(db, scenario_id)
+        if not current_state:
+            logger.error(f"No initial state found for scenario: {scenario_id}")
             return None
         
-        logger.info(f"Current node: {current_node}")
+        logger.info(f"Current state: {current_state}")
 
 
         logger.info(f"Step 3")
-        # Initialize process instance with current node
-        instance = db.query(ProcessInstance).filter(ProcessInstance.id == instance_id).first()
-        instance.current_node_id = current_node.id
+        # Initialize episode with current state
+        episode = db.query(Episode).filter(Episode.id == episode_id).first()
+        episode.current_state_id = current_state.id
         db.commit()
         
         # Keep track of all steps
         all_steps = []
         
-        # Continue processing nodes until we reach the end
-        while current_node:
-            # 3. Get all roles associated with the node
-            roles = ProcessManager._get_node_roles(db, current_node.id)
+        # Continue processing states until we reach the end
+        while current_state:
+            # 3. Get all roles associated with the state
+            roles = ScenarioManager._get_state_roles(db, current_state.id)
             if not roles:
-                logger.error(f"Failed to get roles for node: {current_node.id}")
+                logger.error(f"Failed to get roles for state: {current_state.id}")
                 return None
             
             # 4. Get or create users for each role
             role_users = []
             for role in roles:
-                user = ProcessManager._get_or_create_role_user(db, role.id, instance_id)
+                user = ScenarioManager._get_or_create_agent_assignment(db, role.id, episode_id)
                 if not user:
                     logger.error(f"Failed to get or create user for role: {role.id}")
                     return None
@@ -299,82 +299,82 @@ def execute_process(process_id: int, initiator_id: int) -> Optional[int]:
             # 5. If there's only one role, generate a simple response
             if len(role_users) == 1:
                 role, user = role_users[0]
-                response = generate_llm_response(db, current_node, role, user, all_steps)
+                response = generate_llm_response(db, current_state, role, user, all_steps)
                 
                 # Create step with generated data
-                step_id = ProcessManager._create_process_instance_step(
-                    db, instance_id, current_node.id, user.id, response
+                step_id = ScenarioManager._create_step(
+                    db, episode_id, current_state.id, user.id, response
                 )
                 
                 if not step_id:
-                    logger.error(f"Failed to create step for node: {current_node.id}")
+                    logger.error(f"Failed to create step for state: {current_state.id}")
                     return None
                 
                 # Add step to history
-                step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
+                step = db.query(Step).filter(Step.id == step_id).first()
                 all_steps.append(step)
             
             # 6. If there are multiple roles, conduct a multi-turn conversation
             else:
                 # Create conversation
-                conversation = create_conversation(db, current_node, instance_id, role_users)
+                conversation = create_conversation(db, current_state, episode_id, role_users)
                 if not conversation:
-                    logger.error(f"Failed to create conversation for node: {current_node.id}")
+                    logger.error(f"Failed to create conversation for state: {current_state.id}")
                     return None
                 
                 # Conduct multi-turn conversation
                 conversation_result = conduct_multi_turn_conversation(
-                    db, conversation, current_node, role_users
+                    db, conversation, current_state, role_users
                 )
                 
                 # Create a step for each role to record their participation
                 for role, user in role_users:
-                    step_id = ProcessManager._create_process_instance_step(
-                        db, instance_id, current_node.id, user.id, 
-                        f"Participated in conversation for node: {current_node.name}"
+                    step_id = ScenarioManager._create_step(
+                        db, episode_id, current_state.id, user.id, 
+                        f"Participated in conversation for state: {current_state.name}"
                     )
                     
                     if not step_id:
-                        logger.error(f"Failed to create step for node: {current_node.id} and user: {user.id}")
+                        logger.error(f"Failed to create step for state: {current_state.id} and user: {user.id}")
                         continue
                     
                     # Add step to history
-                    step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
+                    step = db.query(Step).filter(Step.id == step_id).first()
                     all_steps.append(step)
                 
                 # Create a final step with the conversation result
-                step_id = ProcessManager._create_process_instance_step(
-                    db, instance_id, current_node.id, role_users[0][1].id, conversation_result
+                step_id = ScenarioManager._create_step(
+                    db, episode_id, current_state.id, role_users[0][1].id, conversation_result
                 )
                 
                 if not step_id:
-                    logger.error(f"Failed to create final step for node: {current_node.id}")
+                    logger.error(f"Failed to create final step for state: {current_state.id}")
                     return None
                 
                 # Add final step to history
-                step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
+                step = db.query(Step).filter(Step.id == step_id).first()
                 all_steps.append(step)
             
-            # Update instance with current node
-            instance.current_node_id = current_node.id
+            # Update episode with current state
+            episode.current_state_id = current_state.id
             db.commit()
             
-            logger.info(f"Current node in the circle: {current_node}")
-            # 7. Find next node
-            next_node = get_next_node(db, process_id, current_node.id, instance_id, role_users[0][1])
+            logger.info(f"Current state in the circle: {current_state}")
+            # 7. Find next state
+            next_state = get_next_node(db, scenario_id, current_state.id, episode_id, role_users[0][1])
             
-            # If no next node, we've reached the end
-            if not next_node:
-                logger.info(f"Process instance {instance_id} completed successfully")
-                instance.status = ProcessInstanceStatus.COMPLETED
+            # If no next state, we've reached the end
+            if not next_state:
+                logger.info(f"Episode {episode_id} completed successfully")
+                episode.status = EpisodeStatus.COMPLETED
                 db.commit()
                 break
             
-            # Move to next node
-            current_node = next_node
+            # Move to next state
+            current_state = next_state
         
-        return instance_id
+        return episode_id
         
     except Exception as e:
-        logger.error(f"Failed to execute process: {str(e)}")
+        logger.error(f"Failed to execute scenario: {str(e)}")
         return None
