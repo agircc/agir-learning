@@ -18,11 +18,10 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.scenario import StateInDBBase
 
-from .process_manager.get_next_node import get_next_node
-from .process_manager.generate_llm_response import generate_llm_response
-from .llm_learner_generate_response import learner_generate_response
-from .llm_role_user_generate_response import role_user_generate_response
-from ..llms.llm_provider_manager import LLMProviderManager
+from .scenario_manager.get_next_state import get_next_state
+from .scenario_manager.generate_llm_response import generate_llm_response
+from .coversation.create_conversation import create_conversation
+from .coversation.conduct_multi_turn_conversation import conduct_multi_turn_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +360,7 @@ def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
             
             logger.info(f"Current state in the circle: {current_state}")
             # 7. Find next state
-            next_state = get_next_node(db, scenario_id, current_state.id, episode_id, role_users[0][1])
+            next_state = get_next_state(db, scenario_id, current_state.id, episode_id, role_users[0][1])
             
             # If no next state, we've reached the end
             if not next_state:
