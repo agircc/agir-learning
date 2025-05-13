@@ -1,6 +1,6 @@
 # AGIR Learning: Agent-Guided Intelligent Reflection for Skill Development
 
-A system designed to improve learner skills through simulated experiences and guided interactions with AI agents in virtual processes.
+A system designed to improve learner skills through simulated experiences and guided interactions with AI agents in virtual scenarios.
 
 ## Overview
 
@@ -8,14 +8,14 @@ AGIR Learning is a platform that helps learners develop specific skills through 
 
 The core purpose of AGIR Learning is to **accelerate skill development through simulated practice in a safe environment**. Whether learning medical diagnosis, negotiation tactics, or programming techniques, the system provides:
 
-1. **Structured learning environments** defined as processes in YAML
+1. **Structured learning environments** defined as scenarios in YAML
 2. **Role-based AI agents** that simulate different participants in the learning scenario
 3. **Guided reflection** to help learners understand their strengths and areas for improvement
 4. **Iterative skill development** through repeated practice with increasing complexity
 
 ### Key Concepts
 
-- **Learner**: The primary user whose skills are being developed through the process. In the database, a learner is a record in the user table.
+- **Learner**: The primary user whose skills are being developed through the scenario. In the database, a learner is a record in the user table.
 - **Scenario**: A structured sequence of interactions designed as a learning experience for specific skills.
 - **Agents**: AI participants in the scenario represented by different roles (stored as users in the database).
 - **Evolution**: The mechanism by which the learner's skills improve through experiences, feedback, and guided reflection.
@@ -36,17 +36,17 @@ pip install -r requirements.txt
 ### Running Evolution Process
 
 ```bash
-# 仅初始化进程
-python run.py path/to/process.yml --mode init
+# Initialize scenario only
+python run.py path/to/scenario.yml --mode init
 
-# 仅运行已有进程
-python run.py path/to/process.yml --mode run --process-id 123
+# Run existing scenario
+python run.py path/to/scenario.yml --mode run --scenario-id 123
 
-# 初始化进程并运行（默认行为）
-python run.py path/to/process.yml
+# Initialize scenario and run (default behavior)
+python run.py path/to/scenario.yml
 
-# 或者明确指定
-python run.py path/to/process.yml --mode all
+# Or explicitly specify
+python run.py path/to/scenario.yml --mode all
 ```
 
 ### Environment Variables
@@ -59,9 +59,9 @@ OPENAI_API_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
 ```
 
-## Process YAML Format
+## Scenario YAML Format
 
-Process YAML files define the evolution experience:
+Scenario YAML files define the evolution experience:
 
 ```yaml
 scenario:
@@ -77,7 +77,7 @@ scenario:
     # Other user attributes
     evolution_objective: "Description of what the learner should learn"
 
-  # Roles represent different agents in the process
+  # Roles represent different agents in the scenario
   roles:
     - name: "patient"
       model: "phi"  # Each role can use a different LLM model
@@ -86,7 +86,7 @@ scenario:
       model: "phi"
       description: "Nurse agent for triage, registration, and examinations."
 
-  # States are the steps in the process
+  # States are the steps in the scenario
   states:
     - name: "State Name"
       role: "role_name"  # Role this state belongs to
@@ -110,7 +110,7 @@ scenario:
 
 ## Learner-Centric Architecture
 
-This system is designed around the central concept of a **learner** - a user whose skills and knowledge evolve through simulated processes. Here's how it works:
+This system is designed around the central concept of a **learner** - a user whose skills and knowledge evolve through simulated scenarios. Here's how it works:
 
 1. **Learner Identification**: 
    - The system identifies the learner based on the YAML configuration
@@ -202,7 +202,7 @@ Project Root/
     │   ├── agent.py        # Agent model
     │   ├── scenario.py     # Scenario model
     │   └── role.py         # Role model
-    ├── process_manager.py  # Process management and execution
+    ├── episode_manager.py  # Episode management and execution
     └── utils/              # Utility functions
         ├── __init__.py     # Utils initialization
         ├── database.py     # Database utility functions

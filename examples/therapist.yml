@@ -1,4 +1,4 @@
-process:
+scenario:
   name: "Agent Therapy Full Cycle"
   description: "Simulates the full closed loop of mental health therapy involving intake, sessions, reflection, and termination, powered by LLM agents."
   learner_role: "therapist"
@@ -28,7 +28,7 @@ process:
       model: "phi:latest"
       description: "Therapist agent responsible for therapy sessions, planning, and outcome evaluation."
 
-  nodes:
+  states:
     - name: "Distress Emergence"
       roles: ["client"]
       description: "Client experiences emotional distress and decides to seek therapy."

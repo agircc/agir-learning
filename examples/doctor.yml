@@ -1,4 +1,4 @@
-process:
+scenario:
   name: "Agent Hospital Full Cycle"
   description: "Simulates the full closed cycle of patient treatment in a virtual hospital powered by LLM agents."
   learner_role: "doctor"
@@ -28,7 +28,7 @@ process:
       model: "phi:latest"
       description: "Doctor agent for diagnosis, treatment, and follow-up."
 
-  nodes:
+  states:
     - name: "Disease Onset"
       role: "patient"
       description: "Patient experiences symptoms and decides to visit the hospital."
