@@ -18,6 +18,8 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.scenario import StateInDBBase
 
+from src.construction.create_agent_assignment import create_agent_assignment
+
 from .scenario_manager.get_next_state import get_next_state
 from .scenario_manager.generate_llm_response import generate_llm_response
 from .coversation.create_conversation import create_conversation
@@ -166,7 +168,7 @@ class ScenarioManager:
             
             # Check if agent assignment exists
             agent_assignment = db.query(AgentAssignment).filter(
-                AgentAssignment.agent_role_id == role_id
+                AgentAssignment.role_id == role_id
             ).first()
             
             if agent_assignment:
@@ -315,8 +317,22 @@ def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
             
             # 6. If there are multiple roles, conduct a multi-turn conversation
             else:
-                # Create conversation
-                conversation = create_conversation(db, current_state, episode_id, role_users)
+                # First create a step for the conversation
+                step_id = ScenarioManager._create_step(
+                    db, episode_id, current_state.id, role_users[0][1].id,
+                    f"Multi-role conversation for state: {current_state.name}"
+                )
+                
+                if not step_id:
+                    logger.error(f"Failed to create step for state: {current_state.id}")
+                    return None
+                
+                # Add step to history
+                step = db.query(Step).filter(Step.id == step_id).first()
+                all_steps.append(step)
+                
+                # Create conversation linked to the step
+                conversation = create_conversation(db, current_state, episode_id, role_users, step_id)
                 if not conversation:
                     logger.error(f"Failed to create conversation for state: {current_state.id}")
                     return None
@@ -326,33 +342,9 @@ def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
                     db, conversation, current_state, role_users
                 )
                 
-                # Create a step for each role to record their participation
-                for role, user in role_users:
-                    step_id = ScenarioManager._create_step(
-                        db, episode_id, current_state.id, user.id, 
-                        f"Participated in conversation for state: {current_state.name}"
-                    )
-                    
-                    if not step_id:
-                        logger.error(f"Failed to create step for state: {current_state.id} and user: {user.id}")
-                        continue
-                    
-                    # Add step to history
-                    step = db.query(Step).filter(Step.id == step_id).first()
-                    all_steps.append(step)
-                
-                # Create a final step with the conversation result
-                step_id = ScenarioManager._create_step(
-                    db, episode_id, current_state.id, role_users[0][1].id, conversation_result
-                )
-                
-                if not step_id:
-                    logger.error(f"Failed to create final step for state: {current_state.id}")
-                    return None
-                
-                # Add final step to history
-                step = db.query(Step).filter(Step.id == step_id).first()
-                all_steps.append(step)
+                # Update the step with conversation results
+                step.generated_text = conversation_result
+                db.commit()
             
             # Update episode with current state
             episode.current_state_id = current_state.id

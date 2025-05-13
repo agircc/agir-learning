@@ -3,8 +3,8 @@ from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from agir_db.models.user import User
-from agir_db.models.process_role import ProcessRole
-from agir_db.models.process import ProcessNode
+from agir_db.models.agent_role import AgentRole
+from agir_db.models.scenario import State
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 def conduct_multi_turn_conversation(
   db: Session, 
   conversation: ChatConversation, 
-  node: ProcessNode, 
-  role_users: List[Tuple[ProcessRole, User]], 
+  state: State, 
+  role_users: List[Tuple[AgentRole, User]], 
   max_turns: int = 10
 ) -> Optional[str]:
   """
@@ -25,8 +25,8 @@ def conduct_multi_turn_conversation(
   Args:
       db: Database session
       conversation: Chat conversation
-      node: Process node
-      role_users: List of tuples containing role and user instances
+      state: State in the scenario
+      role_users: List of tuples containing agent role and user instances
       max_turns: Maximum number of conversation turns
       
   Returns:
@@ -39,11 +39,11 @@ def conduct_multi_turn_conversation(
       # Start conversation with a message from the first role
       first_role, first_user = role_users[0]
       
-      # Start with node description as first message
+      # Start with state description as first message
       initial_message = ChatMessage(
           conversation_id=conversation.id,
           sender_id=first_user.id,
-          content=f"Let's start our discussion about: {node.description}. As {first_user.username}, I'll begin."
+          content=f"Let's start our discussion about: {state.description}. As {first_user.username}, I'll begin."
       )
       
       db.add(initial_message)
@@ -76,8 +76,8 @@ def conduct_multi_turn_conversation(
               # Build prompt
               prompt = f"""You are an AI assistant playing the role of {user.username} in a conversation.
 
-Node: {node.name}
-Task: {node.description}
+State: {state.name}
+Task: {state.description}
 
 Previous conversation:
 {conversation_history}
@@ -109,7 +109,7 @@ If the conversation seems complete or if there's a natural stopping point, inclu
           
           # If we've reached max turns, conclude the conversation
           if turn_count >= max_turns:
-              logger.warning(f"Conversation for node {node.name} reached maximum turns ({max_turns})")
+              logger.warning(f"Conversation for state {state.name} reached maximum turns ({max_turns})")
               final_message = ChatMessage(
                   conversation_id=conversation.id,
                   sender_id=first_user.id,
@@ -139,7 +139,7 @@ Provide a summary that captures the key points discussed and any conclusions rea
       
       summary = provider.generate(summary_prompt)
       
-      logger.info(f"Completed multi-turn conversation for node: {node.name}")
+      logger.info(f"Completed multi-turn conversation for state: {state.name}")
       
       return f"Conversation summary: {summary}\n\nFull conversation:\n{conversation_history}"
       
