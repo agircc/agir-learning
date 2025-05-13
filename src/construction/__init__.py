@@ -12,10 +12,10 @@ from agir_db.models import User, Scenario
 from agir_db.db.base_class import Base
 from ..evolution.episode_manager import EpisodeManager
 
-# 加载环境变量
+# Load environment variables
 load_dotenv()
 
-# 配置日志
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from agir_db.db.session import engine
-    # 尝试导入迁移模块
+    # Try to import migration module
     try:
         # import agir_db.alembic.env as alembic_env
         has_alembic = False
@@ -51,16 +51,16 @@ def check_database() -> bool:
         return False
 
 def run_migrations():
-    """运行数据库迁移"""
+    """Run database migrations"""
     try:
-        # 使用Alembic运行迁移或使用SQLAlchemy创建表
+        # Use Alembic for migrations or SQLAlchemy to create tables
         if has_alembic:
             try:
-                # 尝试使用alembic运行迁移
+                # Try to use alembic for migrations
                 from alembic import command
                 from alembic.config import Config
                 
-                # 获取alembic配置文件路径
+                # Get alembic configuration file path
                 alembic_cfg_path = os.path.join(os.path.dirname(importlib.util.find_spec("agir_db").origin), "alembic.ini")
                 
                 if os.path.exists(alembic_cfg_path):
@@ -77,7 +77,7 @@ def run_migrations():
                 Base.metadata.create_all(bind=engine)
                 logger.info("SQLAlchemy tables created successfully")
         else:
-            # 使用SQLAlchemy创建所有表
+            # Use SQLAlchemy to create all tables
             Base.metadata.create_all(bind=engine)
             logger.info("SQLAlchemy tables created successfully")
             

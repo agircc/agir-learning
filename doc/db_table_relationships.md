@@ -1,28 +1,28 @@
 ## user
 learner defined in the yaml is actually a record in the user table
 
-use usename in the yaml to find whether the user is existed, if not existed, create a new user
+use username in the yaml to find whether the user exists, if not existed, create a new user
 
-## processes
-use process name and created_by to find process, if not existed, create a new record
+## scenarios
+use scenario name and created_by to find scenario, if not existed, create a new record
 
 created by is learner's id
 
-## process_roles
-used process id and name to map with the roles defined in the yaml
+## agent_roles
+use scenario id and name to map with the roles defined in the yaml
 
 so do not create duplicated roles when execute python program second time
 
-## process_nodes
+## states
 
-use process id and name to map with the nodes defined in the yaml
+use scenario id and name to map with the states defined in the yaml
 
-so do not create duplicated nodes when execute python program second time
+so do not create duplicated states when execute python program second time
 
-## process_transitions
+## state_transitions
 
-use process id, from_node_id, to_node_id to map with the tranistions defined in the yaml
+use scenario id, from_state_id, to_state_id to map with the transitions defined in the yaml
 
-in the yaml, the from and to is node name, so need to use name find node id at first
+in the yaml, the from and to is state name, so need to use name to find state id first
 
 
