@@ -6,7 +6,7 @@ Test YAML loader with model field handling
 import logging
 import sys
 import json
-from src.utils.yaml_loader import load_process_from_file
+from src.utils.yaml_loader import load_scenario_from_file
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 def test_yaml_loader(file_path):
     """Test YAML loader with a specific file."""
-    process = load_process_from_file(file_path)
+    process = load_scenario_from_file(file_path)
     if not process:
         logger.error(f"Failed to load process from {file_path}")
         return False
