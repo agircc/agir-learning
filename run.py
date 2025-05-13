@@ -15,7 +15,6 @@ from src.construction.check_database_tables import check_database_tables
 from src.construction.run_construction import run_construction
 from src.evolution.run_evolution import run_evolution
 
-from src.evolution.evolution import EvolutionEngine
 from src.evolution.process_instance_manager import ProcessManager  # Import the new ProcessManager
 from src.llms import OpenAIProvider, AnthropicProvider, OllamaProvider
 from src.construction import check_database

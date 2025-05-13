@@ -3,10 +3,11 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional, Tuple, Set
+from agir_db.db.session import get_db
 
 logger = logging.getLogger(__name__)
 
-def check_database_tables(db: Session) -> bool:
+def check_database_tables() -> bool:
     """
     Check if all required database tables exist.
     
@@ -17,15 +18,23 @@ def check_database_tables(db: Session) -> bool:
         bool: True if all tables exist, False otherwise
     """
     try:
+
+        db = next(get_db())
+        print("Database connection successful:  ")
+        print(db)
+
         # Get engine inspector
         inspector = inspect(db.get_bind())
         
         # Get existing tables
         existing_tables = set(inspector.get_table_names())
         
+        print("Existing tables: ")
+        print(existing_tables)
+
         # Required tables
         required_tables = {
-            'user',
+            'users',
             'scenarios',
             'states',
             'state_transitions',

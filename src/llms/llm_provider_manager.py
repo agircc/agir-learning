@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 
 from agir_db.db.session import SessionLocal, get_db
 from agir_db.models.user import User
-from agir_db.models.process import Process as DBProcess, ProcessNode as DBProcessNode
-from agir_db.models.process_instance import ProcessInstance, ProcessInstanceStatus
+from agir_db.models.scenario import Scenario as DBScenario, State as DBState
+from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.custom_field import CustomField
 
 from src.models.process import Process, ProcessNode
