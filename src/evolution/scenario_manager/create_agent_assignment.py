@@ -7,8 +7,48 @@ from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.agent_assignment import AgentAssignment
 from src.construction.data_store import get_learner, get_scenario, set_learner
+import random
+import time
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# Lists of common first and last names for more realistic user generation
+FIRST_NAMES = [
+    "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles",
+    "Mary", "Patricia", "Jennifer", "Linda", "Elizabeth", "Barbara", "Susan", "Jessica", "Sarah", "Karen",
+    "Daniel", "Matthew", "Anthony", "Mark", "Donald", "Steven", "Paul", "Andrew", "Joshua", "Kenneth",
+    "Lisa", "Nancy", "Betty", "Sandra", "Margaret", "Ashley", "Kimberly", "Emily", "Donna", "Michelle"
+]
+
+LAST_NAMES = [
+    "Smith", "Johnson", "Williams", "Jones", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor",
+    "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson", "Garcia", "Martinez", "Robinson",
+    "Clark", "Rodriguez", "Lewis", "Lee", "Walker", "Hall", "Allen", "Young", "Hernandez", "King",
+    "Wright", "Lopez", "Hill", "Scott", "Green", "Adams", "Baker", "Gonzalez", "Nelson", "Carter"
+]
+
+def generate_realistic_user(role, scenario_id):
+    """
+    Generate a realistic user with unique username based on role and scenario_id
+    
+    Args:
+        role: The role of the user
+        scenario_id: The scenario ID
+        
+    Returns:
+        tuple: (username, first_name, last_name)
+    """
+    first_name = random.choice(FIRST_NAMES)
+    last_name = random.choice(LAST_NAMES)
+    
+    # Create a unique identifier using timestamp and a random number
+    unique_id = f"{int(time.time() * 1000) % 100000:05d}{random.randint(100, 999)}"
+    
+    # Create username: combine parts of first and last name with unique ID
+    username = f"{first_name.lower()[:4]}_{last_name.lower()[:4]}_{unique_id}"
+    
+    return username, first_name, last_name
 
 def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: Optional[str] = None, model: Optional[str] = None) -> User:
     """
@@ -41,7 +81,7 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
         
         # Generate username if not provided
         if not username:
-            username = f"{role}_{scenario_id}"
+            username, first_name, last_name = generate_realistic_user(role, scenario_id)
         
         # Find or create user
         user = db.query(User).filter(User.username == username).first()
@@ -50,8 +90,8 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
             # Create new user
             user = User(
                 username=username,
-                first_name=role,
-                last_name=str(scenario_id)[:8],
+                first_name=first_name,
+                last_name=last_name,
                 email=f"{username}@agir.ai",
                 is_active=True
             )
