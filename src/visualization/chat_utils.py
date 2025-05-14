@@ -16,7 +16,7 @@ def get_conversations_for_step(db: Session, step_id: uuid.UUID) -> List[ChatConv
     Get conversations related to a step.
     
     Args:
-        db: Database session
+        db: Database session (will be closed by caller)
         step_id: ID of the step
         
     Returns:
@@ -36,7 +36,7 @@ def get_messages_for_conversation(db: Session, conversation_id: uuid.UUID) -> Li
     Get messages for a conversation.
     
     Args:
-        db: Database session
+        db: Database session (will be closed by caller)
         conversation_id: ID of the chat conversation
         
     Returns:
@@ -62,7 +62,7 @@ def format_messages(messages: List[ChatMessage]) -> str:
     formatted = ""
     
     for message in messages:
-        sender = message.sender.name if message.sender else "Unknown"
+        sender = message.sender.username if message.sender else "Unknown"
         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S") if message.created_at else "Unknown time"
         
         formatted += f"[{timestamp}] {sender}:\n"

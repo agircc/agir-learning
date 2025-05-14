@@ -33,7 +33,40 @@ class ScenarioVisualizer:
     def __init__(self, root):
         self.root = root
         self.root.title("AGIR Scenario Visualizer")
-        self.root.geometry("1200x800")
+        
+        # 设置窗口为屏幕大小
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        # 给窗口预留一点边距
+        window_width = screen_width - 100
+        window_height = screen_height - 100
+        
+        # 计算窗口放在屏幕中央的坐标
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        
+        # 设置窗口大小和位置
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # 尝试最大化窗口，使用对不同操作系统兼容的方式
+        try:
+            # Windows
+            self.root.state('zoomed')
+        except:
+            try:
+                # macOS 和 Linux 不支持 'zoomed'
+                # 在 macOS 上，可以使用 os 模块检测是否为 macOS
+                import platform
+                if platform.system() == 'Darwin':  # macOS
+                    # 在 macOS 上设置窗口大小接近屏幕大小即可
+                    pass
+                else:  # Linux
+                    self.root.attributes('-zoomed', True)
+            except:
+                # 如果以上方法都失败，就使用普通全屏方式
+                self.root.attributes('-fullscreen', True)
+                # 添加 Escape 键退出全屏
+                self.root.bind("<Escape>", lambda event: self.root.attributes("-fullscreen", False))
         
         # Configure styles
         self.style = ttk.Style()
@@ -272,6 +305,7 @@ class ScenarioVisualizer:
         self.messages_text.pack(fill=tk.BOTH, expand=True)
 
     def load_scenarios(self):
+        db = None
         try:
             print("Attempting to get database session...")
             db = next(get_db())
@@ -295,8 +329,14 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load scenarios: {str(e)}")
+        finally:
+            # 确保关闭会话
+            if db:
+                db.close()
+                print("Database session closed")
 
     def load_episodes(self):
+        db = None
         try:
             print("Attempting to get database session for episodes...")
             db = next(get_db())
@@ -323,12 +363,18 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load episodes: {str(e)}")
+        finally:
+            # 确保关闭会话
+            if db:
+                db.close()
+                print("Database session closed for episodes")
 
     def on_scenario_selected(self, event):
         item_id = self.scenario_tree.focus()
         if not item_id:
             return
             
+        db = None
         try:
             print(f"Scenario selected: {item_id}")
             scenario_id = uuid.UUID(item_id)
@@ -368,19 +414,27 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load scenario details: {str(e)}")
+        finally:
+            if db:
+                db.close()
+                print("Database session closed for scenario details")
 
     def on_episode_selected(self, event):
         item_id = self.episodes_tree.focus()
         if not item_id:
             return
             
+        db = None
         try:
+            print(f"Episode selected: {item_id}")
             episode_id = uuid.UUID(item_id)
             db = next(get_db())
             
             # Get episode details
+            print(f"Querying episode details for ID: {episode_id}")
             episode = db.query(Episode).filter(Episode.id == episode_id).first()
             if not episode:
+                print("Episode not found")
                 return
             
             # Clear existing steps
@@ -388,14 +442,17 @@ class ScenarioVisualizer:
                 self.steps_tree.delete(item)
             
             # Get steps for this episode
+            print(f"Getting steps for episode: {episode_id}")
             steps = db.query(Step).filter(
                 Step.episode_id == episode_id
             ).order_by(Step.created_at).all()
+            print(f"Found {len(steps)} steps")
             
             # Add steps to tree
             for step in steps:
                 state_name = step.state.name if step.state else "Unknown"
-                user_name = step.user.name if step.user else "Unknown"
+                user_name = step.user.username if step.user else "Unknown"
+                print(f"Adding step: {step.id}, state: {state_name}, user: {user_name}")
                 
                 self.steps_tree.insert("", tk.END, iid=str(step.id),
                                     values=(state_name, user_name, step.action, step.created_at))
@@ -405,20 +462,31 @@ class ScenarioVisualizer:
                 self.conversations_tree.delete(item)
             
         except Exception as e:
+            print(f"Exception in on_episode_selected: {str(e)}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load episode details: {str(e)}")
+        finally:
+            if db:
+                db.close()
+                print("Database session closed for episode details")
 
     def on_step_selected(self, event):
         item_id = self.steps_tree.focus()
         if not item_id:
             return
             
+        db = None
         try:
+            print(f"Step selected: {item_id}")
             step_id = uuid.UUID(item_id)
             db = next(get_db())
             
             # Get step details
+            print(f"Querying step details for ID: {step_id}")
             step = db.query(Step).filter(Step.id == step_id).first()
             if not step:
+                print("Step not found")
                 return
             
             # Clear existing text
@@ -427,7 +495,7 @@ class ScenarioVisualizer:
             # Add step details
             self.step_text.insert(tk.END, f"State: {step.state.name if step.state else 'Unknown'}\n\n")
             self.step_text.insert(tk.END, f"Action: {step.action}\n\n")
-            self.step_text.insert(tk.END, f"User: {step.user.name if step.user else 'Unknown'}\n\n")
+            self.step_text.insert(tk.END, f"User: {step.user.username if step.user else 'Unknown'}\n\n")
             self.step_text.insert(tk.END, f"Created At: {step.created_at}\n\n")
             
             # Add generated text if available
@@ -440,33 +508,49 @@ class ScenarioVisualizer:
                 self.conversations_tree.delete(item)
             
             # Load related conversations
+            print(f"Getting conversations for step: {step_id}")
             conversations = get_conversations_for_step(db, step_id)
+            print(f"Found {len(conversations)} conversations")
             for conversation in conversations:
+                print(f"Adding conversation: {conversation.id} - {conversation.title}")
                 self.conversations_tree.insert("", tk.END, iid=str(conversation.id),
                                             values=(conversation.title, conversation.created_at))
             
         except Exception as e:
+            print(f"Exception in on_step_selected: {str(e)}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load step details: {str(e)}")
+        finally:
+            if db:
+                db.close()
+                print("Database session closed for step details")
 
     def on_conversation_selected(self, event):
         item_id = self.conversations_tree.focus()
         if not item_id:
             return
             
+        db = None
         try:
+            print(f"Conversation selected: {item_id}")
             conversation_id = uuid.UUID(item_id)
             db = next(get_db())
             
             # Get conversation details
+            print(f"Querying conversation details for ID: {conversation_id}")
             conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
             if not conversation:
+                print("Conversation not found")
                 return
             
             # Clear existing text
             self.messages_text.delete(1.0, tk.END)
             
             # Get messages for this conversation
+            print(f"Getting messages for conversation: {conversation_id}")
             messages = get_messages_for_conversation(db, conversation_id)
+            print(f"Found {len(messages)} messages")
             
             # Format and display messages
             self.messages_text.insert(tk.END, f"Title: {conversation.title}\n\n")
@@ -479,7 +563,14 @@ class ScenarioVisualizer:
                 self.messages_text.insert(tk.END, "No messages found for this conversation.")
             
         except Exception as e:
+            print(f"Exception in on_conversation_selected: {str(e)}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load conversation details: {str(e)}")
+        finally:
+            if db:
+                db.close()
+                print("Database session closed for conversation details")
 
 
 def main():
