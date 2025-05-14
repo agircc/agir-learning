@@ -1,59 +1,95 @@
+"""
+Run evolution process
+"""
+
 import logging
+import yaml
+import os
+import uuid
+from sqlalchemy.orm import Session
+from typing import Dict, Any, Optional, Union, List
 
-from agir_db.db.session import SessionLocal, get_db
+from agir_db.db.session import get_db
+from agir_db.models.scenario import Scenario
+from agir_db.models.state import State
+from src.evolution.episode_manager import EpisodeManager
 
-from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
-from src.construction.data_store import get_learner, get_scenario, get_states, get_agent_roles
 logger = logging.getLogger(__name__)
 
-def run_evolution(scenario_id: int) -> bool:
-  # Create database session to fetch the scenario
-  with SessionLocal() as db:
-      # Get the scenario data
-      scenario = get_scenario()
-      
-      if not scenario:
-          logger.error(f"Scenario not found: {scenario_id}")
-          return False
-      
-      # Get scenario name with fallback
-      scenario_name = scenario.get("name", f"Scenario {scenario_id}") if isinstance(scenario, dict) else f"Scenario {scenario_id}"
-      logger.info(f"Running evolution for scenario: {scenario_name} (ID: {scenario_id})")
-      
-      # Find or create the learner user
-      learner = get_learner()
-      logger.info(f"Learner: {learner}")
-      logger.info(f"Using learner: {learner.username} (ID: {learner.id})")
-      
-      roles_config = get_agent_roles()
-      logger.info(f"Roles config is a list: {roles_config}")
-      # If roles_config is a list of role objects
-      for role in roles_config:
-          # For list format, each role should be a dictionary with at least 'name' or 'id'
-          if isinstance(role, dict):
-              role_name = role.get('name') or role.get('id')
-              role_data = role
-          else:
-              # If it's not a dict, try to extract name/id as attribute
-              role_name = getattr(role, 'name', None) or getattr(role, 'id', None)
-              # Convert object to dict for easier handling
-              role_data = vars(role) if hasattr(role, '__dict__') else {'name': role_name}
-          
-          if not role_name or role_name.lower() == "learner":
-              # Skip if no name/id or if it's the learner role
-              continue
-          
-          logger.info(f"Creating user for role: {role_name}")
-          username = role_data.get("username", f"{role_name}_{scenario_id}")
-          agent = create_agent_assignment(db, role_name, scenario_id, username, role_data.get("model", None))
-          logger.info(f"Agent: {agent}")
-          logger.info(f"Created user: {agent.username} (ID: {agent.id})")
-          logger.info(f"Step xxx")
-      
-      
-      # Run the evolution process
-    #   self._process_evolution(db, process, learner, process_id)
-      from src.evolution.execute_scenario import execute_scenario
-      logger.info(f"Step !!!!")
-      execute_scenario(scenario_id, learner.id)
-      return True
+
+def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1) -> bool:
+    """
+    Run a previously defined scenario.
+    
+    Args:
+        scenario_id: ID of the scenario to run
+        num_episodes: Number of episodes to run (default: 1)
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    db = None
+    success = True
+    
+    try:
+        db = next(get_db())
+        
+        # First, look for the scenario
+        logger.info(f"Looking up scenario with ID: {scenario_id}")
+        scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+        
+        if not scenario:
+            logger.error(f"No scenario found with ID: {scenario_id}")
+            return False
+        
+        logger.info(f"Found scenario: {scenario.name}")
+        
+        # Find the start node
+        start_node = None
+        for node in scenario.states:
+            if node.is_start:
+                start_node = node
+                break
+        
+        if not start_node:
+            logger.error(f"No start node found for scenario: {scenario.name}")
+            return False
+        
+        logger.info(f"Found start node: {start_node.name}")
+        
+        # Run the requested number of episodes
+        logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name}")
+        
+        for i in range(num_episodes):
+            logger.info(f"Starting episode {i+1} of {num_episodes}")
+            
+            # Create an episode manager
+            episode_manager = EpisodeManager(scenario_id)
+            
+            # Start the process from the beginning
+            episode = episode_manager.create_episode()
+            
+            if not episode:
+                logger.error(f"Failed to create episode for scenario: {scenario.name}")
+                success = False
+                continue
+                
+            logger.info(f"Created episode with ID: {episode.id}")
+            
+            # Execute the process until completion or error
+            result = episode_manager.execute_episode(start_node.id)
+            
+            if not result:
+                logger.error(f"Failed to execute episode {i+1}")
+                success = False
+            else:
+                logger.info(f"Successfully completed episode {i+1}")
+        
+        return success
+        
+    except Exception as e:
+        logger.exception(f"Error running evolution: {str(e)}")
+        return False
+    finally:
+        if db:
+            db.close()

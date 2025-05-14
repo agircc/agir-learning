@@ -73,6 +73,13 @@ def parse_args():
         help='Process ID for run mode (required when mode=run)'
     )
     
+    parser.add_argument(
+        '--episodes', '-e',
+        type=int,
+        default=1,
+        help='Number of episodes to run (default: 1)'
+    )
+    
     return parser.parse_args()
 
 def main():
@@ -125,8 +132,8 @@ def main():
     
     try:        
         # Run evolution process, now using the ID rather than loading from file again
-        logger.info(f"Running evolution process with ID: {process_id}")
-        success = run_evolution(process_id)
+        logger.info(f"Running evolution process with ID: {process_id}, episodes: {args.episodes}")
+        success = run_evolution(process_id, num_episodes=args.episodes)
         
         if success:
             logger.info("Evolution process completed successfully")

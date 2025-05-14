@@ -26,7 +26,161 @@ class EpisodeManager:
     """
     Manages the creation and execution of scenarios.
     """        
+    def __init__(self, scenario_id: Union[int, str, uuid.UUID]):
+        """
+        Initialize an EpisodeManager for a specific scenario.
+        
+        Args:
+            scenario_id: ID of the scenario
+        """
+        self.scenario_id = scenario_id
+        
+    def create_episode(self) -> Optional[Episode]:
+        """
+        Create a new episode for the scenario.
+        
+        Returns:
+            Optional[Episode]: Created episode if successful, None otherwise
+        """
+        db = None
+        try:
+            db = next(get_db())
+            
+            # Get scenario
+            scenario = db.query(Scenario).filter(Scenario.id == self.scenario_id).first()
+            if not scenario:
+                logger.error(f"Scenario not found: {self.scenario_id}")
+                return None
+            
+            # Get the initial state
+            initial_state = self._get_initial_state(db, self.scenario_id)
+            if not initial_state:
+                logger.error(f"Initial state not found for scenario: {self.scenario_id}")
+                return None
+            
+            # Create episode
+            episode = Episode(
+                scenario_id=self.scenario_id,
+                status=EpisodeStatus.ACTIVE,
+                current_state_id=initial_state.id
+            )
+            
+            db.add(episode)
+            db.flush()  # Get ID without committing
+            
+            # Create initial step
+            initial_step = Step(
+                episode_id=episode.id,
+                state_id=initial_state.id,
+                action="start"
+            )
+            
+            db.add(initial_step)
+            db.commit()
+            
+            logger.info(f"Created episode {episode.id} for scenario {self.scenario_id}")
+            
+            return episode
+            
+        except Exception as e:
+            if db:
+                db.rollback()
+            logger.error(f"Failed to create episode: {str(e)}")
+            return None
+        finally:
+            if db:
+                db.close()
     
+    def execute_episode(self, start_state_id: Union[int, str, uuid.UUID]) -> bool:
+        """
+        Execute an episode from the start state through all transitions until completion.
+        
+        Args:
+            start_state_id: ID of the start state
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        db = None
+        try:
+            db = next(get_db())
+            
+            # Get latest episode for this scenario
+            episode = db.query(Episode).filter(
+                Episode.scenario_id == self.scenario_id
+            ).order_by(Episode.created_at.desc()).first()
+            
+            if not episode:
+                logger.error(f"No active episode found for scenario: {self.scenario_id}")
+                return False
+            
+            # Ensure episode is active
+            if episode.status != EpisodeStatus.ACTIVE:
+                logger.error(f"Episode {episode.id} is not active (status: {episode.status})")
+                return False
+            
+            # Get the start state
+            current_state = db.query(State).filter(State.id == start_state_id).first()
+            if not current_state:
+                logger.error(f"Start state not found: {start_state_id}")
+                return False
+            
+            logger.info(f"Starting episode execution from state: {current_state.name}")
+            
+            # Execute until no more transitions or end state
+            while True:
+                # Check if this is an end state (no outgoing transitions)
+                transitions = db.query(StateTransition).filter(
+                    StateTransition.scenario_id == self.scenario_id,
+                    StateTransition.from_state_id == current_state.id
+                ).all()
+                
+                if not transitions:
+                    logger.info(f"Reached end state: {current_state.name}")
+                    break
+                
+                # Get the next transition
+                next_transition = transitions[0]  # For now, just take the first transition
+                
+                # Get the next state
+                next_state = db.query(State).filter(State.id == next_transition.to_state_id).first()
+                if not next_state:
+                    logger.error(f"Next state not found: {next_transition.to_state_id}")
+                    return False
+                
+                logger.info(f"Transitioning from {current_state.name} to {next_state.name}")
+                
+                # Create step for the next state
+                step_id = EpisodeManager._create_step(
+                    db, episode.id, next_state.id, episode.initiator_id
+                )
+                
+                if not step_id:
+                    logger.error("Failed to create step")
+                    return False
+                
+                # Update episode current state
+                episode.current_state_id = next_state.id
+                db.commit()
+                
+                # Move to next state
+                current_state = next_state
+            
+            # Complete episode
+            episode.status = EpisodeStatus.COMPLETED
+            db.commit()
+            
+            logger.info(f"Successfully completed episode {episode.id}")
+            return True
+            
+        except Exception as e:
+            if db:
+                db.rollback()
+            logger.error(f"Failed to execute episode: {str(e)}")
+            return False
+        finally:
+            if db:
+                db.close()
     
     @staticmethod
     def _get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
