@@ -211,37 +211,26 @@ class ScenarioVisualizer:
         self.episode_detail_frame = ttk.LabelFrame(self.episodes_tab, text="Episode Details")
         self.episode_detail_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Create notebook for steps and conversations
-        self.episode_notebook = ttk.Notebook(self.episode_detail_frame)
-        self.episode_notebook.pack(fill=tk.BOTH, expand=True)
-        
-        # Create steps tab
-        self.steps_tab = ttk.Frame(self.episode_notebook)
-        self.episode_notebook.add(self.steps_tab, text="Steps")
-        
-        # Create conversations tab
-        self.conversations_tab = ttk.Frame(self.episode_notebook)
-        self.episode_notebook.add(self.conversations_tab, text="Conversations")
-        
         # Set up steps tab
-        self.setup_steps_tab()
-        
-        # Set up conversations tab
-        self.setup_conversations_tab()
+        self.setup_steps_panel()
         
         # Load episodes
         self.load_episodes()
 
-    def setup_steps_tab(self):
+    def setup_steps_panel(self):
+        # Create top frame for steps list
+        self.steps_list_frame = ttk.LabelFrame(self.episode_detail_frame, text="Steps")
+        self.steps_list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
         # Create scrollbar for steps list
-        self.steps_scroll = ttk.Scrollbar(self.steps_tab)
+        self.steps_scroll = ttk.Scrollbar(self.steps_list_frame)
         self.steps_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Create steps treeview
-        self.steps_tree = ttk.Treeview(self.steps_tab, 
-                                      columns=("state", "user", "action", "created_at"),
-                                      show="headings",
-                                      yscrollcommand=self.steps_scroll.set)
+        self.steps_tree = ttk.Treeview(self.steps_list_frame, 
+                                     columns=("state", "user", "action", "created_at"),
+                                     show="headings",
+                                     yscrollcommand=self.steps_scroll.set)
         self.steps_scroll.config(command=self.steps_tree.yview)
         
         # Configure columns
@@ -260,49 +249,25 @@ class ScenarioVisualizer:
         # Bind click event
         self.steps_tree.bind("<Double-1>", self.on_step_selected)
         
+        # Create bottom paned window for step details and conversations
+        self.details_paned = ttk.PanedWindow(self.episode_detail_frame, orient=tk.HORIZONTAL)
+        self.details_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
         # Create step detail frame
-        self.step_detail_frame = ttk.LabelFrame(self.steps_tab, text="Step Details")
-        self.step_detail_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.step_detail_frame = ttk.LabelFrame(self.details_paned, text="Step Details")
+        self.details_paned.add(self.step_detail_frame, weight=1)
         
         # Create text widget for step details
         self.step_text = tk.Text(self.step_detail_frame, wrap=tk.WORD)
         self.step_text.pack(fill=tk.BOTH, expand=True)
-
-    def setup_conversations_tab(self):
-        # Create left frame for conversations list
-        self.conversations_list_frame = ttk.Frame(self.conversations_tab)
-        self.conversations_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Create scrollbar for conversations list
-        self.conversations_scroll = ttk.Scrollbar(self.conversations_list_frame)
-        self.conversations_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        # Create conversation frame
+        self.conversation_frame = ttk.LabelFrame(self.details_paned, text="Conversation")
+        self.details_paned.add(self.conversation_frame, weight=1)
         
-        # Create conversations treeview
-        self.conversations_tree = ttk.Treeview(self.conversations_list_frame, 
-                                             columns=("title", "created_at"),
-                                             show="headings",
-                                             yscrollcommand=self.conversations_scroll.set)
-        self.conversations_scroll.config(command=self.conversations_tree.yview)
-        
-        # Configure columns
-        self.conversations_tree.heading("title", text="Title")
-        self.conversations_tree.heading("created_at", text="Created At")
-        self.conversations_tree.column("title", width=200)
-        self.conversations_tree.column("created_at", width=150)
-        
-        # Pack the conversations treeview
-        self.conversations_tree.pack(fill=tk.BOTH, expand=True)
-        
-        # Bind click event
-        self.conversations_tree.bind("<Double-1>", self.on_conversation_selected)
-        
-        # Create right frame for conversation messages
-        self.messages_frame = ttk.LabelFrame(self.conversations_tab, text="Messages")
-        self.messages_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Create text widget for messages
-        self.messages_text = tk.Text(self.messages_frame, wrap=tk.WORD)
-        self.messages_text.pack(fill=tk.BOTH, expand=True)
+        # Create text widget for conversation
+        self.conversation_text = tk.Text(self.conversation_frame, wrap=tk.WORD)
+        self.conversation_text.pack(fill=tk.BOTH, expand=True)
 
     def load_scenarios(self):
         db = None
@@ -457,9 +422,11 @@ class ScenarioVisualizer:
                 self.steps_tree.insert("", tk.END, iid=str(step.id),
                                     values=(state_name, user_name, step.action, step.created_at))
             
-            # Clear conversations tree
-            for item in self.conversations_tree.get_children():
-                self.conversations_tree.delete(item)
+            # Clear conversation text
+            self.conversation_text.delete(1.0, tk.END)
+            
+            # Clear step text
+            self.step_text.delete(1.0, tk.END)
             
         except Exception as e:
             print(f"Exception in on_episode_selected: {str(e)}")
@@ -491,6 +458,7 @@ class ScenarioVisualizer:
             
             # Clear existing text
             self.step_text.delete(1.0, tk.END)
+            self.conversation_text.delete(1.0, tk.END)
             
             # Add step details
             self.step_text.insert(tk.END, f"State: {step.state.name if step.state else 'Unknown'}\n\n")
@@ -503,18 +471,29 @@ class ScenarioVisualizer:
                 self.step_text.insert(tk.END, "Generated Text:\n\n")
                 self.step_text.insert(tk.END, step.generated_text)
             
-            # Clear conversations tree
-            for item in self.conversations_tree.get_children():
-                self.conversations_tree.delete(item)
-            
             # Load related conversations
             print(f"Getting conversations for step: {step_id}")
             conversations = get_conversations_for_step(db, step_id)
             print(f"Found {len(conversations)} conversations")
-            for conversation in conversations:
-                print(f"Adding conversation: {conversation.id} - {conversation.title}")
-                self.conversations_tree.insert("", tk.END, iid=str(conversation.id),
-                                            values=(conversation.title, conversation.created_at))
+            
+            # If there are conversations, display the first one
+            if conversations:
+                conversation = conversations[0]  # Display first conversation
+                print(f"Displaying conversation: {conversation.id} - {conversation.title}")
+                
+                # Display conversation title and details
+                self.conversation_text.insert(tk.END, f"Title: {conversation.title}\n\n")
+                self.conversation_text.insert(tk.END, f"Created At: {conversation.created_at}\n\n")
+                
+                # Get and display messages
+                messages = get_messages_for_conversation(db, conversation.id)
+                if messages:
+                    formatted_messages = format_messages(messages)
+                    self.conversation_text.insert(tk.END, formatted_messages)
+                else:
+                    self.conversation_text.insert(tk.END, "No messages found for this conversation.")
+            else:
+                self.conversation_text.insert(tk.END, "No conversations associated with this step.")
             
         except Exception as e:
             print(f"Exception in on_step_selected: {str(e)}")
@@ -525,52 +504,6 @@ class ScenarioVisualizer:
             if db:
                 db.close()
                 print("Database session closed for step details")
-
-    def on_conversation_selected(self, event):
-        item_id = self.conversations_tree.focus()
-        if not item_id:
-            return
-            
-        db = None
-        try:
-            print(f"Conversation selected: {item_id}")
-            conversation_id = uuid.UUID(item_id)
-            db = next(get_db())
-            
-            # Get conversation details
-            print(f"Querying conversation details for ID: {conversation_id}")
-            conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
-            if not conversation:
-                print("Conversation not found")
-                return
-            
-            # Clear existing text
-            self.messages_text.delete(1.0, tk.END)
-            
-            # Get messages for this conversation
-            print(f"Getting messages for conversation: {conversation_id}")
-            messages = get_messages_for_conversation(db, conversation_id)
-            print(f"Found {len(messages)} messages")
-            
-            # Format and display messages
-            self.messages_text.insert(tk.END, f"Title: {conversation.title}\n\n")
-            self.messages_text.insert(tk.END, f"Created At: {conversation.created_at}\n\n")
-            
-            if messages:
-                formatted_messages = format_messages(messages)
-                self.messages_text.insert(tk.END, formatted_messages)
-            else:
-                self.messages_text.insert(tk.END, "No messages found for this conversation.")
-            
-        except Exception as e:
-            print(f"Exception in on_conversation_selected: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            messagebox.showerror("Error", f"Failed to load conversation details: {str(e)}")
-        finally:
-            if db:
-                db.close()
-                print("Database session closed for conversation details")
 
 
 def main():
