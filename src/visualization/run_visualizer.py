@@ -7,7 +7,10 @@ import os
 import sys
 import tkinter as tk
 from pathlib import Path
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 # Add the project root to the path
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
