@@ -62,10 +62,17 @@ def format_messages(messages: List[ChatMessage]) -> str:
     formatted = ""
     
     for message in messages:
-        sender = message.sender.username if message.sender else "Unknown"
+        # Use first_name and last_name instead of username for a more realistic display
+        if message.sender and message.sender.first_name and message.sender.last_name:
+            sender_name = f"{message.sender.first_name} {message.sender.last_name}"
+        elif message.sender:
+            sender_name = message.sender.username
+        else:
+            sender_name = "Unknown"
+            
         timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S") if message.created_at else "Unknown time"
         
-        formatted += f"[{timestamp}] {sender}:\n"
+        formatted += f"[{timestamp}] {sender_name}:\n"
         formatted += f"{message.content}\n\n"
     
     return formatted 
