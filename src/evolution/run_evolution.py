@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional, Union, List
 
 from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
-from agir_db.models.state import State
 from src.evolution.episode_manager import EpisodeManager
 
 logger = logging.getLogger(__name__)
@@ -44,19 +43,6 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
         
         logger.info(f"Found scenario: {scenario.name}")
         
-        # Find the start node
-        start_node = None
-        for node in scenario.states:
-            if node.is_start:
-                start_node = node
-                break
-        
-        if not start_node:
-            logger.error(f"No start node found for scenario: {scenario.name}")
-            return False
-        
-        logger.info(f"Found start node: {start_node.name}")
-        
         # Run the requested number of episodes
         logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name}")
         
@@ -77,7 +63,7 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
             logger.info(f"Created episode with ID: {episode.id}")
             
             # Execute the process until completion or error
-            result = episode_manager.execute_episode(start_node.id)
+            result = episode_manager.execute_episode()
             
             if not result:
                 logger.error(f"Failed to execute episode {i+1}")

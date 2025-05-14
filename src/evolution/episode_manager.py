@@ -91,7 +91,7 @@ class EpisodeManager:
             if db:
                 db.close()
     
-    def execute_episode(self, start_state_id: Union[int, str, uuid.UUID]) -> bool:
+    def execute_episode(self) -> bool:
         """
         Execute an episode from the start state through all transitions until completion.
         
@@ -120,9 +120,9 @@ class EpisodeManager:
                 return False
             
             # Get the start state
-            current_state = db.query(State).filter(State.id == start_state_id).first()
+            current_state = db.query(State).filter(State.id == episode.current_state_id).first()
             if not current_state:
-                logger.error(f"Start state not found: {start_state_id}")
+                logger.error(f"Start state not found: {episode.current_state_id}")
                 return False
             
             logger.info(f"Starting episode execution from state: {current_state.name}")
