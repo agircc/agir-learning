@@ -17,6 +17,8 @@ from agir_db.models.scenario import Scenario, State, StateTransition
 from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step
 
+from src.construction.data_store import get_learner
+
 from ..models.process import Process as YamlProcess
 
 logger = logging.getLogger(__name__)
@@ -58,11 +60,13 @@ class EpisodeManager:
                 logger.error(f"Initial state not found for scenario: {self.scenario_id}")
                 return None
             
+            learner = get_learner()            
             # Create episode
             episode = Episode(
                 scenario_id=self.scenario_id,
-                status=EpisodeStatus.ACTIVE,
-                current_state_id=initial_state.id
+                status=EpisodeStatus.RUNNING,
+                current_state_id=initial_state.id,
+                initiator_id=learner.id
             )
             
             db.add(episode)
@@ -115,7 +119,7 @@ class EpisodeManager:
                 return False
             
             # Ensure episode is active
-            if episode.status != EpisodeStatus.ACTIVE:
+            if episode.status != EpisodeStatus.RUNNING:
                 logger.error(f"Episode {episode.id} is not active (status: {episode.status})")
                 return False
             
