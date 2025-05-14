@@ -1,13 +1,18 @@
-将 construction 和 evolution 后的数据可视化展示出来
+# Visualization
 
-construction 和 evolution 的过程在 src/construction 和 src/evolution 下面
+Visualizes data after scenario construction and evolution.
 
-展示具体的 Process 信息，name、description、learner
+Construction and evolution processes are located in `src/construction` and `src/evolution` directories.
 
-然后展示 process instance
+The visualization shows:
+- Scenario information: name, description, learner
+- Episodes (previously process instances)
+- When clicking on an episode, it displays the steps within that episode
+- When clicking on a step, it shows related chat conversations and their messages
 
-点击 process instance 后，展开展示下面的 step
+All data is retrieved from the database.
 
-点击 step 后，展开展示里面的 chat_conversations, 以及 conversation 的 chat_messages
-
-所有的数据都是从数据库获取
+To run the visualizer:
+```
+python -m src.visualization.run_visualizer
+```

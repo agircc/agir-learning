@@ -8,32 +8,26 @@ from sqlalchemy.orm import Session
 
 from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.chat_message import ChatMessage
-from agir_db.models.process_instance_step import ProcessInstanceStep
+from agir_db.models.step import Step
 
 
 def get_conversations_for_step(db: Session, step_id: uuid.UUID) -> List[ChatConversation]:
     """
-    Get conversations related to a process instance step.
+    Get conversations related to a step.
     
     Args:
         db: Database session
-        step_id: ID of the process instance step
+        step_id: ID of the step
         
     Returns:
         List of chat conversations
     """
-    # This implementation is a placeholder and would need to be updated 
-    # based on how conversations are linked to process instance steps in your schema
+    # Query conversations directly using the related_id and related_type fields
+    conversations = db.query(ChatConversation).filter(
+        ChatConversation.related_id == step_id,
+        ChatConversation.related_type == 'step'
+    ).all()
     
-    # Assuming there's a link between conversations and steps
-    # This could be via a join table or a direct foreign key
-    step = db.query(ProcessInstanceStep).filter(ProcessInstanceStep.id == step_id).first()
-    if not step:
-        return []
-    
-    # For now, we'll return all conversations that might be related to this step
-    # This is just a placeholder and should be replaced with proper query
-    conversations = db.query(ChatConversation).all()
     return conversations
 
 

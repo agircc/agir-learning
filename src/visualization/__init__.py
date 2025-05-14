@@ -1,3 +1,3 @@
 """
-Visualization package for AGIR processes.
+Visualization package for AGIR scenarios.
 """ 
