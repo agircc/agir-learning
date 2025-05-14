@@ -330,15 +330,19 @@ class ScenarioVisualizer:
             return
             
         try:
+            print(f"Scenario selected: {item_id}")
             scenario_id = uuid.UUID(item_id)
             db = next(get_db())
             
             # Get scenario details
+            print(f"Querying scenario details for ID: {scenario_id}")
             scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
             if not scenario:
+                print("Scenario not found")
                 return
                 
             # Update scenario info
+            print(f"Updating scenario info: {scenario.name}")
             self.scenario_name_var.set(scenario.name)
             self.scenario_desc_var.set(scenario.description if scenario.description else "")
             self.scenario_learner_var.set(scenario.learner_role)
@@ -348,15 +352,21 @@ class ScenarioVisualizer:
                 self.states_tree.delete(item)
             
             # Add states to tree
+            print(f"Adding {len(scenario.states)} states to tree")
             for state in scenario.states:
                 # Get roles for this state
                 role_names = []
+                print(f"Getting roles for state: {state.name}, {len(state.roles)} roles found")
                 for role in state.roles:
-                    role_names.append(role.agent_role.name)
+                    print(f"Processing role: {role}")
+                    role_names.append(role.name)
                 
                 self.states_tree.insert("", tk.END, iid=str(state.id),
                                     values=(state.name, state.description, ", ".join(role_names)))
         except Exception as e:
+            print(f"Exception in on_scenario_selected: {str(e)}")
+            import traceback
+            traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load scenario details: {str(e)}")
 
     def on_episode_selected(self, event):

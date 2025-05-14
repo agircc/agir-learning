@@ -49,6 +49,11 @@ python run.py path/to/scenario.yml
 python run.py path/to/scenario.yml --mode all
 ```
 
+### Running Visualization
+```bash
+python -m src.visualization.run_visualizer
+```
+
 ### Environment Variables
 
 Set the following environment variables in a `.env` file:
