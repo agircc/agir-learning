@@ -79,9 +79,14 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
                 if user:
                     return user
         
-        # Generate username if not provided
+        # Generate user information
         if not username:
+            # Generate a new username and name information
             username, first_name, last_name = generate_realistic_user(role, scenario_id)
+        else:
+            # Username was provided, assign default names
+            first_name = random.choice(FIRST_NAMES)
+            last_name = random.choice(LAST_NAMES)
         
         # Find or create user
         user = db.query(User).filter(User.username == username).first()
