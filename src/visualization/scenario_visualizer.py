@@ -3,11 +3,13 @@ Scenario Visualizer using Tkinter
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
-from typing import List, Dict, Any, Optional, Tuple
+from tkinter import ttk, messagebox, scrolledtext, font
+from typing import List, Dict, Any, Optional, Tuple, Set
 import uuid
 from sqlalchemy.orm import Session
 import os
+import random
+import colorsys
 
 from agir_db.db.session import get_db
 # Debug print to see database configuration
@@ -27,6 +29,91 @@ from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.agent_role import AgentRole
 
 from .chat_utils import get_conversations_for_step, get_messages_for_conversation, format_messages
+
+
+class ChatDisplayFrame(ttk.Frame):
+    """Custom frame for displaying chat messages with better styling."""
+    
+    def __init__(self, parent, *args, **kwargs):
+        ttk.Frame.__init__(self, parent, *args, **kwargs)
+        
+        # Chat display colors
+        self.colors = {}
+        self.default_colors = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#8A2BE2", "#FF6347", "#20B2AA", "#FF8C00"]
+        
+        # Create scrollable text widget with custom styling
+        self.text = scrolledtext.ScrolledText(self, wrap=tk.WORD)
+        self.text.pack(fill=tk.BOTH, expand=True)
+        
+        # Configure tags for styling
+        self.text.tag_configure("timestamp", foreground="#666666", font=("Helvetica", 9, "italic"))
+        self.text.tag_configure("header", font=("Helvetica", 10, "bold"))
+        self.text.tag_configure("message", font=("Helvetica", 11), lmargin1=20, lmargin2=20)
+        self.text.tag_configure("system", foreground="#999999", font=("Helvetica", 10, "italic"))
+        
+        # Make the text widget read-only
+        self.text.config(state=tk.DISABLED)
+        
+    def get_agent_color(self, agent_id, agent_role=None):
+        """Get a consistent color for an agent based on their ID."""
+        if agent_id in self.colors:
+            return self.colors[agent_id]
+        
+        # Generate a new color
+        if len(self.default_colors) > 0:
+            color = self.default_colors.pop(0)
+        else:
+            # Generate a random visually distinct color if we've used all defaults
+            h = random.random()
+            s = random.uniform(0.5, 0.9)
+            l = random.uniform(0.4, 0.6)
+            r, g, b = colorsys.hls_to_rgb(h, l, s)
+            color = f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+            
+        self.colors[agent_id] = color
+        return color
+        
+    def display_messages(self, messages):
+        """Display messages in the chat widget with styling."""
+        # Clear current content
+        self.text.config(state=tk.NORMAL)
+        self.text.delete(1.0, tk.END)
+        
+        # Reset colors
+        self.colors = {}
+        
+        if not messages:
+            self.text.insert(tk.END, "No messages to display.", "system")
+            self.text.config(state=tk.DISABLED)
+            return
+            
+        for msg in messages:
+            # Format and insert message with styling
+            sender_name = msg["sender_name"]
+            sender_id = msg["sender_id"]
+            timestamp = msg["timestamp"]
+            content = msg["content"]
+            
+            # Create a tag for this sender if it doesn't exist
+            sender_tag = f"sender_{sender_id}"
+            if not sender_tag in self.text.tag_names():
+                color = self.get_agent_color(sender_id)
+                self.text.tag_configure(sender_tag, foreground=color, font=("Helvetica", 10, "bold"))
+            
+            # Insert timestamp
+            self.text.insert(tk.END, f"[{timestamp}] ", "timestamp")
+            
+            # Insert sender name with color
+            self.text.insert(tk.END, f"{sender_name}: ", sender_tag)
+            
+            # Insert message content
+            self.text.insert(tk.END, f"\n{content}\n\n", "message")
+        
+        # Make read-only again
+        self.text.config(state=tk.DISABLED)
+        
+        # Scroll to the end
+        self.text.see(tk.END)
 
 
 class ScenarioVisualizer:
@@ -211,9 +298,9 @@ class ScenarioVisualizer:
         self.conversation_frame = ttk.LabelFrame(self.details_paned, text="Conversation")
         self.details_paned.add(self.conversation_frame, weight=1)
         
-        # Create text widget for conversation
-        self.conversation_text = tk.Text(self.conversation_frame, wrap=tk.WORD)
-        self.conversation_text.pack(fill=tk.BOTH, expand=True)
+        # Create enhanced chat display widget for conversation
+        self.conversation_display = ChatDisplayFrame(self.conversation_frame)
+        self.conversation_display.pack(fill=tk.BOTH, expand=True)
 
     def load_scenarios(self):
         db = None
@@ -273,7 +360,7 @@ class ScenarioVisualizer:
                 
             # Clear step details and conversation
             self.step_text.delete(1.0, tk.END)
-            self.conversation_text.delete(1.0, tk.END)
+            self.conversation_display.display_messages([])
             
             # Get episodes for this scenario
             print(f"Getting episodes for scenario: {scenario_id}")
@@ -323,7 +410,7 @@ class ScenarioVisualizer:
             
             # Clear step details and conversation
             self.step_text.delete(1.0, tk.END)
-            self.conversation_text.delete(1.0, tk.END)
+            self.conversation_display.display_messages([])
             
             # Get steps for this episode
             print(f"Getting steps for episode: {episode_id}")
@@ -371,7 +458,6 @@ class ScenarioVisualizer:
             
             # Clear existing text
             self.step_text.delete(1.0, tk.END)
-            self.conversation_text.delete(1.0, tk.END)
             
             # Add step details
             self.step_text.insert(tk.END, f"State: {step.state.name if step.state else 'Unknown'}\n\n")
@@ -394,19 +480,18 @@ class ScenarioVisualizer:
                 conversation = conversations[0]  # Display first conversation
                 print(f"Displaying conversation: {conversation.id} - {conversation.title}")
                 
-                # Display conversation title and details
-                self.conversation_text.insert(tk.END, f"Title: {conversation.title}\n\n")
-                self.conversation_text.insert(tk.END, f"Created At: {conversation.created_at}\n\n")
-                
                 # Get and display messages
                 messages = get_messages_for_conversation(db, conversation.id)
                 if messages:
                     formatted_messages = format_messages(messages)
-                    self.conversation_text.insert(tk.END, formatted_messages)
+                    # Display using our enhanced chat display
+                    self.conversation_display.display_messages(formatted_messages)
                 else:
-                    self.conversation_text.insert(tk.END, "No messages found for this conversation.")
+                    # No messages
+                    self.conversation_display.display_messages([])
             else:
-                self.conversation_text.insert(tk.END, "No conversations associated with this step.")
+                # No conversations
+                self.conversation_display.display_messages([])
             
         except Exception as e:
             print(f"Exception in on_step_selected: {str(e)}")
