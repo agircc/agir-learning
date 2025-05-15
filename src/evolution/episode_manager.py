@@ -40,46 +40,7 @@ class EpisodeManager:
         """
         self.scenario_id = scenario_id
         
-    def create_episode(self) -> Optional[Episode]:
-        """
-        Create a new episode for the scenario.
-        
-        Returns:
-            Optional[Episode]: Created episode if successful, None otherwise
-        """
-        db = None
-        try:
-            db = next(get_db())
-            
-            # Get scenario
-            scenario = db.query(Scenario).filter(Scenario.id == self.scenario_id).first()
-            if not scenario:
-                logger.error(f"Scenario not found: {self.scenario_id}")
-                return None
-            
-            learner = get_learner()            
-            # Create episode
-            episode = Episode(
-                scenario_id=self.scenario_id,
-                status=EpisodeStatus.RUNNING,
-                initiator_id=learner.id
-            )
-            
-            db.add(episode)
-            db.commit()
-            
-            logger.info(f"Created episode {episode.id} for scenario {self.scenario_id}")
-            
-            return episode
-            
-        except Exception as e:
-            if db:
-                db.rollback()
-            logger.error(f"Failed to create episode: {str(e)}")
-            return None
-        finally:
-            if db:
-                db.close()
+    
     
     def execute_episode(self) -> bool:
         """
