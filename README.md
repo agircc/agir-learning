@@ -40,7 +40,7 @@ pip install -r requirements.txt
 python run.py path/to/scenario.yml --mode init
 
 # Run existing scenario
-python run.py --mode run --process-id 123
+python run.py path/to/scenario.yml --mode run --scenario-id 123
 
 # Initialize scenario and run (default behavior)
 python run.py path/to/scenario.yml
