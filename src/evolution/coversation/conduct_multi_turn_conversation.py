@@ -14,7 +14,7 @@ from src.llms.llm_langchain import BaseLangChainProvider
 
 # LangChain imports updated to use langchain_community where appropriate
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import LLMChain, ConversationChain
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
@@ -62,6 +62,7 @@ def conduct_multi_turn_conversation(
       
       # Initialize conversation chains for each role
       role_chains = {}
+      chat_histories = {}
       
       # Create a conversation chain for each role
       for role, user in role_users:
@@ -85,11 +86,22 @@ IMPORTANT INSTRUCTIONS:
           # Get LangChain provider for this model
           langchain_provider = llm_provider_manager.get_provider(model_name)
           
-          # Create conversation chain with memory
-          role_chains[user.id] = langchain_provider.create_chain(
-              system_prompt=system_prompt,
-              memory=True
+          # Create LLM chain with appropriate prompt
+          prompt = ChatPromptTemplate.from_messages([
+              SystemMessagePromptTemplate.from_template(system_prompt),
+              MessagesPlaceholder(variable_name="chat_history"),
+              HumanMessagePromptTemplate.from_template("{input}")
+          ])
+          
+          # Create the chain
+          role_chains[user.id] = LLMChain(
+              llm=langchain_provider.get_chat_model(),
+              prompt=prompt,
+              verbose=False
           )
+          
+          # Initialize empty chat history for each role
+          chat_histories[user.id] = []
       
       # Conduct conversation
       conversation_complete = False
@@ -111,8 +123,20 @@ IMPORTANT INSTRUCTIONS:
                   sender = db.query(User).filter(User.id == msg.sender_id).first()
                   conversation_history += f"{sender.username}: {msg.content}\n\n"
               
+              # Convert previous messages to LangChain message format
+              lc_messages = []
+              for msg in messages:
+                  sender = db.query(User).filter(User.id == msg.sender_id).first()
+                  if sender.id == user.id:
+                      lc_messages.append(AIMessage(content=msg.content))
+                  else:
+                      lc_messages.append(HumanMessage(content=f"{sender.username}: {msg.content}"))
+              
               # Generate response using the chain
-              response = chain.predict(input=conversation_history)
+              response = chain.run(
+                  input=conversation_history,
+                  chat_history=lc_messages[-10:] if lc_messages else []
+              )
               
               # Create and save message
               message = ChatMessage(

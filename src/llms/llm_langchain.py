@@ -3,12 +3,13 @@ import os
 import logging
 from typing import Dict, Any, Optional, List, Union
 
-from langchain_community.chat_models import ChatOpenAI, ChatAnthropic
+from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain_community.llms import Ollama
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.callbacks.manager import CallbackManager
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain, LLMChain
+from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 
 logger = logging.getLogger(__name__)
@@ -96,54 +97,41 @@ class BaseLangChainProvider:
         response = chat.predict_messages(lc_messages)
         return response.content
     
-    def create_chain(self, system_prompt: str = None, memory: bool = True) -> ConversationChain:
-        """Create a conversation chain
+    def create_chain(self, system_prompt: str = None, memory: bool = True) -> LLMChain:
+        """Create a conversation chain using updated LangChain practices
         
         Args:
             system_prompt: Optional system prompt
-            memory: Whether to use conversation memory
+            memory: Whether to include memory placeholders in the prompt
             
         Returns:
-            ConversationChain instance
+            LLMChain instance
         """
         chat = self.get_chat_model()
         
+        # Create the prompt template
+        messages = []
+        
+        # Add system message if provided
+        if system_prompt:
+            messages.append(SystemMessage(content=system_prompt))
+        
+        # Add history placeholder if memory is enabled
         if memory:
-            mem = ConversationBufferMemory(return_messages=True)
-            
-            # Create the prompt template
-            if system_prompt:
-                prompt = ChatPromptTemplate.from_messages([
-                    SystemMessage(content=system_prompt),
-                    MessagesPlaceholder(variable_name="history"),
-                    HumanMessage(content="{input}")
-                ])
-            else:
-                prompt = ChatPromptTemplate.from_messages([
-                    MessagesPlaceholder(variable_name="history"),
-                    HumanMessage(content="{input}")
-                ])
-            
-            # Create the chain
-            chain = ConversationChain(
-                llm=chat,
-                prompt=prompt,
-                memory=mem,
-                verbose=False
-            )
-        else:
-            # No memory version
-            if system_prompt:
-                prompt = ChatPromptTemplate.from_messages([
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content="{input}")
-                ])
-            else:
-                prompt = ChatPromptTemplate.from_messages([
-                    HumanMessage(content="{input}")
-                ])
-            
-            chain = LLMChain(llm=chat, prompt=prompt)
+            messages.append(MessagesPlaceholder(variable_name="chat_history"))
+        
+        # Add user input placeholder
+        messages.append(HumanMessage(content="{input}"))
+        
+        # Create the prompt
+        prompt = ChatPromptTemplate.from_messages(messages)
+        
+        # Create the chain
+        chain = LLMChain(
+            llm=chat,
+            prompt=prompt,
+            verbose=False
+        )
         
         return chain
 
@@ -160,7 +148,7 @@ class OpenAILangChainProvider(BaseLangChainProvider):
         self._llm = ChatOpenAI(
             model_name=self.model_name,
             temperature=0.7,
-            openai_api_key=api_key
+            api_key=api_key
         )
     
     def _initialize_chat_model(self):
@@ -172,7 +160,7 @@ class OpenAILangChainProvider(BaseLangChainProvider):
         self._chat_model = ChatOpenAI(
             model_name=self.model_name,
             temperature=0.7,
-            openai_api_key=api_key
+            api_key=api_key
         )
 
 
@@ -188,7 +176,7 @@ class AnthropicLangChainProvider(BaseLangChainProvider):
         self._llm = ChatAnthropic(
             model_name=self.model_name,
             temperature=0.7,
-            anthropic_api_key=api_key
+            api_key=api_key
         )
     
     def _initialize_chat_model(self):
@@ -200,7 +188,7 @@ class AnthropicLangChainProvider(BaseLangChainProvider):
         self._chat_model = ChatAnthropic(
             model_name=self.model_name,
             temperature=0.7,
-            anthropic_api_key=api_key
+            api_key=api_key
         )
 
 
