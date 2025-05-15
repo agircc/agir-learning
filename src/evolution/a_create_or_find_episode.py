@@ -1,39 +1,38 @@
-import os
 import logging
-import json
-import uuid
-from typing import Dict, Any, List, Optional, Tuple, Union
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from typing import Optional
 
 from agir_db.db.session import get_db
-from agir_db.models.user import User
-from agir_db.models.agent_role import AgentRole
-from agir_db.models.scenario import Scenario, State, StateTransition
+from agir_db.models.scenario import Scenario
 from agir_db.models.episode import Episode, EpisodeStatus
-from agir_db.models.step import Step
-from agir_db.models.scenario import StateRole
-from agir_db.models.agent_assignment import AgentAssignment
 
 from src.construction.data_store import get_learner
-from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
-
-from ..models.process import Process as YamlProcess
 
 logger = logging.getLogger(__name__)
 
-def create_episode(scenario_id: int) -> Optional[Episode]:
+def create_or_find_episode(scenario_id: int) -> Optional[Episode]:
         """
-        Create a new episode for the scenario.
+        Find an existing running episode for the scenario or create a new one if none exists.
         
         Returns:
-            Optional[Episode]: Created episode if successful, None otherwise
+            Optional[Episode]: Found or created episode if successful, None otherwise
         """
         db = None
         try:
             db = next(get_db())
             
-            logger.info(f"Creating episode for scenario: {scenario_id}")
+            logger.info(f"Looking for existing running episode for scenario: {scenario_id}")
+            
+            # Check for existing running episodes
+            existing_episode = db.query(Episode).filter(
+                Episode.scenario_id == scenario_id, 
+                Episode.status == EpisodeStatus.RUNNING
+            ).first()
+            
+            if existing_episode:
+                logger.info(f"Found existing running episode {existing_episode.id} for scenario {scenario_id}")
+                return existing_episode
+
+            logger.info(f"Creating new episode for scenario: {scenario_id}")
 
             # Get scenario
             scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
@@ -59,7 +58,7 @@ def create_episode(scenario_id: int) -> Optional[Episode]:
         except Exception as e:
             if db:
                 db.rollback()
-            logger.error(f"Failed to create episode: {str(e)}")
+            logger.error(f"Failed to create or find episode: {str(e)}")
             return None
         finally:
             if db:

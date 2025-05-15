@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, Union, List
 
 from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
-from src.evolution.a_create_or_find_episode import create_episode
+from src.evolution.a_create_or_find_episode import create_or_find_episode
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
             logger.info(f"Starting episode {i+1} of {num_episodes}")
             
             # Start the process from the beginning
-            episode = create_episode(scenario_id)
+            episode = create_or_find_episode(scenario_id)
             
             if not episode:
                 logger.error(f"Failed to create episode for scenario: {scenario.name}")
