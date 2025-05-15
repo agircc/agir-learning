@@ -16,8 +16,11 @@ from agir_db.models.agent_role import AgentRole
 from agir_db.models.scenario import Scenario, State, StateTransition
 from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step
+from agir_db.models.state_role import StateRole
+from agir_db.models.agent_assignment import AgentAssignment
 
 from src.construction.data_store import get_learner
+from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 
 from ..models.process import Process as YamlProcess
 
@@ -72,10 +75,14 @@ class EpisodeManager:
             db.add(episode)
             db.flush()  # Get ID without committing
             
+            # Get the user_id based on state_role
+            user_id = self._get_user_for_state(db, initial_state.id, self.scenario_id)
+            
             # Create initial step
             initial_step = Step(
                 episode_id=episode.id,
                 state_id=initial_state.id,
+                user_id=user_id,
                 action="start"
             )
             
@@ -156,7 +163,7 @@ class EpisodeManager:
                 
                 # Create step for the next state
                 step_id = EpisodeManager._create_step(
-                    db, episode.id, next_state.id, episode.initiator_id
+                    db, episode.id, next_state.id, None
                 )
                 
                 if not step_id:
@@ -226,6 +233,45 @@ class EpisodeManager:
             return None
     
     @staticmethod
+    def _get_user_for_state(db: Session, state_id: int, scenario_id: int) -> Optional[int]:
+        """
+        Get or create the appropriate user for this state based on the state_role.
+        
+        Args:
+            db: Database session
+            state_id: ID of the state
+            scenario_id: ID of the scenario
+            
+        Returns:
+            Optional[int]: User ID if found or created, None otherwise
+        """
+        try:
+            # Get the state_role for this state
+            state_role = db.query(StateRole).filter(StateRole.state_id == state_id).first()
+            if not state_role:
+                logger.warning(f"No state_role found for state: {state_id}")
+                return None
+                
+            # Get the agent_role
+            agent_role = db.query(AgentRole).filter(AgentRole.id == state_role.agent_role_id).first()
+            if not agent_role:
+                logger.warning(f"No agent_role found for state_role: {state_role.id}")
+                return None
+            
+            # Create or get agent assignment for this role
+            user = create_agent_assignment(db, agent_role.name, scenario_id)
+            
+            if not user:
+                logger.error(f"Failed to create or find user for role: {agent_role.name}")
+                return None
+                
+            return user.id
+            
+        except Exception as e:
+            logger.error(f"Failed to get user for state: {str(e)}")
+            return None
+    
+    @staticmethod
     def _create_step(
         db: Session, 
         episode_id: int, 
@@ -245,6 +291,16 @@ class EpisodeManager:
             Optional[int]: ID of the step if successful, None otherwise
         """
         try:
+            # If no user_id is provided, look it up based on the state's role
+            if user_id is None:
+                # Get the episode to find the scenario_id
+                episode = db.query(Episode).filter(Episode.id == episode_id).first()
+                if not episode:
+                    logger.error(f"Episode not found: {episode_id}")
+                    return None
+                    
+                user_id = EpisodeManager._get_user_for_state(db, state_id, episode.scenario_id)
+            
             step = Step(
                 episode_id=episode_id,
                 state_id=state_id,
@@ -317,9 +373,9 @@ class EpisodeManager:
                 logger.error(f"No next state found for episode: {episode_id}")
                 return None
             
-            # Create step for next state
+            # Create step for next state - pass None for user_id to trigger lookup
             step_id = EpisodeManager._create_step(
-                db, episode_id, next_state_id, episode.initiator_id
+                db, episode_id, next_state_id, None
             )
             
             if not step_id:
