@@ -10,13 +10,13 @@ from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
 from src.llms.llm_provider_manager import LLMProviderManager
+from src.llms.llm_langchain import BaseLangChainProvider
 
 # LangChain imports
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate, ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
+from langchain.chains import LLMChain, ConversationChain
+from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
-from langchain.chat_models import ChatOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ def conduct_multi_turn_conversation(
       Optional[str]: Summary of the conversation if successful, None otherwise
   """
   try:
-      # Initialize LLM provider manager
-      llm_provider_manager = LLMProviderManager()
+      # Initialize LLM provider manager with LangChain support
+      llm_provider_manager = LLMProviderManager(use_langchain=True)
       
       # Start conversation with a message from the first role
       first_role, first_user = role_users[0]
@@ -60,17 +60,15 @@ def conduct_multi_turn_conversation(
       # Keep track of messages
       messages = [initial_message]
       
-      # Initialize LangChain memories for each participant
-      chat_memories = {}
+      # Initialize conversation chains for each role
+      role_chains = {}
       
+      # Create a conversation chain for each role
       for role, user in role_users:
-          # Create a conversation memory for each participant
-          chat_memories[user.id] = ConversationBufferMemory(
-              return_messages=True,
-              memory_key="chat_history"
-          )
+          # Get the appropriate model for this user
+          model_name = user.llm_model
           
-          # Add initial system message with role instructions
+          # Create a system prompt for this role
           system_prompt = f"""You are roleplaying as {user.username}.
 
 State Context: {state.name}
@@ -83,7 +81,15 @@ IMPORTANT INSTRUCTIONS:
 4. Stay in character as {user.username}
 5. If the conversation seems complete, include "I THINK WE'VE REACHED A CONCLUSION" at the end
 """
-          chat_memories[user.id].chat_memory.add_message(SystemMessage(content=system_prompt))
+          
+          # Get LangChain provider for this model
+          langchain_provider = llm_provider_manager.get_provider(model_name)
+          
+          # Create conversation chain with memory
+          role_chains[user.id] = langchain_provider.create_chain(
+              system_prompt=system_prompt,
+              memory=True
+          )
       
       # Conduct conversation
       conversation_complete = False
@@ -96,47 +102,17 @@ IMPORTANT INSTRUCTIONS:
               if turn_count == 0 and i == 0:
                   continue
               
-              # Get the model for this role
-              model_name = user.llm_model
-              provider = llm_provider_manager.get_provider(model_name)
+              # Get the conversation chain for this role
+              chain = role_chains[user.id]
               
-              # Update conversation history in memory
+              # Prepare conversation history for input
               conversation_history = ""
               for msg in messages:
                   sender = db.query(User).filter(User.id == msg.sender_id).first()
                   conversation_history += f"{sender.username}: {msg.content}\n\n"
               
-              # Set up LangChain model
-              # Try to get LangChain model from provider, or create a default one
-              try:
-                  llm = provider.get_langchain_model()
-              except (AttributeError, NotImplementedError):
-                  llm = ChatOpenAI(model_name=model_name, temperature=0.7)
-              
-              # Create chat prompt template
-              chat_prompt = ChatPromptTemplate.from_messages([
-                  SystemMessagePromptTemplate.from_template(
-                      "You are roleplaying as {character}. Current discussion: {state}. {task}"
-                  ),
-                  HumanMessagePromptTemplate.from_template(
-                      "Previous conversation:\n{conversation_history}\n\nRespond as {character}:"
-                  )
-              ])
-              
-              # Create LangChain chain
-              chain = LLMChain(
-                  llm=llm,
-                  prompt=chat_prompt,
-                  verbose=False
-              )
-              
-              # Execute chain to get response
-              response = chain.run(
-                  character=user.username,
-                  state=state.name,
-                  task=state.description,
-                  conversation_history=conversation_history
-              )
+              # Generate response using the chain
+              response = chain.predict(input=conversation_history)
               
               # Create and save message
               message = ChatMessage(
@@ -177,14 +153,9 @@ IMPORTANT INSTRUCTIONS:
       
       # Use the first user's model to generate a summary
       model_name = role_users[0][1].llm_model
-      provider = llm_provider_manager.get_provider(model_name)
+      langchain_provider = llm_provider_manager.get_provider(model_name)
       
-      # Try to use LangChain for summary if possible
-      try:
-          llm = provider.get_langchain_model()
-      except (AttributeError, NotImplementedError):
-          llm = ChatOpenAI(model_name=model_name, temperature=0.3)
-          
+      # Create a simple chain for summarization
       summary_prompt = PromptTemplate(
           input_variables=["conversation"],
           template="""Summarize the following conversation in a concise paragraph:
@@ -194,7 +165,11 @@ IMPORTANT INSTRUCTIONS:
 Provide a summary that captures the key points discussed and any conclusions reached."""
       )
       
-      summary_chain = LLMChain(llm=llm, prompt=summary_prompt)
+      summary_chain = LLMChain(
+          llm=langchain_provider.get_chat_model(),
+          prompt=summary_prompt
+      )
+      
       summary = summary_chain.run(conversation=conversation_history)
       
       logger.info(f"Completed multi-turn conversation for state: {state.name}")

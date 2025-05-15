@@ -17,6 +17,7 @@ from src.models.process import Process, ProcessNode
 from src.models.agent import Agent
 from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
 from src.llms.ollama import OllamaProvider
+from src.llms.llm_langchain import get_langchain_provider, BaseLangChainProvider
 
 # Configure logging
 logging.basicConfig(
@@ -28,14 +29,16 @@ logger = logging.getLogger(__name__)
 class LLMProviderManager:
     """Manages multiple LLM providers based on model names"""
     
-    def __init__(self, skip_llm=False):
+    def __init__(self, skip_llm=False, use_langchain=False):
         """Initialize the LLM provider manager
         
         Args:
             skip_llm: Whether to skip LLM initialization for testing purposes only
+            use_langchain: Whether to use LangChain providers instead of native ones
         """
         self.providers = {}  # Cache of initialized providers
         self.skip_llm = skip_llm
+        self.use_langchain = use_langchain
         
         # No default provider - will be determined by the database values
         self.default_provider = None
@@ -57,6 +60,11 @@ class LLMProviderManager:
         if self.skip_llm:
             logger.info("Skip LLM flag is set, using dummy provider")
             return DummyProvider(model_name=model_name)
+            
+        # Use LangChain providers if specified
+        if self.use_langchain:
+            logger.info(f"Using LangChain provider for {model_name}")
+            return get_langchain_provider(model_name)
             
         if provider_type == 'openai':
             model = model_name or 'gpt-4'
@@ -185,3 +193,22 @@ class LLMProviderManager:
             return "ollama"
         else:
             raise ValueError(f"Could not determine provider type for model: {model_name}")
+
+    def get_langchain_model(self, model_name):
+        """Get a LangChain model for the specified model
+        
+        Args:
+            model_name: Name of the model
+            
+        Returns:
+            LangChain model instance
+        """
+        provider = self.get_provider(model_name)
+        
+        # If the provider is already a LangChain provider, just return it
+        if isinstance(provider, BaseLangChainProvider):
+            return provider.get_chat_model()
+            
+        # Otherwise, create a new LangChain provider
+        langchain_provider = get_langchain_provider(model_name)
+        return langchain_provider.get_chat_model()
