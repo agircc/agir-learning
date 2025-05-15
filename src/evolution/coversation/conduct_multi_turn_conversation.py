@@ -57,7 +57,7 @@ def conduct_multi_turn_conversation(
       turn_count = 0
       
       while not conversation_complete and turn_count < max_turns:
-          # For each role, generate a response
+          # For each role, generate a response in a round-robin fashion
           for i, (role, user) in enumerate(role_users):
               # Skip the first role in the first turn as they already sent the initial message
               if turn_count == 0 and i == 0:
@@ -73,7 +73,7 @@ def conduct_multi_turn_conversation(
                   sender = db.query(User).filter(User.id == msg.sender_id).first()
                   conversation_history += f"{sender.username}: {msg.content}\n\n"
               
-              # Build prompt
+              # Build prompt - explicitly instruct to only generate a single response
               prompt = f"""You are an AI assistant playing the role of {user.username} in a conversation.
 
 State: {state.name}
@@ -82,7 +82,13 @@ Task: {state.description}
 Previous conversation:
 {conversation_history}
 
-Please respond as {user.username}. Keep your response natural and conversational.
+IMPORTANT INSTRUCTIONS:
+1. Respond ONLY as {user.username}
+2. Generate ONLY ONE single message as a response
+3. DO NOT include messages from other participants
+4. DO NOT roleplay as multiple people
+5. Stay in character as {user.username} only
+
 If the conversation seems complete or if there's a natural stopping point, include the phrase "I THINK WE'VE REACHED A CONCLUSION" at the end of your message.
 """
               
