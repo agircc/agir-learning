@@ -1,4 +1,5 @@
 import logging
+import sys
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
@@ -151,4 +152,4 @@ Provide a summary that captures the key points discussed and any conclusions rea
       
   except Exception as e:
       logger.error(f"Failed to conduct multi-turn conversation: {str(e)}")
-      return f"Error in conversation: {str(e)}"
+      sys.exit(1)
