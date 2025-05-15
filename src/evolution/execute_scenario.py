@@ -241,13 +241,12 @@ class ScenarioManager:
 
     
  
-def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
+def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
     """
     Execute a scenario from start to finish.
     
     Args:
         scenario_id: ID of the scenario
-        initiator_id: ID of the initiator
         
     Returns:
         Optional[int]: ID of the episode if successful, None otherwise
@@ -256,10 +255,7 @@ def execute_scenario(scenario_id: int, initiator_id: int) -> Optional[int]:
         logger.info(f"Step 0")
         db = next(get_db())
         logger.info(f"Step 1")
-        # 1. Create episode
-        episode_id = ScenarioManager._create_episode(db, scenario_id, initiator_id)
-        if not episode_id:
-            return None
+
         
         logger.info(f"Step 2")
         # 2. Get initial state and create first step
