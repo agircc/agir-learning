@@ -12,7 +12,7 @@ from agir_db.models.chat_conversation import ChatConversation
 from src.llms.llm_provider_manager import LLMProviderManager
 from src.llms.llm_langchain import BaseLangChainProvider
 
-# LangChain imports
+# LangChain imports updated to use langchain_community where appropriate
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain, ConversationChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate

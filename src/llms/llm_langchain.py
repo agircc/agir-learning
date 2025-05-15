@@ -3,8 +3,8 @@ import os
 import logging
 from typing import Dict, Any, Optional, List, Union
 
-from langchain.chat_models import ChatOpenAI, ChatAnthropic
-from langchain.llms import Ollama
+from langchain_community.chat_models import ChatOpenAI, ChatAnthropic
+from langchain_community.llms import Ollama
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.callbacks.manager import CallbackManager
 from langchain.memory import ConversationBufferMemory
