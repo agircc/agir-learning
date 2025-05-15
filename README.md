@@ -40,7 +40,7 @@ pip install -r requirements.txt
 python run.py path/to/scenario.yml --mode init
 
 # Run existing scenario
-python run.py path/to/scenario.yml --mode run --scenario-id 123
+python run.py --mode run --process-id 123
 
 # Initialize scenario and run (default behavior)
 python run.py path/to/scenario.yml
@@ -48,6 +48,34 @@ python run.py path/to/scenario.yml
 # Or explicitly specify
 python run.py path/to/scenario.yml --mode all
 ```
+
+### Clearing Database Tables
+
+The system provides a standalone command to clear all data from the database tables. This is useful for resetting the system to a clean state.
+
+```bash
+# Clear database tables with confirmation prompt
+python clear_db.py
+
+# Clear database tables without confirmation prompt
+python clear_db.py --confirm
+
+# Enable verbose logging
+python clear_db.py --verbose
+```
+
+This command will delete all data from the following tables in the correct order to respect foreign key constraints:
+- chat_messages
+- chat_participants
+- chat_conversations
+- steps
+- episodes
+- state_roles
+- state_transitions
+- agent_assignments
+- states
+- scenarios
+- users
 
 ### Running Visualization
 ```bash
