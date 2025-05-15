@@ -19,13 +19,13 @@ scenario:
 
   roles:
     - name: "client"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
       description: "Client agent with psychological issues, emotional history, and therapy goals."
     - name: "intake_coordinator"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
       description: "Staff responsible for first contact, intake interview, and case assignment."
     - name: "therapist"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
       description: "Therapist agent responsible for therapy sessions, planning, and outcome evaluation."
 
   states:
