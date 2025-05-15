@@ -57,36 +57,15 @@ class EpisodeManager:
                 logger.error(f"Scenario not found: {self.scenario_id}")
                 return None
             
-            # Get the initial state
-            initial_state = self._get_initial_state(db, self.scenario_id)
-            if not initial_state:
-                logger.error(f"Initial state not found for scenario: {self.scenario_id}")
-                return None
-            
             learner = get_learner()            
             # Create episode
             episode = Episode(
                 scenario_id=self.scenario_id,
                 status=EpisodeStatus.RUNNING,
-                current_state_id=initial_state.id,
                 initiator_id=learner.id
             )
             
             db.add(episode)
-            db.flush()  # Get ID without committing
-            
-            # Get the user_id based on state_role
-            user_id = self._get_user_for_state(db, initial_state.id, self.scenario_id)
-            
-            # Create initial step
-            initial_step = Step(
-                episode_id=episode.id,
-                state_id=initial_state.id,
-                user_id=user_id,
-                action="start"
-            )
-            
-            db.add(initial_step)
             db.commit()
             
             logger.info(f"Created episode {episode.id} for scenario {self.scenario_id}")
@@ -257,7 +236,8 @@ class EpisodeManager:
             if not agent_role:
                 logger.warning(f"No agent_role found for state_role: {state_role.id}")
                 return None
-            
+            logger.info(f"Agent role: 111 {agent_role.name}")
+            return None
             # Create or get agent assignment for this role
             user = create_agent_assignment(db, agent_role.name, scenario_id)
             
