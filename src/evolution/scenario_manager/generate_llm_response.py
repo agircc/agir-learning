@@ -1,4 +1,5 @@
 import logging
+import sys
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.user import User
@@ -47,10 +48,7 @@ def generate_llm_response(db: Session, state: State, current_state_role: AgentRo
       # Get the appropriate LLM model from the user
       model_name = user.llm_model
       if not model_name:
-          if current_state_role and hasattr(current_state_role, 'model') and current_state_role.model:
-              model_name = current_state_role.model
-          else:
-              logger.warning(f"No LLM model specified for user {user.username} or role. Using default model: {model_name}")
+          sys.exit(1)
       
       logger.info(f"Using model {model_name} for state {state.name}")
       
@@ -59,7 +57,7 @@ def generate_llm_response(db: Session, state: State, current_state_role: AgentRo
       provider = llm_provider_manager.get_provider(model_name)
       
       # Build prompt
-      prompt = f"""You are an AI assistant working on a scenario called "{state.name}".
+      prompt = f"""You are a human working on a scenario called "{state.name}".
       
 Your role: {user.username}
 Task: {state.description}
