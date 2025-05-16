@@ -13,12 +13,13 @@ from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.scenario import Scenario, State, StateTransition, StateRole
 from agir_db.models.episode import Episode, EpisodeStatus
-from agir_db.models.step import Step
+from agir_db.models.step import Step, StepStatus
 from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.scenario import StateInDBBase
 
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
+from src.evolution.update_step import update_step
 
 from .scenario_manager.get_next_state import get_next_state
 from .scenario_manager.generate_llm_response import generate_llm_response
@@ -300,57 +301,87 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
             # 5. If there's only one role, generate a simple response
             if len(role_users) == 1:
                 role, user = role_users[0]
-                response = generate_llm_response(db, current_state, role, user, all_steps)
                 
-                # Create step with generated data
+                # Create step with RUNNING status
                 step_id = ScenarioManager._create_step(
-                    db, episode_id, current_state.id, user.id, response
+                    db, episode_id, current_state.id, user.id
                 )
                 
                 if not step_id:
                     logger.error(f"Failed to create step for state: {current_state.id}")
                     return None
                 
-                # Add step to history
-                step = db.query(Step).filter(Step.id == step_id).first()
-                all_steps.append(step)
+                # Update the step status to RUNNING
+                update_step(db, step_id, status=StepStatus.RUNNING)
+                
+                try:
+                    # Generate LLM response
+                    response = generate_llm_response(db, current_state, role, user, all_steps)
+                    
+                    # Update step with generated data and mark as COMPLETED
+                    update_step(db, step_id, response, StepStatus.COMPLETED)
+                    
+                    # Add step to history
+                    step = db.query(Step).filter(Step.id == step_id).first()
+                    all_steps.append(step)
+                    
+                except Exception as e:
+                    # Update step status to FAILED if there's an error
+                    update_step(db, step_id, f"Failed to generate response: {str(e)}", StepStatus.FAILED)
+                    logger.error(f"Failed to generate response: {str(e)}")
+                    episode.status = EpisodeStatus.FAILED
+                    db.commit()
+                    return None
             
             # 6. If there are multiple roles, conduct a multi-turn conversation
             else:
-                # First create a step for the conversation
+                # Create step for the conversation with RUNNING status
                 step_id = ScenarioManager._create_step(
-                    db, episode_id, current_state.id, role_users[0][1].id,
-                    f"Multi-role conversation for state: {current_state.name}"
+                    db, episode_id, current_state.id, role_users[0][1].id
                 )
                 
                 if not step_id:
                     logger.error(f"Failed to create step for state: {current_state.id}")
                     return None
                 
-                # Add step to history
-                step = db.query(Step).filter(Step.id == step_id).first()
-                all_steps.append(step)
+                # Update the step status to RUNNING
+                update_step(db, step_id, f"Multi-role conversation for state: {current_state.name}", StepStatus.RUNNING)
                 
-                # Create conversation linked to the step
-                conversation = create_conversation(db, current_state, episode_id, role_users, step_id)
-                if not conversation:
-                    logger.error(f"Failed to create conversation for state: {current_state.id}")
-                    return None
-                
-                # Conduct multi-turn conversation
-                conversation_result = conduct_multi_turn_conversation(
-                    db, conversation, current_state, role_users
-                )
-                
-                # Update the step with conversation results
-                step.generated_text = conversation_result
-                db.commit()
-                
-                # Also update episode status to mark this state as processed
-                episode = db.query(Episode).filter(Episode.id == episode_id).first()
-                if episode:
-                    episode.last_updated = time.time()
+                try:
+                    # Add step to history
+                    step = db.query(Step).filter(Step.id == step_id).first()
+                    all_steps.append(step)
+                    
+                    # Create conversation linked to the step
+                    conversation = create_conversation(db, current_state, episode_id, role_users, step_id)
+                    if not conversation:
+                        logger.error(f"Failed to create conversation for state: {current_state.id}")
+                        update_step(db, step_id, "Failed to create conversation", StepStatus.FAILED)
+                        episode.status = EpisodeStatus.FAILED
+                        db.commit()
+                        return None
+                    
+                    # Conduct multi-turn conversation
+                    conversation_result = conduct_multi_turn_conversation(
+                        db, conversation, current_state, role_users
+                    )
+                    
+                    # Update the step with conversation results and mark as COMPLETED
+                    update_step(db, step_id, conversation_result, StepStatus.COMPLETED)
+                    
+                    # Also update episode status to mark this state as processed
+                    episode = db.query(Episode).filter(Episode.id == episode_id).first()
+                    if episode:
+                        episode.last_updated = time.time()
+                        db.commit()
+                        
+                except Exception as e:
+                    # Update step status to FAILED if there's an error
+                    update_step(db, step_id, f"Failed in conversation: {str(e)}", StepStatus.FAILED)
+                    logger.error(f"Failed in conversation: {str(e)}")
+                    episode.status = EpisodeStatus.FAILED
                     db.commit()
+                    return None
             
             # Update episode with current state
             episode.current_state_id = current_state.id

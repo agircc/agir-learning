@@ -5,22 +5,24 @@ Update step with response message
 import logging
 from typing import Dict, Any, List, Optional, Union
 from sqlalchemy.orm import Session
-from agir_db.models.step import Step
+from agir_db.models.step import Step, StepStatus
 
 logger = logging.getLogger(__name__)
 
 def update_step(
     db: Session,
     step_id: int,
-    response_message: str
+    response_message: str = None,
+    status: StepStatus = None
 ) -> Optional[int]:
     """
-    Updates a step with the response message.
+    Updates a step with the response message and/or status.
     
     Args:
         db: Database session
         step_id: ID of the step
-        response_message: Message to add to the step
+        response_message: Message to add to the step (optional)
+        status: New status for the step (optional)
         
     Returns:
         Optional[int]: ID of the updated step if successful, None otherwise
@@ -33,10 +35,14 @@ def update_step(
             return None
         
         # Update the step
-        step.response = response_message
+        if response_message is not None:
+            step.response = response_message
+            
+        if status is not None:
+            step.status = status
         
         db.commit()
-        logger.info(f"Updated step {step_id} with response message")
+        logger.info(f"Updated step {step_id} with status: {status} and response message: {'Yes' if response_message else 'No'}")
         
         return step_id
         
