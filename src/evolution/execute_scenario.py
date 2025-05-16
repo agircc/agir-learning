@@ -260,11 +260,38 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
         if not episode:
             logger.error(f"Episode with ID {episode_id} not found")
             return None
-            
+        
         # If episode has a current state, use it instead of getting initial state
         if episode.current_state_id and episode.status == EpisodeStatus.RUNNING:
             current_state = db.query(State).filter(State.id == episode.current_state_id).first()
             logger.info(f"Continuing with existing state: {current_state.name if current_state else None}")
+            
+            # Check for unfinished or failed steps in the current state
+            unfinished_steps = db.query(Step).filter(
+                Step.episode_id == episode_id,
+                Step.state_id == current_state.id,
+                Step.status.in_([StepStatus.PENDING, StepStatus.RUNNING, StepStatus.FAILED])
+            ).all()
+            
+            if unfinished_steps:
+                logger.info(f"Found {len(unfinished_steps)} unfinished steps in current state {current_state.name}")
+                
+                # Update unfinished/running steps back to pending so they can be retried
+                for step in unfinished_steps:
+                    logger.info(f"Resetting step {step.id} from status {step.status} to PENDING")
+                    update_step(db, step.id, status=StepStatus.PENDING)
+                
+                # Load all completed steps for context
+                completed_steps = db.query(Step).filter(
+                    Step.episode_id == episode_id,
+                    Step.status == StepStatus.COMPLETED
+                ).all()
+                all_steps = completed_steps
+            else:
+                # No unfinished steps found, load all steps for context
+                all_steps = db.query(Step).filter(
+                    Step.episode_id == episode_id
+                ).all()
         else:
             # Get initial state if episode is new or doesn't have a current state
             current_state = ScenarioManager._get_initial_state(db, scenario_id)
@@ -275,11 +302,11 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
             # Initialize episode with current state
             episode.current_state_id = current_state.id
             db.commit()
+            
+            # No steps yet
+            all_steps = []
         
         logger.info(f"Current state: {current_state}")
-        
-        # Keep track of all steps
-        all_steps = []
         
         # Continue processing states until we reach the end
         while current_state:
