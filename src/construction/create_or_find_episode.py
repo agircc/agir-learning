@@ -1,7 +1,7 @@
 import logging
 
 from sqlalchemy.orm import Session
-from src.construction.check_database_tables import check_database_tables
+from src.utils.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.episode import Episode, EpisodeStatus

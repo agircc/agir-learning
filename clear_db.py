@@ -8,12 +8,10 @@ import argparse
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-from src.construction.clear_database import clear_database_tables
+from src.utils.clear_database import clear_database_tables
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
