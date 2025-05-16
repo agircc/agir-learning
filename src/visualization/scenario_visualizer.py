@@ -22,11 +22,12 @@ except Exception as e:
 # Print environment variable directly for comparison
 print(f"Environment DATABASE_URI: {os.environ.get('SQLALCHEMY_DATABASE_URI')}")
 
-from agir_db.models.scenario import Scenario, State
+from agir_db.models.scenario import Scenario
+from agir_db.models.state import State
 from agir_db.models.episode import Episode
 from agir_db.models.step import Step
 from agir_db.models.chat_conversation import ChatConversation
-from agir_db.models.agent_role import AgentRole
+from agir_db.models.state_role import StateRole
 
 from .chat_utils import get_conversations_for_step, get_messages_for_conversation, format_messages
 
