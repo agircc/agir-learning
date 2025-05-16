@@ -252,10 +252,7 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
         Optional[int]: ID of the episode if successful, None otherwise
     """
     try:
-        logger.info(f"Step 0")
         db = next(get_db())
-        logger.info(f"Step 1")
-
         
         logger.info(f"Step 2")
         # 2. Get initial state and create first step
