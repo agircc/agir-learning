@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
-from agir_db.models.scenario import State
+from agir_db.models.state import State
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
