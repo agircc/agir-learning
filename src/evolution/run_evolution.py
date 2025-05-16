@@ -224,13 +224,6 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
             # Start the process from the beginning
             episode = a_create_or_find_episode(scenario_id)
             
-            if not episode:
-                logger.error(f"Failed to create episode for scenario: {scenario.name}")
-                success = False
-                continue
-                
-            logger.info(f"Created episode with ID: {episode.id}")
-            
             # Execute the process until completion or error
             result = execute_episode(scenario_id, episode.id)
             

@@ -1,4 +1,5 @@
 import logging
+import sys
 from typing import Optional
 
 from agir_db.db.session import get_db
@@ -40,7 +41,7 @@ def a_create_or_find_episode(scenario_id: int) -> Optional[Episode]:
         scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
         if not scenario:
             logger.error(f"Scenario not found: {scenario_id}")
-            return None
+            sys.exit(1)
         
         learner = get_learner()            
         # Create episode
@@ -61,7 +62,7 @@ def a_create_or_find_episode(scenario_id: int) -> Optional[Episode]:
         if db:
             db.rollback()
         logger.error(f"Failed to create or find episode: {str(e)}")
-        return None
+        sys.exit(1)
     finally:
         if db:
             db.close()
