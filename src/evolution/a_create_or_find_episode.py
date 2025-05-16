@@ -5,7 +5,7 @@ from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
 from agir_db.models.episode import Episode, EpisodeStatus
 
-from src.construction.data_store import get_learner
+from src.common.data_store import get_learner
 
 logger = logging.getLogger(__name__)
 

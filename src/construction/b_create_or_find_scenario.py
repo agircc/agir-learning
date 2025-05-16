@@ -6,7 +6,7 @@ from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
 from agir_db.schemas.scenario import ScenarioDTO
 from agir_db.models.user import User
-from src.construction.data_store import set_scenario
+from src.common.data_store import set_scenario
 
 logger = logging.getLogger(__name__)
 

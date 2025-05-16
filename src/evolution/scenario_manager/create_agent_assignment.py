@@ -6,7 +6,7 @@ from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.agent_assignment import AgentAssignment
-from src.construction.data_store import get_learner, get_scenario, set_learner
+from src.common.data_store import get_learner, get_scenario, set_learner
 import random
 import time
 from datetime import datetime

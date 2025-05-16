@@ -21,7 +21,7 @@ from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step
 from agir_db.models.agent_assignment import AgentAssignment
 
-from src.construction.data_store import get_learner
+from src.common.data_store import get_learner
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 
 from ..models.process import Process as YamlProcess
