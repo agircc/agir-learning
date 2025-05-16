@@ -12,9 +12,9 @@ from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.scenario import Scenario
+from agir_db.models.state_role import StateRole
 from agir_db.models.state import State
 from agir_db.models.state_transition import StateTransition
-from agir_db.models.agent_role import AgentRole
 from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step, StepStatus
 from agir_db.models.agent_assignment import AgentAssignment
@@ -120,9 +120,9 @@ class ScenarioManager:
             List[AgentRole]: Roles associated with the state
         """
         try:
-            # Get all role IDs for this state from the AgentRole table
-            state_roles = db.query(AgentRole).filter(
-                AgentRole.state_id == state_id
+            # Get all role IDs for this state from the StateRole table
+            state_roles = db.query(StateRole).filter(
+                StateRole.state_id == state_id
             ).all()
             
             if not state_roles:
