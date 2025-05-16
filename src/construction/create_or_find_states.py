@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.state import State
 from agir_db.models.agent_role import AgentRole
+from agir_db.models.state_role import StateRole
 from src.construction.data_store import set_states, get_agent_roles
 
 logger = logging.getLogger(__name__)

@@ -120,9 +120,9 @@ class ScenarioManager:
             List[AgentRole]: Roles associated with the state
         """
         try:
-            # Get all role IDs for this state from the StateRole table
-            state_roles = db.query(StateRole).filter(
-                StateRole.state_id == state_id
+            # Get all role IDs for this state from the AgentRole table
+            state_roles = db.query(AgentRole).filter(
+                AgentRole.state_id == state_id
             ).all()
             
             if not state_roles:
