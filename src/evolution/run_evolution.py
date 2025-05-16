@@ -1,21 +1,192 @@
 """
 Run evolution process
 """
-
 import logging
-import yaml
-import os
 import uuid
-from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional, Union, List
+import sys
+import time
+from typing import Optional, Union
 
 from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
+
+from agir_db.models.state import State
+from agir_db.models.episode import Episode, EpisodeStatus
+from agir_db.models.step import Step, StepStatus
+
 from src.evolution.a_create_or_find_episode import a_create_or_find_episode
-from src.evolution.execute_episode import execute_episode
+from src.evolution.b_get_initial_state import b_get_initial_state
+from src.evolution.c_get_state_roles import c_get_state_roles
+from src.evolution.d_get_or_create_user import d_get_or_create_user
+from src.evolution.e_create_step import e_create_step
+from src.evolution.update_step import update_step
+
+from .scenario_manager.get_next_state import get_next_state
+from .scenario_manager.generate_llm_response import generate_llm_response
+from .coversation.create_conversation import create_conversation
+from .coversation.conduct_multi_turn_conversation import conduct_multi_turn_conversation
 
 logger = logging.getLogger(__name__)
 
+   
+def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
+    """
+    Execute a scenario from start to finish.
+    
+    Args:
+        scenario_id: ID of the scenario
+        
+    Returns:
+        Optional[int]: ID of the episode if successful, None otherwise
+    """
+    try:
+        db = next(get_db())
+        
+        # Check if the episode exists and is not completed
+        episode = db.query(Episode).filter(Episode.id == episode_id).first()
+        if not episode:
+            logger.error(f"Episode with ID {episode_id} not found")
+            return None
+        
+        current_state = b_get_initial_state(db, scenario_id)
+
+        # Load all completed steps for context
+        completed_steps = db.query(Step).filter(
+            Step.episode_id == episode_id,
+            Step.status == StepStatus.COMPLETED
+        ).all()
+        all_steps = completed_steps
+
+        # If episode has a current state, use it instead of getting initial state
+        if episode.current_state_id and episode.status == EpisodeStatus.RUNNING:
+            current_state = db.query(State).filter(State.id == episode.current_state_id).first()
+            logger.info(f"Continuing with existing state: {current_state.name if current_state else None}")
+            
+            # Check for unfinished or failed steps in the current state
+            unfinished_steps = db.query(Step).filter(
+                Step.episode_id == episode_id,
+                Step.state_id == current_state.id,
+                Step.status.in_([StepStatus.PENDING, StepStatus.RUNNING, StepStatus.FAILED])
+            ).all()
+            
+            if unfinished_steps:
+                logger.info(f"Found {len(unfinished_steps)} unfinished steps in current state {current_state.name}")
+                
+                # Update unfinished/running steps back to pending so they can be retried
+                for step in unfinished_steps:
+                    logger.info(f"Resetting step {step.id} from status {step.status} to PENDING")
+                    update_step(db, step.id, status=StepStatus.PENDING)
+        
+        logger.info(f"Current state: {current_state}")
+        
+        # Continue processing states until we reach the end
+        while current_state:
+            # 3. Get all roles associated with the state
+            roles = c_get_state_roles(db, current_state.id)
+
+            # 4. Get or create users for each role
+            role_users = []
+            for role in roles:
+                user = d_get_or_create_user(db, role.id, episode_id)
+                if not user:
+                    logger.error(f"Failed to get or create user for role: {role.id}")
+                    sys.exit(1)
+                role_users.append((role, user))
+            
+            # 5. If there's only one role, generate a simple response
+            if len(role_users) == 1:
+                role, user = role_users[0]
+                
+                # Create step with RUNNING status
+                step_id = e_create_step(
+                    db, episode_id, current_state.id, user.id
+                )
+                
+                try:
+                    # Generate LLM response
+                    response = generate_llm_response(db, current_state, role, user, all_steps)
+                    
+                    # Update step with generated data and mark as COMPLETED
+                    update_step(db, step_id, response, StepStatus.COMPLETED)
+                    
+                    # Add step to history
+                    step = db.query(Step).filter(Step.id == step_id).first()
+                    all_steps.append(step)
+                    
+                except Exception as e:
+                    # Update step status to FAILED if there's an error
+                    update_step(db, step_id, f"Failed to generate response: {str(e)}", StepStatus.FAILED)
+                    logger.error(f"Failed to generate response: {str(e)}")
+                    episode.status = EpisodeStatus.FAILED
+                    db.commit()
+                    sys.exit(1)
+            
+            # 6. If there are multiple roles, conduct a multi-turn conversation
+            else:
+                # Create step for the conversation with RUNNING status
+                step_id = e_create_step(
+                    db, episode_id, current_state.id, role_users[0][1].id
+                )
+                
+                try:
+                    # Add step to history
+                    step = db.query(Step).filter(Step.id == step_id).first()
+                    all_steps.append(step)
+                    
+                    # Create conversation linked to the step
+                    conversation = create_conversation(db, current_state, episode_id, role_users, step_id)
+                    if not conversation:
+                        logger.error(f"Failed to create conversation for state: {current_state.id}")
+                        update_step(db, step_id, "Failed to create conversation", StepStatus.FAILED)
+                        episode.status = EpisodeStatus.FAILED
+                        db.commit()
+                        return None
+                    
+                    # Conduct multi-turn conversation
+                    conversation_result = conduct_multi_turn_conversation(
+                        db, conversation, current_state, role_users
+                    )
+                    
+                    # Update the step with conversation results and mark as COMPLETED
+                    update_step(db, step_id, conversation_result, StepStatus.COMPLETED)
+                    
+                    # Also update episode status to mark this state as processed
+                    episode = db.query(Episode).filter(Episode.id == episode_id).first()
+                    if episode:
+                        episode.last_updated = time.time()
+                        db.commit()
+                        
+                except Exception as e:
+                    # Update step status to FAILED if there's an error
+                    update_step(db, step_id, f"Failed in conversation: {str(e)}", StepStatus.FAILED)
+                    logger.error(f"Failed in conversation: {str(e)}")
+                    episode.status = EpisodeStatus.FAILED
+                    db.commit()
+                    return None
+            
+            # Update episode with current state
+            episode.current_state_id = current_state.id
+            db.commit()
+            
+            logger.info(f"Current state in the circle: {current_state}")
+            # 7. Find next state
+            next_state = get_next_state(db, scenario_id, current_state.id, episode_id, role_users[0][1])
+            
+            # If no next state, we've reached the end
+            if not next_state:
+                logger.info(f"Episode {episode_id} completed successfully")
+                episode.status = EpisodeStatus.COMPLETED
+                db.commit()
+                break
+            
+            # Move to next state
+            current_state = next_state
+        
+        return episode_id
+        
+    except Exception as e:
+        logger.error(f"Failed to execute scenario: {str(e)}")
+        return None
 
 def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1) -> bool:
     """
