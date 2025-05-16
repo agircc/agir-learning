@@ -21,7 +21,7 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.state import StateInDBBase
 
-from src.evolution.b_get_initial_state import b_get_initial_state
+from src.evolution.b_get_state import b_get_state
 from src.evolution.c_get_state_roles import c_get_state_roles
 from src.evolution.d_get_or_create_agent_assignment import d_get_or_create_agent_assignment
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
@@ -176,7 +176,7 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                 ).all()
         else:
             # Get initial state if episode is new or doesn't have a current state
-            current_state = b_get_initial_state(db, scenario_id)
+            current_state = b_get_state(db, scenario_id)
             if not current_state:
                 logger.error(f"No initial state found for scenario: {scenario_id}")
                 return None
