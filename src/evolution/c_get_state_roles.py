@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 import json
 import uuid
@@ -28,7 +29,7 @@ def c_get_state_roles(db: Session, state_id: int) -> List[AgentRole]:
       
       if not state_roles:
           logger.error(f"No roles found for state: {state_id}")
-          return []
+          sys.exit(1)
       
       # Get the actual AgentRole objects
       roles = []
@@ -40,6 +41,10 @@ def c_get_state_roles(db: Session, state_id: int) -> List[AgentRole]:
           if role:
               roles.append(role)
       
+      if not roles:
+          logger.error(f"Failed to get roles for state: {state_id}")
+          sys.exit(1)
+
       return roles
       
   except Exception as e:

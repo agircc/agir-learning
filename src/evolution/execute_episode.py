@@ -21,7 +21,7 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.state import StateInDBBase
 
-from src.evolution.b_get_state import b_get_state
+from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
 from src.evolution.d_get_or_create_agent_assignment import d_get_or_create_agent_assignment
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
@@ -77,48 +77,7 @@ class ScenarioManager:
     
     
     
-    @staticmethod
-    def _create_step(
-        db: Session, 
-        episode_id: int, 
-        state_id: int, 
-        user_id: Optional[int] = None,
-        generated_text: Optional[str] = None
-    ) -> Optional[int]:
-        """
-        Create a step.
-        
-        Args:
-            db: Database session
-            episode_id: ID of the episode
-            state_id: ID of the state
-            user_id: ID of the user (optional)
-            generated_text: Comment/data from LLM (optional)
-            
-        Returns:
-            Optional[int]: ID of the step if successful, None otherwise
-        """
-        try:
-            step = Step(
-                episode_id=episode_id,
-                state_id=state_id,
-                user_id=user_id,
-                action="scenario",
-                generated_text=generated_text
-            )
-            
-            db.add(step)
-            db.commit()
-            db.refresh(step)
-            
-            logger.info(f"Created step with ID: {step.id}")
-            
-            return step.id
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Failed to create step: {str(e)}")
-            return None
+    
 
     
 
@@ -143,6 +102,15 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
             logger.error(f"Episode with ID {episode_id} not found")
             return None
         
+        current_state = b_get_initial_state(db, scenario_id)
+
+        # Load all completed steps for context
+        completed_steps = db.query(Step).filter(
+            Step.episode_id == episode_id,
+            Step.status == StepStatus.COMPLETED
+        ).all()
+        all_steps = completed_steps
+
         # If episode has a current state, use it instead of getting initial state
         if episode.current_state_id and episode.status == EpisodeStatus.RUNNING:
             current_state = db.query(State).filter(State.id == episode.current_state_id).first()
@@ -162,31 +130,6 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                 for step in unfinished_steps:
                     logger.info(f"Resetting step {step.id} from status {step.status} to PENDING")
                     update_step(db, step.id, status=StepStatus.PENDING)
-                
-                # Load all completed steps for context
-                completed_steps = db.query(Step).filter(
-                    Step.episode_id == episode_id,
-                    Step.status == StepStatus.COMPLETED
-                ).all()
-                all_steps = completed_steps
-            else:
-                # No unfinished steps found, load all steps for context
-                all_steps = db.query(Step).filter(
-                    Step.episode_id == episode_id
-                ).all()
-        else:
-            # Get initial state if episode is new or doesn't have a current state
-            current_state = b_get_state(db, scenario_id)
-            if not current_state:
-                logger.error(f"No initial state found for scenario: {scenario_id}")
-                return None
-            
-            # Initialize episode with current state
-            episode.current_state_id = current_state.id
-            db.commit()
-            
-            # No steps yet
-            all_steps = []
         
         logger.info(f"Current state: {current_state}")
         
@@ -194,9 +137,7 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
         while current_state:
             # 3. Get all roles associated with the state
             roles = c_get_state_roles(db, current_state.id)
-            if not roles:
-                logger.error(f"Failed to get roles for state: {current_state.id}")
-                return None
+
             
             # 4. Get or create users for each role
             role_users = []

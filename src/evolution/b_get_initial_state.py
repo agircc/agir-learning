@@ -7,11 +7,11 @@ from agir_db.models.state_transition import StateTransition
 from agir_db.schemas.state import StateInDBBase
 from agir_db.models.episode import EpisodeStatus
 
-from src.evolution.store import get_episode
+from src.evolution.store import get_episode, set_episode
 
 logger = logging.getLogger(__name__)
 
-def b_get_state(db: Session, scenario_id: int) -> Optional[State]:
+def b_get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
     """
     Get the initial state of a scenario.
     
@@ -54,6 +54,12 @@ def b_get_state(db: Session, scenario_id: int) -> Optional[State]:
         
         # If no clear starting state, return the first state
         logger.warning(f"No clear starting state found for scenario: {scenario_id}, using first state")
+
+
+        episode.current_state_id = all_states[0].id
+        db.commit()
+        db.refresh(episode)
+        set_episode(episode)
         return all_states[0]
         
     except Exception as e:
