@@ -5,9 +5,11 @@ from agir_db.models.state import State
 from agir_db.models.state_transition import StateTransition
 from agir_db.schemas.state import StateInDBBase
 
+from src.evolution.store import get_episode
+
 logger = logging.getLogger(__name__)
 
-def b_get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
+def b_get_state(db: Session, scenario_id: int) -> Optional[State]:
     """
     Get the initial state of a scenario.
     
@@ -19,6 +21,12 @@ def b_get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
         Optional[State]: Initial state if found, None otherwise
     """
     try:
+        
+        episode = get_episode()
+        if not episode:
+            logger.error(f"No episode found")
+            return None
+        
         # Get all states in the scenario
         all_states = db.query(State).filter(State.scenario_id == scenario_id).all()
         if not all_states:
