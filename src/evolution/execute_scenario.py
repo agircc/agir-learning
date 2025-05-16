@@ -254,21 +254,28 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
     try:
         db = next(get_db())
         
-        logger.info(f"Step 2")
-        # 2. Get initial state and create first step
-        current_state = ScenarioManager._get_initial_state(db, scenario_id)
-        if not current_state:
-            logger.error(f"No initial state found for scenario: {scenario_id}")
+        # Check if the episode exists and is not completed
+        episode = db.query(Episode).filter(Episode.id == episode_id).first()
+        if not episode:
+            logger.error(f"Episode with ID {episode_id} not found")
             return None
+            
+        # If episode has a current state, use it instead of getting initial state
+        if episode.current_state_id and episode.status == EpisodeStatus.RUNNING:
+            current_state = db.query(State).filter(State.id == episode.current_state_id).first()
+            logger.info(f"Continuing with existing state: {current_state.name if current_state else None}")
+        else:
+            # Get initial state if episode is new or doesn't have a current state
+            current_state = ScenarioManager._get_initial_state(db, scenario_id)
+            if not current_state:
+                logger.error(f"No initial state found for scenario: {scenario_id}")
+                return None
+            
+            # Initialize episode with current state
+            episode.current_state_id = current_state.id
+            db.commit()
         
         logger.info(f"Current state: {current_state}")
-
-
-        logger.info(f"Step 3")
-        # Initialize episode with current state
-        episode = db.query(Episode).filter(Episode.id == episode_id).first()
-        episode.current_state_id = current_state.id
-        db.commit()
         
         # Keep track of all steps
         all_steps = []
