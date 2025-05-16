@@ -15,11 +15,6 @@ from src.construction.check_database_tables import check_database_tables
 from src.construction.run_construction import run_construction
 from src.evolution.run_evolution import run_evolution
 
-from src.evolution.process_instance_manager import ProcessManager  # Import the new ProcessManager
-from src.llms import OpenAIProvider, AnthropicProvider, OllamaProvider
-from src.construction import check_database
-from src.llms.llm_provider_manager import LLMProviderManager
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -90,7 +85,6 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Check database tables using the ProcessManager
     if not args.skip_db_check:
         logger.info("Checking database tables...")
         if not check_database_tables():
