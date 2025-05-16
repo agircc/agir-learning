@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 
 from agir_db.models.user import User
@@ -14,7 +14,6 @@ from src.llms.llm_langchain import BaseLangChainProvider
 
 # LangChain imports updated to use langchain_community where appropriate
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
@@ -86,19 +85,15 @@ IMPORTANT INSTRUCTIONS:
           # Get LangChain provider for this model
           langchain_provider = llm_provider_manager.get_provider(model_name)
           
-          # Create LLM chain with appropriate prompt
+          # Create prompt template using modern approach
           prompt = ChatPromptTemplate.from_messages([
               SystemMessagePromptTemplate.from_template(system_prompt),
               MessagesPlaceholder(variable_name="chat_history"),
               HumanMessagePromptTemplate.from_template("{input}")
           ])
           
-          # Create the chain
-          role_chains[user.id] = LLMChain(
-              llm=langchain_provider.get_chat_model(),
-              prompt=prompt,
-              verbose=False
-          )
+          # Create the chain using pipe operator (|) for RunnableSequence
+          role_chains[user.id] = prompt | langchain_provider.get_chat_model()
           
           # Initialize empty chat history for each role
           chat_histories[user.id] = []
@@ -132,17 +127,23 @@ IMPORTANT INSTRUCTIONS:
                   else:
                       lc_messages.append(HumanMessage(content=f"{sender.username}: {msg.content}"))
               
-              # Generate response using the chain
-              response = chain.run(
-                  input=conversation_history,
-                  chat_history=lc_messages[-10:] if lc_messages else []
-              )
+              # Generate response using the chain with invoke() instead of run()
+              response = chain.invoke({
+                  "input": conversation_history,
+                  "chat_history": lc_messages[-10:] if lc_messages else []
+              })
+              
+              # Extract content from response
+              if hasattr(response, 'content'):
+                  response_text = response.content
+              else:
+                  response_text = str(response)
               
               # Create and save message
               message = ChatMessage(
                   conversation_id=conversation.id,
                   sender_id=user.id,
-                  content=response
+                  content=response_text
               )
               
               db.add(message)
@@ -150,7 +151,7 @@ IMPORTANT INSTRUCTIONS:
               messages.append(message)
               
               # Check if conversation is complete
-              if "I THINK WE'VE REACHED A CONCLUSION" in response:
+              if "I THINK WE'VE REACHED A CONCLUSION" in response_text:
                   conversation_complete = True
                   break
           
@@ -179,22 +180,26 @@ IMPORTANT INSTRUCTIONS:
       model_name = role_users[0][1].llm_model
       langchain_provider = llm_provider_manager.get_provider(model_name)
       
-      # Create a simple chain for summarization
-      summary_prompt = PromptTemplate(
-          input_variables=["conversation"],
-          template="""Summarize the following conversation in a concise paragraph:
+      # Create a prompt for summarization
+      summary_prompt = PromptTemplate.from_template(
+          """Summarize the following conversation in a concise paragraph:
 
 {conversation}
 
 Provide a summary that captures the key points discussed and any conclusions reached."""
       )
       
-      summary_chain = LLMChain(
-          llm=langchain_provider.get_chat_model(),
-          prompt=summary_prompt
-      )
+      # Create a chain using pipe operator
+      summary_chain = summary_prompt | langchain_provider.get_chat_model()
       
-      summary = summary_chain.run(conversation=conversation_history)
+      # Generate summary using invoke()
+      summary_response = summary_chain.invoke({"conversation": conversation_history})
+      
+      # Extract summary content
+      if hasattr(summary_response, 'content'):
+          summary = summary_response.content
+      else:
+          summary = str(summary_response)
       
       logger.info(f"Completed multi-turn conversation for state: {state.name}")
       

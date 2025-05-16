@@ -7,9 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_community.llms import Ollama
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain.callbacks.manager import CallbackManager
 from langchain.memory import ConversationBufferMemory
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 
 logger = logging.getLogger(__name__)
@@ -66,8 +64,12 @@ class BaseLangChainProvider:
             Generated text
         """
         chat = self.get_chat_model()
-        result = chat.predict(prompt)
-        return result
+        result = chat.invoke(prompt)
+        
+        # Extract result content
+        if hasattr(result, 'content'):
+            return result.content
+        return str(result)
     
     def generate_with_history(self, messages: List[Dict[str, str]]) -> str:
         """Generate response with conversation history
@@ -94,10 +96,12 @@ class BaseLangChainProvider:
                 lc_messages.append(AIMessage(content=content))
         
         # Generate response
-        response = chat.predict_messages(lc_messages)
-        return response.content
+        response = chat.invoke(lc_messages)
+        if hasattr(response, 'content'):
+            return response.content
+        return str(response)
     
-    def create_chain(self, system_prompt: str = None, memory: bool = True) -> LLMChain:
+    def create_chain(self, system_prompt: str = None, memory: bool = True):
         """Create a conversation chain using updated LangChain practices
         
         Args:
@@ -105,7 +109,7 @@ class BaseLangChainProvider:
             memory: Whether to include memory placeholders in the prompt
             
         Returns:
-            LLMChain instance
+            Runnable instance (RunnableSequence)
         """
         chat = self.get_chat_model()
         
@@ -126,12 +130,8 @@ class BaseLangChainProvider:
         # Create the prompt
         prompt = ChatPromptTemplate.from_messages(messages)
         
-        # Create the chain
-        chain = LLMChain(
-            llm=chat,
-            prompt=prompt,
-            verbose=False
-        )
+        # Create a runnable sequence using the pipe operator
+        chain = prompt | chat
         
         return chain
 
