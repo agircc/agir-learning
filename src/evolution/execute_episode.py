@@ -21,6 +21,9 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.models.chat_message import ChatMessage
 from agir_db.schemas.state import StateInDBBase
 
+from src.evolution.b_get_initial_state import b_get_initial_state
+from src.evolution.c_get_state_roles import c_get_state_roles
+from src.evolution.d_get_or_create_agent_assignment import d_get_or_create_agent_assignment
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 from src.evolution.update_step import update_step
 
@@ -68,135 +71,11 @@ class ScenarioManager:
             logger.error(f"Failed to create episode: {str(e)}")
             return None
     
-    @staticmethod
-    def _get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
-        """
-        Get the initial state of a scenario.
-        
-        Args:
-            db: Database session
-            scenario_id: ID of the scenario
-            
-        Returns:
-            Optional[State]: Initial state if found, None otherwise
-        """
-        try:
-            # Get all states in the scenario
-            all_states = db.query(State).filter(State.scenario_id == scenario_id).all()
-            if not all_states:
-                logger.error(f"No states found for scenario: {scenario_id}")
-                return None
-            
-            # Get all 'to' states in transitions
-            to_states = db.query(StateTransition.to_state_id).filter(
-                StateTransition.scenario_id == scenario_id
-            ).all()
-            to_state_ids = {t[0] for t in to_states}
-            
-            # Find states that are not 'to' states in any transition
-            # These are potential starting states
-            for state in all_states:
-                if state.id not in to_state_ids:
-                    return StateInDBBase.model_validate(state)
-            
-            # If no clear starting state, return the first state
-            logger.warning(f"No clear starting state found for scenario: {scenario_id}, using first state")
-            return all_states[0]
-            
-        except Exception as e:
-            logger.error(f"Failed to get initial state: {str(e)}")
-            return None
     
-    @staticmethod
-    def _get_state_roles(db: Session, state_id: int) -> List[AgentRole]:
-        """
-        Get all roles associated with a state.
-        
-        Args:
-            db: Database session
-            state_id: ID of the state
-            
-        Returns:
-            List[AgentRole]: Roles associated with the state
-        """
-        try:
-            # Get all role IDs for this state from the StateRole table
-            state_roles = db.query(StateRole).filter(
-                StateRole.state_id == state_id
-            ).all()
-            
-            if not state_roles:
-                logger.error(f"No roles found for state: {state_id}")
-                return []
-            
-            # Get the actual AgentRole objects
-            roles = []
-            for state_role in state_roles:
-                role = db.query(AgentRole).filter(
-                    AgentRole.id == state_role.agent_role_id
-                ).first()
-                
-                if role:
-                    roles.append(role)
-            
-            return roles
-            
-        except Exception as e:
-            logger.error(f"Failed to get state roles: {str(e)}")
-            return []
     
-    @staticmethod
-    def _get_or_create_agent_assignment(db: Session, role_id: int, episode_id: int) -> Optional[User]:
-        """
-        Get or create a user for a role in an episode.
-        
-        Args:
-            db: Database session
-            role_id: ID of the role
-            episode_id: ID of the episode
-            
-        Returns:
-            Optional[User]: User if found or created, None otherwise
-        """
-        try:
-            # Try to find existing agent assignment for this episode
-            episode = db.query(Episode).filter(Episode.id == episode_id).first()
-            if not episode:
-                logger.error(f"Episode not found: {episode_id}")
-                return None
-            
-            role = db.query(AgentRole).filter(AgentRole.id == role_id).first()
-            if not role:
-                logger.error(f"Role not found: {role_id}")
-                return None
-            
-            # Check if agent assignment exists
-            agent_assignment = db.query(AgentAssignment).filter(
-                AgentAssignment.role_id == role_id
-            ).first()
-            
-            if agent_assignment:
-                # User exists for this role
-                user = db.query(User).filter(User.id == agent_assignment.user_id).first()
-                if user:
-                    logger.info(f"Found existing user {user.username} for role {role.name}")
-                    return user
-            
-            # Create a new user for this role
-            logger.info(f"Creating new user for role {role.name} in scenario {episode.scenario_id}")
-            user = create_agent_assignment(
-                db, 
-                role.name, 
-                episode.scenario_id, 
-                username=f"{role.name}_{episode.id}",
-                model=getattr(role, 'model', None)
-            )
-            
-            return user
-            
-        except Exception as e:
-            logger.error(f"Failed to get or create agent assignment: {str(e)}")
-            return None
+    
+    
+    
     
     @staticmethod
     def _create_step(
@@ -245,7 +124,7 @@ class ScenarioManager:
 
     
  
-def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
+def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
     """
     Execute a scenario from start to finish.
     
@@ -297,7 +176,7 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
                 ).all()
         else:
             # Get initial state if episode is new or doesn't have a current state
-            current_state = ScenarioManager._get_initial_state(db, scenario_id)
+            current_state = b_get_initial_state(db, scenario_id)
             if not current_state:
                 logger.error(f"No initial state found for scenario: {scenario_id}")
                 return None
@@ -314,7 +193,7 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
         # Continue processing states until we reach the end
         while current_state:
             # 3. Get all roles associated with the state
-            roles = ScenarioManager._get_state_roles(db, current_state.id)
+            roles = c_get_state_roles(db, current_state.id)
             if not roles:
                 logger.error(f"Failed to get roles for state: {current_state.id}")
                 return None
@@ -322,7 +201,7 @@ def execute_scenario(scenario_id: int, episode_id: int) -> Optional[int]:
             # 4. Get or create users for each role
             role_users = []
             for role in roles:
-                user = ScenarioManager._get_or_create_agent_assignment(db, role.id, episode_id)
+                user = d_get_or_create_agent_assignment(db, role.id, episode_id)
                 if not user:
                     logger.error(f"Failed to get or create user for role: {role.id}")
                     return None

@@ -9,7 +9,7 @@ from src.common.data_store import get_learner
 
 logger = logging.getLogger(__name__)
 
-def create_or_find_episode(scenario_id: int) -> Optional[Episode]:
+def a_create_or_find_episode(scenario_id: int) -> Optional[Episode]:
         """
         Find an existing running episode for the scenario or create a new one if none exists.
         
