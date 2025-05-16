@@ -1,21 +1,18 @@
 """
 Command-line interface
 """
-
 import os
 import sys
 import argparse
 import logging
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
 from src.construction.check_database_tables import check_database_tables
 from src.construction.run_construction import run_construction
 from src.evolution.run_evolution import run_evolution
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
