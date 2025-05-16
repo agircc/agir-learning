@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
-from agir_db.models.scenario import Scenario, State, StateTransition
+from agir_db.models.scenario import Scenario
+from agir_db.models.state import State
+from agir_db.models.state_transition import StateTransition
 from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step
 from agir_db.models.scenario import StateRole
