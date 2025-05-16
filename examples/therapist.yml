@@ -10,7 +10,7 @@ scenario:
     gender: "FEMALE"
     birth_date: "1985-03-14"
     profession: "Clinical Psychologist"
-    model: "phi:latest"
+    model: "gpt-4.1-nano"
     skills:
       - "Active Listening"
       - "Cognitive Behavioral Therapy"
