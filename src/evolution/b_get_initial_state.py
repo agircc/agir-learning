@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from agir_db.models.state import State
 from agir_db.models.state_transition import StateTransition
 from agir_db.schemas.state import StateInDBBase
+from agir_db.models.episode import EpisodeStatus
 
 from src.evolution.store import get_episode
 
@@ -26,6 +27,12 @@ def b_get_state(db: Session, scenario_id: int) -> Optional[State]:
         if not episode:
             logger.error(f"No episode found")
             return None
+        
+        if episode.current_state_id and episode.status == EpisodeStatus.RUNNING:
+          current_state = db.query(State).filter(State.id == episode.current_state_id).first()
+          logger.info(f"Continuing with existing state: {current_state.name if current_state else None}")
+
+          return current_state
         
         # Get all states in the scenario
         all_states = db.query(State).filter(State.scenario_id == scenario_id).all()
