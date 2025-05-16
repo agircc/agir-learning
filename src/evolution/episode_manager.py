@@ -18,7 +18,6 @@ from agir_db.models.state import State
 from agir_db.models.state_transition import StateTransition
 from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step
-from agir_db.models.scenario import StateRole
 from agir_db.models.agent_assignment import AgentAssignment
 
 from src.construction.data_store import get_learner
