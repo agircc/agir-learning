@@ -7,7 +7,7 @@ from agir_db.models.step import Step, StepStatus
 
 logger = logging.getLogger(__name__)
 
-def e_create_step(
+def e_create_or_find_step(
     db: Session, 
     episode_id: int, 
     state_id: int, 
@@ -28,6 +28,18 @@ def e_create_step(
         Optional[int]: ID of the step if successful, None otherwise
     """
     try:
+        # Check for unfinished or failed steps in the current state
+        unfinished_step = db.query(Step).filter(
+            Step.episode_id == episode_id,
+            Step.state_id == state_id,
+            Step.user_id == user_id,
+            Step.status.in_([StepStatus.PENDING, StepStatus.RUNNING, StepStatus.FAILED])
+        ).first()
+
+        if unfinished_step:
+            logger.info(f"Found unfinished step: {unfinished_step.id}")
+            return unfinished_step.id
+
         step = Step(
             episode_id=episode_id,
             state_id=state_id,

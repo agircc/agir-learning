@@ -18,7 +18,8 @@ from src.evolution.a_create_or_find_episode import a_create_or_find_episode
 from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
 from src.evolution.d_get_or_create_user import d_get_or_create_user
-from src.evolution.e_create_step import e_create_step
+from src.evolution.e_create_or_find_step import e_create_or_find_step, e_create_step
+from src.evolution.store import get_episode
 from src.evolution.update_step import update_step
 
 from .scenario_manager.get_next_state import get_next_state
@@ -29,7 +30,7 @@ from .coversation.conduct_multi_turn_conversation import conduct_multi_turn_conv
 logger = logging.getLogger(__name__)
 
    
-def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
+def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
     """
     Execute a scenario from start to finish.
     
@@ -41,44 +42,15 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
     """
     try:
         db = next(get_db())
-        
-        # Check if the episode exists and is not completed
-        episode = db.query(Episode).filter(Episode.id == episode_id).first()
-        if not episode:
-            logger.error(f"Episode with ID {episode_id} not found")
-            return None
-        
+        episode = a_create_or_find_episode(scenario_id)
         current_state = b_get_initial_state(db, scenario_id)
-
+                 
         # Load all completed steps for context
-        completed_steps = db.query(Step).filter(
+        all_steps = db.query(Step).filter(
             Step.episode_id == episode_id,
             Step.status == StepStatus.COMPLETED
         ).all()
-        all_steps = completed_steps
 
-        # If episode has a current state, use it instead of getting initial state
-        if episode.current_state_id and episode.status == EpisodeStatus.RUNNING:
-            current_state = db.query(State).filter(State.id == episode.current_state_id).first()
-            logger.info(f"Continuing with existing state: {current_state.name if current_state else None}")
-            
-            # Check for unfinished or failed steps in the current state
-            unfinished_steps = db.query(Step).filter(
-                Step.episode_id == episode_id,
-                Step.state_id == current_state.id,
-                Step.status.in_([StepStatus.PENDING, StepStatus.RUNNING, StepStatus.FAILED])
-            ).all()
-            
-            if unfinished_steps:
-                logger.info(f"Found {len(unfinished_steps)} unfinished steps in current state {current_state.name}")
-                
-                # Update unfinished/running steps back to pending so they can be retried
-                for step in unfinished_steps:
-                    logger.info(f"Resetting step {step.id} from status {step.status} to PENDING")
-                    update_step(db, step.id, status=StepStatus.PENDING)
-        
-        logger.info(f"Current state: {current_state}")
-        
         # Continue processing states until we reach the end
         while current_state:
             # 3. Get all roles associated with the state
@@ -98,7 +70,7 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                 role, user = role_users[0]
                 
                 # Create step with RUNNING status
-                step_id = e_create_step(
+                step_id = e_create_or_find_step(
                     db, episode_id, current_state.id, user.id
                 )
                 
@@ -124,7 +96,7 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
             # 6. If there are multiple roles, conduct a multi-turn conversation
             else:
                 # Create step for the conversation with RUNNING status
-                step_id = e_create_step(
+                step_id = e_create_or_find_step(
                     db, episode_id, current_state.id, role_users[0][1].id
                 )
                 
@@ -205,7 +177,6 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
     try:
         db = next(get_db())
         
-        # First, look for the scenario
         logger.info(f"Looking up scenario with ID: {scenario_id}")
         scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
         
@@ -215,17 +186,12 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
         
         logger.info(f"Found scenario: {scenario.name}")
         
-        # Run the requested number of episodes
         logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name}")
         
         for i in range(num_episodes):
             logger.info(f"Starting episode {i+1} of {num_episodes}")
             
-            # Start the process from the beginning
-            episode = a_create_or_find_episode(scenario_id)
-            
-            # Execute the process until completion or error
-            result = execute_episode(scenario_id, episode.id)
+            result = start_episode(scenario_id)
             
             if not result:
                 logger.error(f"Failed to execute episode {i+1}")

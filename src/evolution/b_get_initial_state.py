@@ -50,17 +50,15 @@ def b_get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
         # These are potential starting states
         for state in all_states:
             if state.id not in to_state_ids:
+                episode.current_state_id = state.id
+                db.commit()
+                db.refresh(episode)
+                set_episode(episode)
                 return StateInDBBase.model_validate(state)
         
         # If no clear starting state, return the first state
         logger.warning(f"No clear starting state found for scenario: {scenario_id}, using first state")
-
-
-        episode.current_state_id = all_states[0].id
-        db.commit()
-        db.refresh(episode)
-        set_episode(episode)
-        return all_states[0]
+        sys.exit(1)
         
     except Exception as e:
         logger.error(f"Failed to get state: {str(e)}")
