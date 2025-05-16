@@ -3,6 +3,7 @@ Execute scenario - handles running a specific episode
 """
 
 import logging
+import sys
 import time
 import json
 import uuid
@@ -23,7 +24,8 @@ from agir_db.schemas.state import StateInDBBase
 
 from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
-from src.evolution.d_get_or_create_agent_assignment import d_get_or_create_agent_assignment
+from src.evolution.d_get_or_create_user import d_get_or_create_user
+from src.evolution.e_create_step import e_create_step
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 from src.evolution.update_step import update_step
 
@@ -142,10 +144,10 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
             # 4. Get or create users for each role
             role_users = []
             for role in roles:
-                user = d_get_or_create_agent_assignment(db, role.id, episode_id)
+                user = d_get_or_create_user(db, role.id, episode_id)
                 if not user:
                     logger.error(f"Failed to get or create user for role: {role.id}")
-                    return None
+                    sys.exit(1)
                 role_users.append((role, user))
             
             # 5. If there's only one role, generate a simple response
@@ -153,16 +155,9 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                 role, user = role_users[0]
                 
                 # Create step with RUNNING status
-                step_id = ScenarioManager._create_step(
+                step_id = e_create_step(
                     db, episode_id, current_state.id, user.id
                 )
-                
-                if not step_id:
-                    logger.error(f"Failed to create step for state: {current_state.id}")
-                    return None
-                
-                # Update the step status to RUNNING
-                update_step(db, step_id, status=StepStatus.RUNNING)
                 
                 try:
                     # Generate LLM response
@@ -181,21 +176,14 @@ def execute_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                     logger.error(f"Failed to generate response: {str(e)}")
                     episode.status = EpisodeStatus.FAILED
                     db.commit()
-                    return None
+                    sys.exit(1)
             
             # 6. If there are multiple roles, conduct a multi-turn conversation
             else:
                 # Create step for the conversation with RUNNING status
-                step_id = ScenarioManager._create_step(
+                step_id = e_create_step(
                     db, episode_id, current_state.id, role_users[0][1].id
                 )
-                
-                if not step_id:
-                    logger.error(f"Failed to create step for state: {current_state.id}")
-                    return None
-                
-                # Update the step status to RUNNING
-                update_step(db, step_id, f"Multi-role conversation for state: {current_state.name}", StepStatus.RUNNING)
                 
                 try:
                     # Add step to history

@@ -1,4 +1,5 @@
 import logging
+import sys
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional, Tuple, Union
@@ -10,6 +11,8 @@ from src.common.data_store import get_learner, get_scenario, set_learner
 import random
 import time
 from datetime import datetime
+
+from src.evolution.store import get_episode
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,7 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
     """
     try:
         scenario = get_scenario()
+        episode = get_episode()
         
         # Check if this is the learner role
         logger.info(f"Scenario learner role: {scenario.learner_role}")
@@ -118,26 +122,20 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
         
         if not agent_role:
             logger.warning(f"Role '{role}' not found for scenario {scenario_id}. Creating a default role.")
-            
-            agent_role = AgentRole(
-                scenario_id=scenario_id,
-                name=role,
-                description=f"Auto-created role for {role}"
-            )
-            
-            db.add(agent_role)
-            db.flush()
+            sys.exit(1)
         
         # Create role-user association if it doesn't exist
         existing_assignment = db.query(AgentAssignment).filter(
             AgentAssignment.role_id == agent_role.id,
-            AgentAssignment.user_id == user.id
+            AgentAssignment.user_id == user.id,
+            AgentAssignment.episode_id == episode.id
         ).first()
         
         if not existing_assignment:
             agent_assignment = AgentAssignment(
                 role_id=agent_role.id,
-                user_id=user.id
+                user_id=user.id,
+                episode_id=episode.id
             )
             
             db.add(agent_assignment)

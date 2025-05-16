@@ -1,5 +1,6 @@
 
 import logging
+import sys
 from typing import Optional
 from sqlalchemy.orm import Session
 from agir_db.models.step import Step, StepStatus
@@ -31,7 +32,6 @@ def e_create_step(
             episode_id=episode_id,
             state_id=state_id,
             user_id=user_id,
-            action="scenario",
             status=StepStatus.RUNNING,
             generated_text=generated_text
         )
@@ -47,4 +47,4 @@ def e_create_step(
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create step: {str(e)}")
-        return None
+        sys.exit(1)
