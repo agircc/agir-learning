@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description='Evolution Process')
+    parser = argparse.ArgumentParser(description='Evolution Scenario')
     
     parser.add_argument(
-        'process_file',
-        help='Path to the YAML process file'
+        'scenario_file',
+        help='Path to the YAML scenario file'
     )
     
     parser.add_argument(
@@ -52,20 +52,20 @@ def parse_args():
     parser.add_argument(
         '--setup-only',
         action='store_true',
-        help='Only setup the process in the database without executing it'
+        help='Only setup the scenario in the database without executing it'
     )
     
     parser.add_argument(
         '--mode',
         choices=['init', 'run', 'all'],
         default='all',
-        help='Execution mode: init (only initialize process), run (only run evolution), all (both)'
+        help='Execution mode: init (only initialize scenario), run (only run evolution), all (both)'
     )
     
     parser.add_argument(
-        '--process-id',
+        '--scenario-id',
         type=int,
-        help='Process ID for run mode (required when mode=run)'
+        help='Scenario ID for run mode (required when mode=run)'
     )
     
     parser.add_argument(
@@ -92,52 +92,52 @@ def main():
             sys.exit(1)
         logger.info("Database tables check passed")
     
-    process_id = None
+    scenario_id = None
     
     # Handle different execution modes
     if args.mode in ['init', 'all']:
-        # Check if process file exists
-        if not os.path.exists(args.process_file):
-            logger.error(f"Process file not found: {args.process_file}")
+        # Check if scenario file exists
+        if not os.path.exists(args.scenario_file):
+            logger.error(f"Scenario file not found: {args.scenario_file}")
             sys.exit(1)
             
-        # Create process from YAML file
-        logger.info(f"Creating process from file: {args.process_file}")
-        process_id = run_construction(args.process_file)
+        # Create scenario from YAML file
+        logger.info(f"Creating scenario from file: {args.scenario_file}")
+        scenario_id = run_construction(args.scenario_file)
         
-        if not process_id:
-            logger.error("Failed to create process from YAML file")
+        if not scenario_id:
+            logger.error("Failed to create scenario from YAML file")
             sys.exit(1)
         
-        logger.info(f"Process created with ID: {process_id}")
+        logger.info(f"Scenario created with ID: {scenario_id}")
     
-    # For run mode, use the provided process_id
+    # For run mode, use the provided scenario_id
     if args.mode == 'run':
-        if args.process_id is None:
-            logger.error("Process ID is required for run mode. Use --process-id to specify.")
+        if args.scenario_id is None:
+            logger.error("Scenario ID is required for run mode. Use --scenario-id to specify.")
             sys.exit(1)
-        process_id = args.process_id
-        logger.info(f"Using provided process ID: {process_id}")
+        scenario_id = args.scenario_id
+        logger.info(f"Using provided scenario ID: {scenario_id}")
     
     # Skip evolution if in init-only mode or setup-only flag is set
     if args.mode == 'init' or args.setup_only:
-        logger.info("Setup-only flag set or init mode selected, exiting without executing process")
+        logger.info("Setup-only flag set or init mode selected, exiting without executing scenario")
         sys.exit(0)
     
     try:        
-        # Run evolution process, now using the ID rather than loading from file again
-        logger.info(f"Running evolution process with ID: {process_id}, episodes: {args.episodes}")
-        success = run_evolution(process_id, num_episodes=args.episodes)
+        # Run evolution scenario, now using the ID rather than loading from file again
+        logger.info(f"Running evolution scenario with ID: {scenario_id}, episodes: {args.episodes}")
+        success = run_evolution(scenario_id, num_episodes=args.episodes)
         
         if success:
-            logger.info("Evolution process completed successfully")
+            logger.info("Evolution scenario completed successfully")
             sys.exit(0)
         else:
-            logger.error("Evolution process failed")
+            logger.error("Evolution scenario failed")
             sys.exit(1)
             
     except Exception as e:
-        logger.error(f"CLI Error in evolution process: {str(e)}")
+        logger.error(f"CLI Error in evolution scenario: {str(e)}")
         sys.exit(1)
 
 
