@@ -84,10 +84,6 @@ IMPORTANT INSTRUCTIONS:
       while not conversation_complete and turn_count < max_turns:
           # For each role, generate a response in round-robin fashion
           for i, (role, user) in enumerate(role_users):
-              # Skip the first role in the first turn as they already sent the initial message
-              if turn_count == 0 and i == 0:
-                  continue
-              
               # Get the conversation chain for this role
               chain = role_chains[user.id]
               
