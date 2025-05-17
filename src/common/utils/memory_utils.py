@@ -4,9 +4,9 @@ Utility functions for working with user memories
 
 import logging
 import sys
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Union, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, Column, Float, String
 from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
 from agir_db.models.state import State
@@ -14,8 +14,84 @@ from agir_db.db.session import get_db
 from src.common.llm_provider import get_llm_model
 import uuid
 import datetime
+import numpy as np
+import json
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 logger = logging.getLogger(__name__)
+
+# Default embedding model
+DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+
+def get_embedding_model(model_name: Optional[str] = None):
+    """
+    Get embedding model based on model name.
+    
+    Args:
+        model_name: Name of the embedding model to use
+        
+    Returns:
+        Embedding model instance
+    """
+    if not model_name:
+        model_name = DEFAULT_EMBEDDING_MODEL
+    
+    # Check if it's an OpenAI model
+    if model_name.startswith("text-embedding"):
+        return OpenAIEmbeddings(model=model_name)
+    else:
+        # Default to HuggingFace for other models
+        return HuggingFaceEmbeddings(model_name=model_name)
+
+def generate_embedding(text: str, model_name: Optional[str] = None) -> List[float]:
+    """
+    Generate embedding vector for text.
+    
+    Args:
+        text: Text to generate embedding for
+        model_name: Name of the embedding model to use
+        
+    Returns:
+        List[float]: Embedding vector
+    """
+    try:
+        embedding_model = get_embedding_model(model_name)
+        embedding = embedding_model.embed_query(text)
+        return embedding
+    except Exception as e:
+        logger.error(f"Failed to generate embedding: {str(e)}")
+        # Return empty vector in case of error
+        return []
+
+def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
+    """
+    Calculate cosine similarity between two vectors.
+    
+    Args:
+        vec1: First vector
+        vec2: Second vector
+        
+    Returns:
+        float: Cosine similarity (-1 to 1)
+    """
+    if not vec1 or not vec2:
+        return 0.0
+    
+    # Convert to numpy arrays
+    vec1 = np.array(vec1)
+    vec2 = np.array(vec2)
+    
+    # Calculate cosine similarity
+    dot_product = np.dot(vec1, vec2)
+    norm_1 = np.linalg.norm(vec1)
+    norm_2 = np.linalg.norm(vec2)
+    
+    # Avoid division by zero
+    if norm_1 == 0 or norm_2 == 0:
+        return 0.0
+        
+    return dot_product / (norm_1 * norm_2)
 
 def extract_knowledge_from_content(content: str, model_name: str) -> str:
     """
@@ -139,6 +215,9 @@ def create_user_memory(
         # Extract knowledge
         knowledge = extract_knowledge_from_content(extraction_context, model_name)
         
+        # Generate embedding for the knowledge
+        embedding = generate_embedding(knowledge)
+        
         # Ensure metadata is a dict and values are serializable
         if metadata is None:
             metadata = {}
@@ -158,7 +237,8 @@ def create_user_memory(
             meta_data=serializable_metadata,
             importance=importance,
             source=source,
-            source_id=source_id
+            source_id=source_id,
+            embedding=embedding  # Use the dedicated embedding field
         )
         
         db.add(memory)
@@ -208,7 +288,8 @@ def get_user_memories(user_id: str, limit: int = 10, offset: int = 0) -> List[Di
                 "source": memory.source,
                 "created_at": memory.created_at.isoformat() if memory.created_at else None,
                 "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
-                "access_count": memory.access_count
+                "access_count": memory.access_count,
+                "embedding": memory.embedding  # Include embedding in the result
             })
             
             # Update access count and last_accessed
@@ -223,6 +304,88 @@ def get_user_memories(user_id: str, limit: int = 10, offset: int = 0) -> List[Di
         logger.error(f"Failed to get user memories: {str(e)}")
         return []
 
+def search_user_memories_vector(user_id: str, query: str, limit: int = 10, 
+                               similarity_threshold: float = 0.7) -> List[Dict[str, Any]]:
+    """
+    Search for memories based on vector similarity.
+    
+    Args:
+        user_id: ID of the user
+        query: Search query
+        limit: Maximum number of memories to return
+        similarity_threshold: Minimum similarity score to include a memory
+        
+    Returns:
+        List[Dict[str, Any]]: List of matching memories as dictionaries
+    """
+    try:
+        db = next(get_db())
+        
+        # Generate embedding for the query
+        query_embedding = generate_embedding(query)
+        if not query_embedding:
+            logger.error("Failed to generate embedding for query")
+            return search_user_memories(user_id, query, limit)  # Fall back to text search
+        
+        # Get all memories for the user
+        memories = db.query(UserMemory).filter(
+            UserMemory.user_id == user_id,
+            UserMemory.is_active == True
+        ).all()
+        
+        # Calculate similarity scores and rank
+        memory_scores = []
+        for memory in memories:
+            # Use the dedicated embedding field
+            memory_embedding = memory.embedding
+            
+            if not memory_embedding:
+                # If no embedding, generate one and store it
+                memory_embedding = generate_embedding(memory.content)
+                if memory_embedding:
+                    memory.embedding = memory_embedding
+                    db.add(memory)
+            
+            # Calculate similarity if embedding exists
+            if memory_embedding:
+                similarity = cosine_similarity(query_embedding, memory_embedding)
+                if similarity >= similarity_threshold:
+                    memory_scores.append((memory, similarity))
+        
+        # Sort by similarity score (descending)
+        memory_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Take top results
+        top_memories = [m for m, s in memory_scores[:limit]]
+        
+        # Convert to dictionaries
+        result = []
+        for memory in top_memories:
+            result.append({
+                "id": str(memory.id),
+                "content": memory.content,
+                "meta_data": memory.meta_data,
+                "importance": memory.importance,
+                "source": memory.source,
+                "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
+                "access_count": memory.access_count,
+                "embedding": memory.embedding  # Include embedding in the result
+            })
+            
+            # Update access count and last_accessed
+            memory.access_count += 1
+            memory.last_accessed = datetime.datetime.now()
+        
+        db.commit()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to search user memories with vector: {str(e)}")
+        # Fall back to text search
+        return search_user_memories(user_id, query, limit)
+
 def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict[str, Any]]:
     """
     Search for memories based on a text query.
@@ -236,6 +399,13 @@ def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict
         List[Dict[str, Any]]: List of matching memories as dictionaries
     """
     try:
+        # First try vector search
+        vector_results = search_user_memories_vector(user_id, query, limit)
+        if vector_results:
+            logger.info(f"Found {len(vector_results)} memories using vector search")
+            return vector_results
+            
+        # Fall back to text search if vector search fails or returns no results
         db = next(get_db())
         
         # Simple text search for now, can be improved with vector search later
@@ -258,7 +428,8 @@ def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict
                 "source": memory.source,
                 "created_at": memory.created_at.isoformat() if memory.created_at else None,
                 "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
-                "access_count": memory.access_count
+                "access_count": memory.access_count,
+                "embedding": memory.embedding  # Include embedding in the result
             })
             
             # Update access count and last_accessed
@@ -291,13 +462,21 @@ def add_user_memory(user_id: str, content: str, meta_data: Dict[str, Any] = None
     try:
         db = next(get_db())
         
+        # Generate embedding for the content
+        embedding = generate_embedding(content)
+        
+        # Prepare metadata
+        if meta_data is None:
+            meta_data = {}
+        
         # Create new memory
         memory = UserMemory(
             user_id=user_id,
             content=content,
-            meta_data=meta_data or {},
+            meta_data=meta_data,
             importance=importance,
-            source=source
+            source=source,
+            embedding=embedding  # Use the dedicated embedding field
         )
         
         db.add(memory)

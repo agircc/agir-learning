@@ -15,7 +15,7 @@ import argparse
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
-from src.common.utils.memory_utils import get_user_memories, search_user_memories, add_user_memory
+from src.common.utils.memory_utils import get_user_memories, search_user_memories, add_user_memory, search_user_memories_vector
 from src.common.llm_provider import get_llm_model
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
@@ -106,17 +106,30 @@ class LearnerChatSession:
     def _search_memories(self, query: str, limit: int = 3) -> None:
         """
         Search memories related to a query and update the current memories.
+        Uses vector similarity search for better semantic matching.
         
         Args:
             query: Search query
             limit: Maximum number of memories to retrieve
         """
-        relevant_memories = search_user_memories(str(self.user.id), query, limit=limit)
-        if relevant_memories:
-            self.memories = relevant_memories
-            logger.info(f"Found {len(relevant_memories)} relevant memories for query: {query}")
-        else:
-            logger.info(f"No relevant memories found for query: {query}")
+        try:
+            # Use vector search directly
+            relevant_memories = search_user_memories_vector(str(self.user.id), query, limit=limit)
+            
+            if relevant_memories:
+                self.memories = relevant_memories
+                logger.info(f"Found {len(relevant_memories)} relevant memories using vector search for query: {query}")
+            else:
+                # Fall back to keyword search if vector search returns no results
+                relevant_memories = search_user_memories(str(self.user.id), query, limit=limit)
+                if relevant_memories:
+                    self.memories = relevant_memories
+                    logger.info(f"Found {len(relevant_memories)} relevant memories using text search for query: {query}")
+                else:
+                    logger.info(f"No relevant memories found for query: {query}")
+        except Exception as e:
+            logger.error(f"Error searching memories: {str(e)}")
+            # Keep current memories if search fails
     
     def chat(self, message: str) -> str:
         """
