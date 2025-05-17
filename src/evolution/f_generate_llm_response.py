@@ -7,7 +7,7 @@ from agir_db.models.state import State
 from agir_db.models.step import Step
 from sqlalchemy.orm import Session
 
-from src.llms.llm_langchain import LLMProviderManager
+from src.common.llm_langchain import LLMProviderManager
 
 logger = logging.getLogger(__name__)
 
