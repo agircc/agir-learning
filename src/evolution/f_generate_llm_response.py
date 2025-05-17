@@ -5,8 +5,9 @@ from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.state import State
 from agir_db.models.step import Step
-from src.llms.llm_provider_manager import LLMProviderManager
 from sqlalchemy.orm import Session
+
+from src.llms.llm_langchain import LLMProviderManager
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,9 @@ from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step
 from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.schemas.state import StateInDBBase
-from src.llms.llm_provider_manager import LLMProviderManager
+
+from src.llms.llm_langchain import LLMProviderManager
+
 
 logger = logging.getLogger(__name__)
 
