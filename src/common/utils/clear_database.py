@@ -30,6 +30,7 @@ def clear_database_tables():
             "state_transitions",
             "states",
             "scenarios",
+            "user_memories",
             "users"
         ]
         
