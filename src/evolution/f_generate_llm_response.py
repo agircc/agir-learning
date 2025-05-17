@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import List, Optional
+from typing import List, Optional, Dict
 from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.state import State
@@ -8,6 +8,8 @@ from agir_db.models.step import Step
 from sqlalchemy.orm import Session
 
 from src.common.llm_provider import get_llm_model
+from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 
 logger = logging.getLogger(__name__)
 
@@ -26,53 +28,46 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       Optional[str]: Generated response if successful, None otherwise
   """
   try:
-      # Create context from previous steps
-      context = {
-          "state_name": state.name,
-          "state_description": state.description,
-          "history": []
-      }
-      
-      # Add previous step data to history
-      for step in previous_steps:
-          if step.generated_text:
-              context["history"].append({
-                  "step_id": step.id,
-                  "state_id": step.state_id,
-                  "user_id": step.user_id,
-                  "content": step.generated_text
-              })
-      
       # Get the appropriate LLM model from the user
       model_name = user.llm_model
       if not model_name:
+          logger.error("User has no LLM model specified")
           sys.exit(1)
       
       logger.info(f"Using model {model_name} for state {state.name}")
       
+      # Get LangChain model
       llm_model = get_llm_model(model_name)
       
-      # Build prompt
-      prompt = f"""You are a human working on a scenario called "{state.name}".
+      # Prepare system prompt
+      system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {user.username}. Task: {state.description}"
       
-Your role: {user.username}
-Task: {state.description}
-
-"""
+      # Convert previous steps to LangChain message format
+      messages = [SystemMessage(content=system_prompt)]
       
-      # Add conversation history if available
-      if context["history"]:
-          prompt += "Previous conversation:\n\n"
-          for i, entry in enumerate(context["history"]):
-              prompt += f"Step {i+1}: {entry['content']}\n\n"
+      # Add previous step data as conversation history
+      for step in previous_steps:
+          if step.generated_text:
+              # Determine if this is from the user or AI based on user_id comparison
+              # This is a simplification - you might need to adjust based on your data model
+              if step.user_id == user.id:
+                  messages.append(HumanMessage(content=step.generated_text))
+              else:
+                  messages.append(AIMessage(content=step.generated_text))
       
-      prompt += f"Please respond as {user.username} for the current step: {state.name}\n"
+      # Add current request
+      current_message = f"Please respond as {user.username} for the current step: {state.name}"
+      messages.append(HumanMessage(content=current_message))
       
-      response = llm_model.generate(prompt)
+      # Generate response using the LLM model with message history
+      response = llm_model.invoke(messages)
       
       logger.info(f"Generated LLM response for state {state.name} with user {user.username}")
       
-      return response
+      # Extract content from response
+      if hasattr(response, 'content'):
+          return response.content
+      return str(response)
       
   except Exception as e:
       logger.error(f"Failed to generate LLM response: {str(e)}")
