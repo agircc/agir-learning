@@ -35,23 +35,9 @@ class BaseLangChainProvider:
             self._initialize_llm()
         return self._llm
     
-    def get_chat_model(self):
-        """Get the LangChain Chat model
-        
-        Returns:
-            LangChain Chat model instance
-        """
-        if self._chat_model is None:
-            self._initialize_chat_model()
-        return self._chat_model
-    
     def _initialize_llm(self):
         """Initialize the LangChain LLM model"""
-        raise NotImplementedError("Subclasses must implement _initialize_llm")
-    
-    def _initialize_chat_model(self):
-        """Initialize the LangChain Chat model"""
-        raise NotImplementedError("Subclasses must implement _initialize_chat_model")
+        raise NotImplementedError("Subclasses must implement _initialize_llm"
     
     def generate(self, prompt: str, temperature: float = 0.7) -> str:
         """Generate text completion
@@ -135,7 +121,6 @@ class BaseLangChainProvider:
         
         return chain
 
-
 class OpenAILangChainProvider(BaseLangChainProvider):
     """LangChain provider for OpenAI"""
     
@@ -150,19 +135,6 @@ class OpenAILangChainProvider(BaseLangChainProvider):
             temperature=0.7,
             api_key=api_key
         )
-    
-    def _initialize_chat_model(self):
-        """Initialize the OpenAI Chat model"""
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
-        
-        self._chat_model = ChatOpenAI(
-            model_name=self.model_name,
-            temperature=0.7,
-            api_key=api_key
-        )
-
 
 class AnthropicLangChainProvider(BaseLangChainProvider):
     """LangChain provider for Anthropic"""
@@ -178,80 +150,6 @@ class AnthropicLangChainProvider(BaseLangChainProvider):
             temperature=0.7,
             api_key=api_key
         )
-    
-    def _initialize_chat_model(self):
-        """Initialize the Anthropic Chat model"""
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
-        
-        self._chat_model = ChatAnthropic(
-            model_name=self.model_name,
-            temperature=0.7,
-            api_key=api_key
-        )
-
-
-class OllamaLangChainProvider(BaseLangChainProvider):
-    """LangChain provider for Ollama"""
-    
-    def _initialize_llm(self):
-        """Initialize the Ollama LLM"""
-        ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
-        base_url = ollama_url.split('/api')[0]
-        
-        self._llm = OllamaLLM(
-            model=self.model_name,
-            base_url=base_url
-        )
-    
-    def _initialize_chat_model(self):
-        """Initialize the Ollama Chat model"""
-        ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
-        base_url = ollama_url.split('/api')[0]
-        
-        # Use OllamaLLM from langchain_ollama
-        self._chat_model = OllamaLLM(
-            model=self.model_name,
-            base_url=base_url
-        )
-
-    def verify_model(self):
-        """Verify that Ollama is running and the specified model is available
-        
-        Raises:
-            ValueError: If Ollama is not available or model is not found
-        """
-        try:
-            import requests
-            base_url = os.getenv('OLLAMA_URL', 'http://localhost:11434').split('/api')[0]
-            
-            try:
-                # Check if Ollama server is running
-                response = requests.get(f"{base_url}/api/tags", timeout=5)
-                if response.status_code != 200:
-                    raise ValueError(f"Ollama server returned status code {response.status_code}")
-                
-                # Check if model is available
-                models_data = response.json()
-                models = models_data.get('models', [])
-                model_names = [m.get('name') for m in models]
-                
-                if self.model_name not in model_names:
-                    available_models = ", ".join(model_names) if model_names else "none"
-                    raise ValueError(
-                        f"Model '{self.model_name}' not found in Ollama. Available models: {available_models}. "
-                        f"You may need to run: ollama pull {self.model_name}"
-                    )
-                
-                logger.info(f"Verified Ollama model '{self.model_name}' is available")
-                
-            except requests.exceptions.RequestException as e:
-                raise ValueError(f"Failed to connect to Ollama server: {str(e)}")
-                
-        except ImportError:
-            raise ValueError("Requests library not available, cannot verify Ollama model")
-
 
 def detect_provider_type(model_name: str) -> str:
     """Detect provider type from model name
@@ -273,8 +171,6 @@ def detect_provider_type(model_name: str) -> str:
         return "openai"
     elif model_name in ["claude", "claude-3", "claude-3-opus", "claude-3-sonnet"] or model_name.startswith("claude-"):
         return "anthropic"
-    elif model_name in ["llama", "phi", "phi:latest", "mixtral", "mistral"] or model_name.startswith("llama-") or model_name.startswith("phi-"):
-        return "ollama"
     else:
         raise ValueError(f"Could not determine provider type for model: {model_name}")
 
@@ -298,42 +194,8 @@ def get_langchain_provider(model_name: str) -> BaseLangChainProvider:
         
     elif provider_type == 'anthropic':
         provider = AnthropicLangChainProvider(model_name=model_name)
-        
-    elif provider_type == 'ollama':
-        provider = OllamaLangChainProvider(model_name=model_name)
-        # Verify Ollama model is available
-        provider.verify_model()
     
     return provider
-
-
-class DummyProvider(BaseLangChainProvider):
-    """Dummy provider for testing that doesn't make actual LLM calls"""
-    
-    def _initialize_llm(self):
-        """Initialize the dummy LLM"""
-        self._llm = None
-    
-    def _initialize_chat_model(self):
-        """Initialize the dummy chat model"""
-        self._chat_model = None
-    
-    def generate(self, prompt: str, temperature: float = 0.7) -> str:
-        """Return a dummy response"""
-        return f"[TEST RESPONSE] Response to: {prompt}"
-    
-    def generate_with_history(self, messages: List[Dict[str, str]]) -> str:
-        """Return a dummy response for conversation"""
-        return "[TEST RESPONSE] Response to conversation"
-    
-    def get_llm(self):
-        """Get the dummy LLM"""
-        return None
-    
-    def get_chat_model(self):
-        """Get the dummy chat model"""
-        return None
-
 
 class LLMProviderManager:
     """Manages LLM providers based on model names (always using LangChain)"""
@@ -366,27 +228,8 @@ class LLMProviderManager:
         # If we already have a provider for this model, return it
         if model_name in self.providers:
             return self.providers[model_name]
-            
-        # Skip LLM is only for testing
-        if self.skip_llm:
-            logger.info("Skip LLM flag is set, using dummy provider")
-            dummy_provider = DummyProvider(model_name=model_name)
-            self.providers[model_name] = dummy_provider
-            return dummy_provider
         
         # Create and cache the provider
         provider = get_langchain_provider(model_name)
         self.providers[model_name] = provider
         return provider
-    
-    def get_langchain_model(self, model_name):
-        """Get a LangChain model for the specified model
-        
-        Args:
-            model_name: Name of the model
-            
-        Returns:
-            LangChain model instance
-        """
-        provider = self.get_provider(model_name)
-        return provider.get_chat_model()
