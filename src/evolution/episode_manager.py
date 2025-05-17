@@ -134,54 +134,8 @@ class EpisodeManager:
         finally:
             if db:
                 db.close()
+
     
-    @staticmethod
-    def _create_step(
-        db: Session, 
-        episode_id: int, 
-        state_id: int, 
-        user_id: Optional[int] = None
-    ) -> Optional[int]:
-        """
-        Create a step.
-        
-        Args:
-            db: Database session
-            episode_id: ID of the episode
-            state_id: ID of the state
-            user_id: ID of the user (optional)
-            
-        Returns:
-            Optional[int]: ID of the step if successful, None otherwise
-        """
-        try:
-            # If no user_id is provided, look it up based on the state's role
-            if user_id is None:
-                # Get the episode to find the scenario_id
-                episode = db.query(Episode).filter(Episode.id == episode_id).first()
-                if not episode:
-                    logger.error(f"Episode not found: {episode_id}")
-                    return None
-                    
-                user_id = EpisodeManager._get_user_for_state(db, state_id, episode.scenario_id)
-            
-            step = Step(
-                episode_id=episode_id,
-                state_id=state_id,
-                user_id=user_id,
-                action="process"  # Default action
-            )
-            
-            db.add(step)
-            db.commit()
-            logger.info(f"Created step with ID: {step.id}")
-            
-            return step.id
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Failed to create step: {str(e)}")
-            return None
     
     @staticmethod
     def advance_scenario(episode_id: int, next_state_name: Optional[str] = None) -> Optional[int]:
@@ -257,38 +211,6 @@ class EpisodeManager:
             logger.error(f"Failed to advance scenario: {str(e)}")
             return None
     
-    @staticmethod
-    def complete_episode(episode_id: int, success: bool = True) -> bool:
-        """
-        Complete an episode.
-        
-        Args:
-            episode_id: ID of the episode
-            success: Whether the episode completed successfully
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            db = next(get_db())
-            
-            # Get episode
-            episode = db.query(Episode).filter(Episode.id == episode_id).first()
-            if not episode:
-                logger.error(f"Episode not found: {episode_id}")
-                return False
-            
-            # Update episode status
-            episode.status = EpisodeStatus.COMPLETED if success else EpisodeStatus.FAILED
-            db.commit()
-            
-            logger.info(f"Completed episode {episode_id} with status: {episode.status}")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to complete episode: {str(e)}")
-            return False
     
     @staticmethod
     def get_scenario(scenario_id: int) -> Optional[Dict[str, Any]]:
