@@ -5,7 +5,6 @@ from typing import Dict, Any, Optional, List, Union
 
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain_ollama import OllamaLLM
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
@@ -37,7 +36,7 @@ class BaseLangChainProvider:
     
     def _initialize_llm(self):
         """Initialize the LangChain LLM model"""
-        raise NotImplementedError("Subclasses must implement _initialize_llm"
+        raise NotImplementedError("Subclasses must implement _initialize_llm")
     
     def generate(self, prompt: str, temperature: float = 0.7) -> str:
         """Generate text completion
@@ -49,7 +48,7 @@ class BaseLangChainProvider:
         Returns:
             Generated text
         """
-        chat = self.get_chat_model()
+        chat = self.get_llm()
         result = chat.invoke(prompt)
         
         # Extract result content
@@ -66,7 +65,7 @@ class BaseLangChainProvider:
         Returns:
             Generated response
         """
-        chat = self.get_chat_model()
+        chat = self.get_llm()
         
         # Convert messages to LangChain format
         lc_messages = []
@@ -97,7 +96,7 @@ class BaseLangChainProvider:
         Returns:
             Runnable instance (RunnableSequence)
         """
-        chat = self.get_chat_model()
+        chat = self.get_llm()
         
         # Create the prompt template
         messages = []
@@ -207,8 +206,6 @@ class LLMProviderManager:
             skip_llm: Whether to skip LLM initialization for testing purposes only
         """
         self.providers = {}  # Cache of initialized providers
-        self.skip_llm = skip_llm
-        self.default_provider = None
         
     def get_provider(self, model_name):
         """Get a provider for the specified model
