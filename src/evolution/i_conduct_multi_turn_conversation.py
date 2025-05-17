@@ -37,21 +37,8 @@ def i_conduct_multi_turn_conversation(
       Optional[str]: Summary of the conversation if successful, None otherwise
   """
   try:      
-      # Start conversation with a message from the first role
-      first_role, first_user = role_users[0]
-      
-      # Start with state description as first message
-      initial_message = ChatMessage(
-          conversation_id=conversation.id,
-          sender_id=first_user.id,
-          content=f"Let's start our discussion about: {state.description}. As {first_user.username}, I'll begin."
-      )
-      
-      db.add(initial_message)
-      db.commit()
-      
       # Keep track of messages
-      messages = [initial_message]
+      messages = []
       
       # Initialize conversation chains for each role
       role_chains = {}
@@ -63,7 +50,7 @@ def i_conduct_multi_turn_conversation(
           model_name = user.llm_model
           
           # Create a system prompt for this role
-          system_prompt = f"""You are roleplaying as {user.username}.
+          system_prompt = f"""You are roleplaying as {role.name}.
 
 State Context: {state.name}
 Task: {state.description}
@@ -149,6 +136,7 @@ IMPORTANT INSTRUCTIONS:
           
           turn_count += 1
           
+          first_role, first_user = role_users[0]
           # If we've reached max turns, conclude the conversation
           if turn_count >= max_turns:
               logger.warning(f"Conversation for state {state.name} reached maximum turns ({max_turns})")
