@@ -60,7 +60,8 @@ Task: {state.description}
 
 IMPORTANT INSTRUCTIONS:
 1. Respond ONLY as {user.first_name} {user.last_name}
-2. If you feel the conversation has naturally concluded and all goals are met, INSTEAD of a normal response, 
+2. Generate ONLY ONE message as a response
+3. If you feel the conversation has naturally concluded and all goals are met, INSTEAD of a normal response, 
    reply ONLY with exactly these words: "{OUR_CONVERSATION_HAS_ENDED_MARKER}"
 """
           
