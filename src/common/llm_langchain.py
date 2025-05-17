@@ -195,38 +195,3 @@ def get_langchain_provider(model_name: str) -> BaseLangChainProvider:
         provider = AnthropicLangChainProvider(model_name=model_name)
     
     return provider
-
-class LLMProviderManager:
-    """Manages LLM providers based on model names (always using LangChain)"""
-    
-    def __init__(self, skip_llm=False):
-        """Initialize the LLM provider manager
-        
-        Args:
-            skip_llm: Whether to skip LLM initialization for testing purposes only
-        """
-        self.providers = {}  # Cache of initialized providers
-        
-    def get_provider(self, model_name):
-        """Get a provider for the specified model
-        
-        Args:
-            model_name: Name of the model (e.g., "gpt-4", "claude-3", "phi")
-            
-        Returns:
-            LLM provider instance
-            
-        Raises:
-            ValueError: If provider cannot be initialized
-        """
-        if not model_name:
-            raise ValueError("Model name must be specified")
-            
-        # If we already have a provider for this model, return it
-        if model_name in self.providers:
-            return self.providers[model_name]
-        
-        # Create and cache the provider
-        provider = get_langchain_provider(model_name)
-        self.providers[model_name] = provider
-        return provider

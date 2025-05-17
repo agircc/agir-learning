@@ -9,10 +9,8 @@ from agir_db.models.state import State
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
-from src.common.llm_langchain import BaseLangChainProvider, LLMProviderManager
+from src.common.llm_langchain import LLMProviderManager
 
-# LangChain imports updated to use langchain_community where appropriate
-from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
