@@ -16,6 +16,9 @@ from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
 
+# 结束对话的标记
+CONVERSATION_END_MARKER = "Our conversation has ended"
+
 def i_conduct_multi_turn_conversation(
   db: Session, 
   conversation: ChatConversation, 
@@ -60,10 +63,10 @@ IMPORTANT INSTRUCTIONS:
 2. Generate ONLY ONE message as a response
 3. DO NOT include messages from other participants
 4. Stay in character as {user.first_name} {user.last_name}
-5. If the conversation seems complete, include "I THINK WE'VE REACHED A CONCLUSION" at the end
+5. If you feel the conversation has naturally concluded and all goals are met, INSTEAD of a normal response, 
+   reply ONLY with exactly these words: "{CONVERSATION_END_MARKER}"
 """
           
-
           # Create prompt template using modern approach
           prompt = ChatPromptTemplate.from_messages([
               SystemMessagePromptTemplate.from_template(system_prompt),
@@ -80,6 +83,9 @@ IMPORTANT INSTRUCTIONS:
       # Conduct conversation
       conversation_complete = False
       turn_count = 0
+      
+      # Get the first role for completion checks
+      first_role, first_user = role_users[0]
       
       while not conversation_complete and turn_count < max_turns:
           # For each role, generate a response in round-robin fashion
@@ -113,8 +119,15 @@ IMPORTANT INSTRUCTIONS:
                   response_text = response.content
               else:
                   response_text = str(response)
+                  
+              # Check if this is the end marker message
+              if response_text.strip() == CONVERSATION_END_MARKER:
+                  # Don't save this message to the database
+                  conversation_complete = True
+                  logger.info(f"Conversation for state {state.name} concluded naturally")
+                  break
               
-              # Create and save message
+              # Create and save normal message
               message = ChatMessage(
                   conversation_id=conversation.id,
                   sender_id=user.id,
@@ -124,15 +137,9 @@ IMPORTANT INSTRUCTIONS:
               db.add(message)
               db.commit()
               messages.append(message)
-              
-              # Check if conversation is complete
-              if "I THINK WE'VE REACHED A CONCLUSION" in response_text:
-                  conversation_complete = True
-                  break
           
           turn_count += 1
           
-          first_role, first_user = role_users[0]
           # If we've reached max turns, conclude the conversation
           if turn_count >= max_turns:
               logger.warning(f"Conversation for state {state.name} reached maximum turns ({max_turns})")
