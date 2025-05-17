@@ -17,7 +17,7 @@ from agir_db.models.step import Step, StepStatus
 from src.evolution.a_create_or_find_episode import a_create_or_find_episode
 from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
-from src.evolution.d_get_or_create_user import d_get_or_create_user
+from src.evolution.d_get_or_create_user_for_state import d_get_or_create_user_for_state
 from src.evolution.e_create_or_find_step import e_create_or_find_step, e_create_step
 from src.evolution.store import get_episode
 from src.evolution.update_step import update_step
@@ -59,7 +59,7 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
             # 4. Get or create users for each role
             role_users = []
             for role in roles:
-                user = d_get_or_create_user(db, role.id, episode_id)
+                user = d_get_or_create_user_for_state(db, role.id, episode_id)
                 if not user:
                     logger.error(f"Failed to get or create user for role: {role.id}")
                     sys.exit(1)

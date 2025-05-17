@@ -11,7 +11,7 @@ from src.evolution.store import get_episode
 
 logger = logging.getLogger(__name__)
 
-def d_get_or_create_user(db: Session, role_id: int) -> Optional[User]:
+def d_get_or_create_user_for_state(db: Session, role_id: int) -> Optional[User]:
   """
   Get or create a user for a role in an episode.
   
