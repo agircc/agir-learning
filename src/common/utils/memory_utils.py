@@ -6,12 +6,14 @@ import logging
 import sys
 from typing import Dict, Any, List, Optional, Union
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
 from agir_db.models.state import State
 from agir_db.db.session import get_db
 from src.common.llm_provider import get_llm_model
 import uuid
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +213,7 @@ def get_user_memories(user_id: str, limit: int = 10, offset: int = 0) -> List[Di
             
             # Update access count and last_accessed
             memory.access_count += 1
-            memory.last_accessed = db.func.now()
+            memory.last_accessed = datetime.datetime.now()
         
         db.commit()
         
@@ -261,7 +263,7 @@ def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict
             
             # Update access count and last_accessed
             memory.access_count += 1
-            memory.last_accessed = db.func.now()
+            memory.last_accessed = datetime.datetime.now()
         
         db.commit()
         
