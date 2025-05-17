@@ -36,7 +36,7 @@ def g_update_step(
         
         # Update the step
         if response_message is not None:
-            step.response = response_message
+            step.generated_text = response_message
             
         if status is not None:
             step.status = status

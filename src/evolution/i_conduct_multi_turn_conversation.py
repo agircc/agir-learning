@@ -9,7 +9,7 @@ from agir_db.models.state import State
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
-from src.common.llm_langchain import LLMProviderManager
+from src.common.llm_provider import LLMProviderManager, get_llm_model
 
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
@@ -36,10 +36,7 @@ def i_conduct_multi_turn_conversation(
   Returns:
       Optional[str]: Summary of the conversation if successful, None otherwise
   """
-  try:
-      # Initialize LLM provider manager with LangChain support
-      llm_provider_manager = LLMProviderManager()
-      
+  try:      
       # Start conversation with a message from the first role
       first_role, first_user = role_users[0]
       
@@ -79,9 +76,7 @@ IMPORTANT INSTRUCTIONS:
 5. If the conversation seems complete, include "I THINK WE'VE REACHED A CONCLUSION" at the end
 """
           
-          # Get LangChain provider for this model
-          langchain_provider = llm_provider_manager.get_provider(model_name)
-          
+
           # Create prompt template using modern approach
           prompt = ChatPromptTemplate.from_messages([
               SystemMessagePromptTemplate.from_template(system_prompt),
@@ -90,7 +85,7 @@ IMPORTANT INSTRUCTIONS:
           ])
           
           # Create the chain using pipe operator (|) for RunnableSequence
-          role_chains[user.id] = prompt | langchain_provider.get_chat_model()
+          role_chains[user.id] = prompt | get_llm_model(model_name)
           
           # Initialize empty chat history for each role
           chat_histories[user.id] = []
@@ -173,34 +168,9 @@ IMPORTANT INSTRUCTIONS:
           sender = db.query(User).filter(User.id == msg.sender_id).first()
           conversation_history += f"{sender.username}: {msg.content}\n\n"
       
-      # Use the first user's model to generate a summary
-      model_name = role_users[0][1].llm_model
-      langchain_provider = llm_provider_manager.get_provider(model_name)
-      
-      # Create a prompt for summarization
-      summary_prompt = PromptTemplate.from_template(
-          """Summarize the following conversation in a concise paragraph:
-
-{conversation}
-
-Provide a summary that captures the key points discussed and any conclusions reached."""
-      )
-      
-      # Create a chain using pipe operator
-      summary_chain = summary_prompt | langchain_provider.get_chat_model()
-      
-      # Generate summary using invoke()
-      summary_response = summary_chain.invoke({"conversation": conversation_history})
-      
-      # Extract summary content
-      if hasattr(summary_response, 'content'):
-          summary = summary_response.content
-      else:
-          summary = str(summary_response)
-      
       logger.info(f"Completed multi-turn conversation for state: {state.name}")
       
-      return f"Conversation summary: {summary}\n\nFull conversation:\n{conversation_history}"
+      return f"Completed multi-turn conversation for state: {state.name}"
       
   except Exception as e:
       logger.error(f"Failed to conduct multi-turn conversation: {str(e)}")

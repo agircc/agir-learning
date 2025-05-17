@@ -1,13 +1,12 @@
-# 使用 langchain 调用 llm 模型
 import os
 import logging
 from typing import Dict, Any, Optional, List, Union
 
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
+from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.language_models.chat_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,6 @@ class BaseLangChainProvider:
         """
         self.model_name = model_name
         self._llm = None
-        self._chat_model = None
     
     def get_llm(self):
         """Get the LangChain LLM model
@@ -174,7 +172,7 @@ def detect_provider_type(model_name: str) -> str:
         raise ValueError(f"Could not determine provider type for model: {model_name}")
 
 
-def get_langchain_provider(model_name: str) -> BaseLangChainProvider:
+def get_llm_model(model_name: str) -> BaseChatModel:
     """Get a LangChain provider for the specified model
     
     Args:
@@ -194,4 +192,4 @@ def get_langchain_provider(model_name: str) -> BaseLangChainProvider:
     elif provider_type == 'anthropic':
         provider = AnthropicLangChainProvider(model_name=model_name)
     
-    return provider
+    return provider.get_llm()

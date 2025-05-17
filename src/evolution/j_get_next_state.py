@@ -17,7 +17,7 @@ from agir_db.models.step import Step
 from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.schemas.state import StateInDBBase
 
-from src.common.llm_langchain import LLMProviderManager
+from src.common.llm_provider import get_llm_model
 
 
 logger = logging.getLogger(__name__)
@@ -110,10 +110,9 @@ def j_get_next_state(db: Session, scenario_id: int, current_state_id: int, episo
           """
           
           # Get LLM response
-          llm_manager = LLMProviderManager()
           logger.info(f"User LLM model: {user}")
-          provider = llm_manager.get_provider(user.llm_model)
-          response = provider.generate(prompt)
+          llm_model = get_llm_model(user.llm_model)
+          response = llm_model.generate(prompt)
           
           # Find the transition based on LLM response
           for t in transitions:

@@ -7,7 +7,7 @@ from agir_db.models.state import State
 from agir_db.models.step import Step
 from sqlalchemy.orm import Session
 
-from src.common.llm_langchain import LLMProviderManager
+from src.common.llm_provider import get_llm_model
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +50,7 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       
       logger.info(f"Using model {model_name} for state {state.name}")
       
-      # Initialize LLM provider manager
-      llm_provider_manager = LLMProviderManager()
-      provider = llm_provider_manager.get_provider(model_name)
+      llm_model = get_llm_model(model_name)
       
       # Build prompt
       prompt = f"""You are a human working on a scenario called "{state.name}".
@@ -70,8 +68,7 @@ Task: {state.description}
       
       prompt += f"Please respond as {user.username} for the current step: {state.name}\n"
       
-      # Call the LLM provider to generate a response
-      response = provider.generate(prompt)
+      response = llm_model.generate(prompt)
       
       logger.info(f"Generated LLM response for state {state.name} with user {user.username}")
       
