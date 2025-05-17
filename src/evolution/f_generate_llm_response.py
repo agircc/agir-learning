@@ -13,7 +13,7 @@ from src.llms.llm_provider_manager import LLMProviderManager
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
-def generate_llm_response(db: Session, state: State, current_state_role: AgentRole, user: User, previous_steps: List[Step]) -> Optional[str]:
+def f_generate_llm_response(db: Session, state: State, current_state_role: AgentRole, user: User, previous_steps: List[Step]) -> Optional[str]:
   """
   Generate LLM response for a state using the appropriate LLM provider.
   

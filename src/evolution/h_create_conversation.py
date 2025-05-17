@@ -11,7 +11,7 @@ from agir_db.models.step import Step
 
 logger = logging.getLogger(__name__)
 
-def create_conversation(db: Session, state: State, episode_id: int, role_users: List[Tuple[AgentRole, User]], step_id: int) -> Optional[ChatConversation]:
+def h_create_conversation(db: Session, state: State, episode_id: int, role_users: List[Tuple[AgentRole, User]], step_id: int) -> Optional[ChatConversation]:
   """
   Create a conversation for a multi-role state.
   

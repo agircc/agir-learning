@@ -9,7 +9,7 @@ from agir_db.models.step import Step, StepStatus
 
 logger = logging.getLogger(__name__)
 
-def update_step(
+def g_update_step(
     db: Session,
     step_id: int,
     response_message: str = None,

@@ -19,13 +19,12 @@ from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
 from src.evolution.d_get_or_create_user_for_state import d_get_or_create_user_for_state
 from src.evolution.e_create_or_find_step import e_create_or_find_step, e_create_step
-from src.evolution.store import get_episode
-from src.evolution.update_step import update_step
+from src.evolution.g_update_step import g_update_step
 
 from .scenario_manager.get_next_state import get_next_state
-from .scenario_manager.generate_llm_response import generate_llm_response
-from .coversation.create_conversation import create_conversation
-from .coversation.conduct_multi_turn_conversation import conduct_multi_turn_conversation
+from .f_generate_llm_response import f_generate_llm_response
+from .h_create_conversation import h_create_conversation
+from .i_conduct_multi_turn_conversation import i_conduct_multi_turn_conversation
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +75,10 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                 
                 try:
                     # Generate LLM response
-                    response = generate_llm_response(db, current_state, role, user, all_steps)
+                    response = f_generate_llm_response(db, current_state, role, user, all_steps)
                     
                     # Update step with generated data and mark as COMPLETED
-                    update_step(db, step_id, response, StepStatus.COMPLETED)
+                    g_update_step(db, step_id, response, StepStatus.COMPLETED)
                     
                     # Add step to history
                     step = db.query(Step).filter(Step.id == step_id).first()
@@ -87,7 +86,7 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                     
                 except Exception as e:
                     # Update step status to FAILED if there's an error
-                    update_step(db, step_id, f"Failed to generate response: {str(e)}", StepStatus.FAILED)
+                    g_update_step(db, step_id, f"Failed to generate response: {str(e)}", StepStatus.FAILED)
                     logger.error(f"Failed to generate response: {str(e)}")
                     episode.status = EpisodeStatus.FAILED
                     db.commit()
@@ -106,21 +105,21 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                     all_steps.append(step)
                     
                     # Create conversation linked to the step
-                    conversation = create_conversation(db, current_state, episode_id, role_users, step_id)
+                    conversation = h_create_conversation(db, current_state, episode_id, role_users, step_id)
                     if not conversation:
                         logger.error(f"Failed to create conversation for state: {current_state.id}")
-                        update_step(db, step_id, "Failed to create conversation", StepStatus.FAILED)
+                        g_update_step(db, step_id, "Failed to create conversation", StepStatus.FAILED)
                         episode.status = EpisodeStatus.FAILED
                         db.commit()
                         return None
                     
                     # Conduct multi-turn conversation
-                    conversation_result = conduct_multi_turn_conversation(
+                    conversation_result = i_conduct_multi_turn_conversation(
                         db, conversation, current_state, role_users
                     )
                     
                     # Update the step with conversation results and mark as COMPLETED
-                    update_step(db, step_id, conversation_result, StepStatus.COMPLETED)
+                    g_update_step(db, step_id, conversation_result, StepStatus.COMPLETED)
                     
                     # Also update episode status to mark this state as processed
                     episode = db.query(Episode).filter(Episode.id == episode_id).first()
@@ -130,7 +129,7 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                         
                 except Exception as e:
                     # Update step status to FAILED if there's an error
-                    update_step(db, step_id, f"Failed in conversation: {str(e)}", StepStatus.FAILED)
+                    g_update_step(db, step_id, f"Failed in conversation: {str(e)}", StepStatus.FAILED)
                     logger.error(f"Failed in conversation: {str(e)}")
                     episode.status = EpisodeStatus.FAILED
                     db.commit()

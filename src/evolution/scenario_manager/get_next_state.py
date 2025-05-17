@@ -18,7 +18,7 @@ from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.schemas.state import StateInDBBase
 
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
-from src.evolution.scenario_manager.generate_llm_response import generate_llm_response
+from src.evolution.f_generate_llm_response import generate_llm_response
 from src.llms.llm_provider_manager import LLMProviderManager
 
 logger = logging.getLogger(__name__)
