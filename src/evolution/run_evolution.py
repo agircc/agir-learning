@@ -28,7 +28,6 @@ from .i_conduct_multi_turn_conversation import i_conduct_multi_turn_conversation
 
 logger = logging.getLogger(__name__)
 
-   
 def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
     """
     Execute a scenario from start to finish.
@@ -52,10 +51,8 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
 
         # Continue processing states until we reach the end
         while current_state:
-            # 3. Get all roles associated with the state
             roles = c_get_state_roles(db, current_state.id)
 
-            # 4. Get or create users for each role
             role_users = []
             for role in roles:
                 user = d_get_or_create_user_for_state(db, role.id, episode_id)
@@ -64,7 +61,6 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                     sys.exit(1)
                 role_users.append((role, user))
             
-            # 5. If there's only one role, generate a simple response
             if len(role_users) == 1:
                 role, user = role_users[0]
                 
@@ -92,7 +88,6 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
                     db.commit()
                     sys.exit(1)
             
-            # 6. If there are multiple roles, conduct a multi-turn conversation
             else:
                 # Create step for the conversation with RUNNING status
                 step_id = e_create_or_find_step(
