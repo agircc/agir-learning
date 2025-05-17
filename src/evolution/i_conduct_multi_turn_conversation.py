@@ -16,8 +16,8 @@ from langchain.schema import HumanMessage, AIMessage, SystemMessage
 
 logger = logging.getLogger(__name__)
 
-# 结束对话的标记
-CONVERSATION_END_MARKER = "Our conversation has ended"
+# End of conversation marker
+OUR_CONVERSATION_HAS_ENDED_MARKER = "OUR CONVERSATION HAS ENDED"
 
 def i_conduct_multi_turn_conversation(
   db: Session, 
@@ -60,11 +60,8 @@ Task: {state.description}
 
 IMPORTANT INSTRUCTIONS:
 1. Respond ONLY as {user.first_name} {user.last_name}
-2. Generate ONLY ONE message as a response
-3. DO NOT include messages from other participants
-4. Stay in character as {user.first_name} {user.last_name}
-5. If you feel the conversation has naturally concluded and all goals are met, INSTEAD of a normal response, 
-   reply ONLY with exactly these words: "{CONVERSATION_END_MARKER}"
+2. If you feel the conversation has naturally concluded and all goals are met, INSTEAD of a normal response, 
+   reply ONLY with exactly these words: "{OUR_CONVERSATION_HAS_ENDED_MARKER}"
 """
           
           # Create prompt template using modern approach
@@ -120,8 +117,8 @@ IMPORTANT INSTRUCTIONS:
               else:
                   response_text = str(response)
                   
-              # Check if this is the end marker message
-              if response_text.strip() == CONVERSATION_END_MARKER:
+              # Check if this is the end marker message (case insensitive)
+              if OUR_CONVERSATION_HAS_ENDED_MARKER.lower() in response_text.strip().lower():
                   # Don't save this message to the database
                   conversation_complete = True
                   logger.info(f"Conversation for state {state.name} concluded naturally")
