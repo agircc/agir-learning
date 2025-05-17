@@ -23,7 +23,7 @@ from src.llms.llm_provider_manager import LLMProviderManager
 
 logger = logging.getLogger(__name__)
 
-def get_next_state(db: Session, scenario_id: int, current_state_id: int, episode_id: int, user: User) -> Optional[State]:
+def j_get_next_state(db: Session, scenario_id: int, current_state_id: int, episode_id: int, user: User) -> Optional[State]:
   """
   Get the next state in a scenario based on conditions.
   

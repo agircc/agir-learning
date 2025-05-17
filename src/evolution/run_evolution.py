@@ -21,7 +21,7 @@ from src.evolution.d_get_or_create_user_for_state import d_get_or_create_user_fo
 from src.evolution.e_create_or_find_step import e_create_or_find_step, e_create_step
 from src.evolution.g_update_step import g_update_step
 
-from .scenario_manager.get_next_state import get_next_state
+from .j_get_next_state import j_get_next_state
 from .f_generate_llm_response import f_generate_llm_response
 from .h_create_conversation import h_create_conversation
 from .i_conduct_multi_turn_conversation import i_conduct_multi_turn_conversation
@@ -141,7 +141,7 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
             
             logger.info(f"Current state in the circle: {current_state}")
             # 7. Find next state
-            next_state = get_next_state(db, scenario_id, current_state.id, episode_id, role_users[0][1])
+            next_state = j_get_next_state(db, scenario_id, current_state.id, episode_id, role_users[0][1])
             
             # If no next state, we've reached the end
             if not next_state:
