@@ -18,7 +18,7 @@ from src.evolution.a_create_or_find_episode import a_create_or_find_episode
 from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
 from src.evolution.d_get_or_create_user_for_state import d_get_or_create_user_for_state
-from src.evolution.e_create_or_find_step import e_create_or_find_step, e_create_step
+from src.evolution.e_create_or_find_step import e_create_or_find_step
 from src.evolution.g_update_step import g_update_step
 
 from .j_get_next_state import j_get_next_state
@@ -28,7 +28,7 @@ from .i_conduct_multi_turn_conversation import i_conduct_multi_turn_conversation
 
 logger = logging.getLogger(__name__)
 
-def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
+def start_episode(scenario_id: int) -> Optional[int]:
     """
     Execute a scenario from start to finish.
     
@@ -41,6 +41,7 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
     try:
         db = next(get_db())
         episode = a_create_or_find_episode(scenario_id)
+        episode_id = episode.id
         current_state = b_get_initial_state(db, scenario_id)
                  
         # Load all completed steps for context
@@ -55,7 +56,7 @@ def start_episode(scenario_id: int, episode_id: int) -> Optional[int]:
 
             role_users = []
             for role in roles:
-                user = d_get_or_create_user_for_state(db, role.id, episode_id)
+                user = d_get_or_create_user_for_state(db, role.id)
                 if not user:
                     logger.error(f"Failed to get or create user for role: {role.id}")
                     sys.exit(1)

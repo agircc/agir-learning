@@ -5,9 +5,9 @@ from src.construction.b_create_or_find_scenario import create_or_find_scenario
 from src.construction.c_create_or_find_agent_roles import create_or_find_agent_roles
 from src.construction.d_create_or_find_states import create_or_find_states
 from src.construction.e_create_or_find_state_transitions import create_or_find_state_transitions
-from src.utils.check_database_tables import check_database_tables
+from src.common.utils.check_database_tables import check_database_tables
 from typing import Dict, Any, List, Optional, Tuple, Union
-from src.utils.yaml_loader import load_scenario_from_file
+from src.common.utils.yaml_loader import load_scenario_from_file
 from agir_db.db.session import get_db
 
 logger = logging.getLogger(__name__)

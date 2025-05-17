@@ -45,6 +45,7 @@ def e_create_or_find_step(
             state_id=state_id,
             user_id=user_id,
             status=StepStatus.RUNNING,
+            action="process",
             generated_text=generated_text
         )
         

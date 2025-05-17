@@ -1,0 +1,27 @@
+scenario:
+  name: "Coworker Daily Chat with Reflection"
+  description: "A minimal episode where Alice greets Bob and then reflects on the interaction."
+  learner_role: "alice"
+
+  learner:
+    username: alice_001
+    model: "phi:latest"
+
+  roles:
+    - name: "alice"
+      model: "phi:latest"
+    - name: "bob"
+      model: "phi:latest"
+
+  states:
+    - name: "Morning Greeting"
+      roles: ["alice", "bob"]
+      description: "Alice greets Bob at the office. Bob gives a short reply."
+
+    - name: "Alice Reflection"
+      roles: ["alice"]
+      description: "Alice reflects briefly on the short interaction with Bob."
+
+  transitions:
+    - from_state_name: Morning Greeting
+      to_state_name: Alice Reflection

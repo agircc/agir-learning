@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from agir_db.models.state import State
 from agir_db.models.state_transition import StateTransition
 from agir_db.schemas.state import StateInDBBase
-from agir_db.models.episode import EpisodeStatus
+from agir_db.models.episode import Episode, EpisodeStatus
 
 from src.evolution.store import get_episode, set_episode
 
@@ -50,10 +50,11 @@ def b_get_initial_state(db: Session, scenario_id: int) -> Optional[State]:
         # These are potential starting states
         for state in all_states:
             if state.id not in to_state_ids:
-                episode.current_state_id = state.id
+                episode_to_update = db.query(Episode).filter(Episode.id == episode.id).first()
+                episode_to_update.current_state_id = state.id
                 db.commit()
-                db.refresh(episode)
-                set_episode(episode)
+                db.refresh(episode_to_update)
+                set_episode(episode_to_update)
                 return StateInDBBase.model_validate(state)
         
         # If no clear starting state, return the first state

@@ -9,8 +9,7 @@ from agir_db.models.state import State
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
-from src.llms.llm_provider_manager import LLMProviderManager
-from src.llms.llm_langchain import BaseLangChainProvider
+from src.llms.llm_langchain import BaseLangChainProvider, LLMProviderManager
 
 # LangChain imports updated to use langchain_community where appropriate
 from langchain.memory import ConversationBufferMemory
@@ -41,7 +40,7 @@ def i_conduct_multi_turn_conversation(
   """
   try:
       # Initialize LLM provider manager with LangChain support
-      llm_provider_manager = LLMProviderManager(use_langchain=True)
+      llm_provider_manager = LLMProviderManager()
       
       # Start conversation with a message from the first role
       first_role, first_user = role_users[0]
