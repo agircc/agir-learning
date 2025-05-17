@@ -24,10 +24,10 @@ def clear_database_tables():
             "chat_participants",
             "chat_conversations",
             "steps",
+            "agent_assignments",
             "episodes",
             "state_roles",
             "state_transitions",
-            "agent_assignments",
             "states",
             "scenarios",
             "users"

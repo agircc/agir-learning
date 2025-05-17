@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from src.utils.clear_database import clear_database_tables
+from src.common.utils.clear_database import clear_database_tables
 
 logging.basicConfig(
     level=logging.INFO,

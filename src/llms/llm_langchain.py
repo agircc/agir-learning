@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional, List, Union
 
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 from langchain.schema import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
@@ -200,7 +200,7 @@ class OllamaLangChainProvider(BaseLangChainProvider):
         ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         base_url = ollama_url.split('/api')[0]
         
-        self._llm = Ollama(
+        self._llm = OllamaLLM(
             model=self.model_name,
             base_url=base_url
         )
@@ -210,9 +210,8 @@ class OllamaLangChainProvider(BaseLangChainProvider):
         ollama_url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
         base_url = ollama_url.split('/api')[0]
         
-        # Ollama doesn't have a dedicated chat model in LangChain
-        # so we'll use the regular LLM interface
-        self._chat_model = Ollama(
+        # Use OllamaLLM from langchain_ollama
+        self._chat_model = OllamaLLM(
             model=self.model_name,
             base_url=base_url
         )

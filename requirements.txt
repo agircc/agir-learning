@@ -14,3 +14,4 @@ python-multipart==0.0.6
 requests>=2.30.0 
 email-validator==2.1.0.post1
 tk==0.1.0
+langchain-ollama==0.3.3

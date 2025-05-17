@@ -5,13 +5,13 @@ scenario:
 
   learner:
     username: alice_001
-    model: "phi:latest"
+    model: "gpt-4.1-nano"
 
   roles:
     - name: "alice"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
     - name: "bob"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
 
   states:
     - name: "Morning Greeting"
