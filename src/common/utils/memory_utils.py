@@ -19,10 +19,22 @@ import json
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
 
+# Import FAISS - exit if not available
+try:
+    import faiss
+    from langchain_community.vectorstores import FAISS
+    from langchain.docstore.document import Document
+except ImportError as e:
+    logging.error(f"FAISS library is required but not found: {str(e)}")
+    logging.error("To install FAISS: conda install -c conda-forge faiss-cpu")
+    sys.exit(1)
+    
 logger = logging.getLogger(__name__)
 
 # Default embedding model
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
+# Default embedding dimension
+DEFAULT_EMBEDDING_DIM = 1536  # OpenAI embedding dimension
 
 def get_embedding_model(model_name: Optional[str] = None):
     """
@@ -75,7 +87,7 @@ def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
     Returns:
         float: Cosine similarity (-1 to 1)
     """
-    if not vec1 or not vec2:
+    if not vec1 or not vec2 or len(vec1) != len(vec2):
         return 0.0
     
     # Convert to numpy arrays
@@ -92,6 +104,35 @@ def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
         return 0.0
         
     return dot_product / (norm_1 * norm_2)
+
+def python_vector_search(query_vector: List[float], memories: List[UserMemory], 
+                         limit: int = 10, threshold: float = 0.0) -> List[Tuple[UserMemory, float]]:
+    """
+    Pure Python implementation of vector search using cosine similarity.
+    This is used as a fallback when FAISS search returns no results.
+    
+    Args:
+        query_vector: Query embedding vector
+        memories: List of UserMemory objects
+        limit: Maximum number of results to return
+        threshold: Minimum similarity threshold
+        
+    Returns:
+        List of (memory, similarity_score) tuples, sorted by descending similarity
+    """
+    results = []
+    
+    for memory in memories:
+        if memory.embedding and len(memory.embedding) > 0:
+            similarity = cosine_similarity(query_vector, memory.embedding)
+            if similarity > threshold:
+                results.append((memory, similarity))
+    
+    # Sort by similarity (descending)
+    results.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return top k results
+    return results[:limit]
 
 def extract_knowledge_from_content(content: str, model_name: str) -> str:
     """
@@ -304,16 +345,61 @@ def get_user_memories(user_id: str, limit: int = 10, offset: int = 0) -> List[Di
         logger.error(f"Failed to get user memories: {str(e)}")
         return []
 
-def search_user_memories_vector(user_id: str, query: str, limit: int = 10, 
-                               similarity_threshold: float = 0.7) -> List[Dict[str, Any]]:
+def build_langchain_faiss_index(memories: List[UserMemory], embedding_model):
     """
-    Search for memories based on vector similarity.
+    Build a FAISS index using LangChain's FAISS vectorstore.
+    
+    Args:
+        memories: List of UserMemory objects
+        embedding_model: LangChain embedding model
+        
+    Returns:
+        FAISS: LangChain FAISS vectorstore or None if no valid memories
+    """
+    # Only include memories that have content
+    documents = []
+    memory_map = {}  # To map Document IDs back to original memories
+    
+    for memory in memories:
+        if memory.content:
+            # Create a Document for each memory
+            doc = Document(
+                page_content=memory.content,
+                metadata={
+                    "id": str(memory.id),
+                    "importance": memory.importance,
+                    "source": memory.source,
+                    "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                    "access_count": memory.access_count,
+                    "user_meta_data": memory.meta_data
+                }
+            )
+            documents.append(doc)
+            memory_map[str(memory.id)] = memory
+    
+    # If no documents, return None
+    if not documents:
+        return None, {}
+    
+    # Create FAISS index using standard parameters
+    try:
+        # Use default parameters as LangChain doesn't expose all FAISS parameters directly
+        vectorstore = FAISS.from_documents(documents, embedding_model)
+        
+        logger.info(f"Built FAISS index with {len(documents)} vectors")
+        return vectorstore, memory_map
+    except Exception as e:
+        logger.error(f"Error building FAISS index: {str(e)}")
+        return None, {}
+
+def search_user_memories_vector(user_id: str, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Search for memories based on vector similarity using FAISS.
     
     Args:
         user_id: ID of the user
         query: Search query
         limit: Maximum number of memories to return
-        similarity_threshold: Minimum similarity score to include a memory
         
     Returns:
         List[Dict[str, Any]]: List of matching memories as dictionaries
@@ -321,74 +407,88 @@ def search_user_memories_vector(user_id: str, query: str, limit: int = 10,
     try:
         db = next(get_db())
         
-        # Generate embedding for the query
+        # Generate query embedding
         query_embedding = generate_embedding(query)
-        if not query_embedding:
+        if not query_embedding or len(query_embedding) == 0:
             logger.error("Failed to generate embedding for query")
-            return search_user_memories(user_id, query, limit)  # Fall back to text search
+            return []
         
-        # Get all memories for the user
+        # Retrieve memories with content
         memories = db.query(UserMemory).filter(
             UserMemory.user_id == user_id,
-            UserMemory.is_active == True
+            UserMemory.is_active == True,
+            UserMemory.content != None
         ).all()
         
-        # Calculate similarity scores and rank
-        memory_scores = []
-        for memory in memories:
-            # Use the dedicated embedding field
-            memory_embedding = memory.embedding
-            
-            if not memory_embedding:
-                # If no embedding, generate one and store it
-                memory_embedding = generate_embedding(memory.content)
-                if memory_embedding:
-                    memory.embedding = memory_embedding
-                    db.add(memory)
-            
-            # Calculate similarity if embedding exists
-            if memory_embedding:
-                similarity = cosine_similarity(query_embedding, memory_embedding)
-                if similarity >= similarity_threshold:
-                    memory_scores.append((memory, similarity))
+        if not memories:
+            logger.warning(f"No memories found for user {user_id}")
+            return []
         
-        # Sort by similarity score (descending)
-        memory_scores.sort(key=lambda x: x[1], reverse=True)
+        # Get embedding model
+        embedding_model = get_embedding_model()
         
-        # Take top results
-        top_memories = [m for m, s in memory_scores[:limit]]
+        # Build FAISS index
+        vectorstore, memory_map = build_langchain_faiss_index(memories, embedding_model)
         
-        # Convert to dictionaries
+        if not vectorstore:
+            logger.warning("Failed to build FAISS index")
+            return []
+                
+        # Search with a larger k and filter later to ensure we get enough results
+        search_k = max(limit * 2, 20)
+        try:
+            # Perform search with vectorstore's similarity_search_with_score method
+            search_results = vectorstore.similarity_search_with_score(query, k=search_k)
+        except Exception as e:
+            logger.error(f"Error during FAISS search: {str(e)}")
+            return []
+        
+        # Process results
         result = []
-        for memory in top_memories:
-            result.append({
-                "id": str(memory.id),
-                "content": memory.content,
-                "meta_data": memory.meta_data,
-                "importance": memory.importance,
-                "source": memory.source,
-                "created_at": memory.created_at.isoformat() if memory.created_at else None,
-                "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
-                "access_count": memory.access_count,
-                "embedding": memory.embedding  # Include embedding in the result
-            })
-            
-            # Update access count and last_accessed
-            memory.access_count += 1
-            memory.last_accessed = datetime.datetime.now()
+        for doc, score in search_results:
+            # Get memory ID from document metadata
+            memory_id = doc.metadata.get("id")
+            if memory_id in memory_map:
+                memory = memory_map[memory_id]
+                
+                # Update access count and last_accessed
+                memory.access_count += 1
+                memory.last_accessed = datetime.datetime.now()
+                db.add(memory)
+                
+                # Add to results
+                result.append({
+                    "id": str(memory.id),
+                    "content": memory.content,
+                    "meta_data": memory.meta_data,
+                    "importance": memory.importance,
+                    "source": memory.source,
+                    "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                    "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
+                    "access_count": memory.access_count,
+                    "embedding": memory.embedding,
+                    "score": float(score)
+                })
         
         db.commit()
         
+        # Sort by score (FAISS returns distance, convert to similarity by inverting)
+        result.sort(key=lambda x: x["score"], reverse=False)
+        
+        # Limit to requested number
+        result = result[:limit]
+        
+        if result:
+            logger.info(f"Found {len(result)} memories using FAISS vector search")
         return result
         
     except Exception as e:
         logger.error(f"Failed to search user memories with vector: {str(e)}")
-        # Fall back to text search
-        return search_user_memories(user_id, query, limit)
+        return []
 
 def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict[str, Any]]:
     """
-    Search for memories based on a text query.
+    Search for memories based on a text query using FAISS vector search.
     
     Args:
         user_id: ID of the user
@@ -399,47 +499,8 @@ def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict
         List[Dict[str, Any]]: List of matching memories as dictionaries
     """
     try:
-        # First try vector search
-        vector_results = search_user_memories_vector(user_id, query, limit)
-        if vector_results:
-            logger.info(f"Found {len(vector_results)} memories using vector search")
-            return vector_results
-            
-        # Fall back to text search if vector search fails or returns no results
-        db = next(get_db())
-        
-        # Simple text search for now, can be improved with vector search later
-        memories = db.query(UserMemory).filter(
-            UserMemory.user_id == user_id,
-            UserMemory.is_active == True,
-            UserMemory.content.ilike(f"%{query}%")
-        ).order_by(
-            UserMemory.importance.desc()
-        ).limit(limit).all()
-        
-        # Convert to dictionaries
-        result = []
-        for memory in memories:
-            result.append({
-                "id": str(memory.id),
-                "content": memory.content,
-                "meta_data": memory.meta_data,
-                "importance": memory.importance,
-                "source": memory.source,
-                "created_at": memory.created_at.isoformat() if memory.created_at else None,
-                "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
-                "access_count": memory.access_count,
-                "embedding": memory.embedding  # Include embedding in the result
-            })
-            
-            # Update access count and last_accessed
-            memory.access_count += 1
-            memory.last_accessed = datetime.datetime.now()
-        
-        db.commit()
-        
-        return result
-        
+        # Perform vector search
+        return search_user_memories_vector(user_id, query, limit)
     except Exception as e:
         logger.error(f"Failed to search user memories: {str(e)}")
         return []

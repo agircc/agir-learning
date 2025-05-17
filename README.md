@@ -23,12 +23,79 @@ The core purpose of AGIR Learning is to **accelerate skill development through s
 ## Installation
 
 ```bash
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate
+# Create and activate conda environment
+conda env create -f environment.yml
+conda activate agir-learning
 
-# Install dependencies
+# If the environment already exists, update it instead:
+conda env update -f environment.yml --prune
+conda activate agir-learning
+
+# Alternatively, if you prefer to install dependencies manually:
+conda create -n agir-learning python=3.12
+conda activate agir-learning
+conda install -c conda-forge faiss-cpu
 pip install -r requirements.txt
+```
+
+### Conda Environment
+
+The project uses a conda environment for dependency management, especially for packages with complex dependencies like FAISS. The `environment.yml` file contains all necessary dependencies:
+
+```yaml
+name: agir-learning
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  - conda-forge::faiss-cpu  # Required for vector search
+  - numpy>=1.24.0
+  - pip:
+    - agir-db @ git+https://github.com/agircc/agir-db.git
+    - python-dotenv==1.0.0  # Required for loading .env files
+    - openai>=1.78.1
+    - anthropic>=0.51.0
+    - PyYAML>=6.0.1
+    - langchain>=0.3.25
+    - langchain-community>=0.3.24
+    - langchain-openai>=0.3.17
+    - langchain-anthropic>=0.3.13
+    - fastapi>=0.104.1,<0.114.0
+    - uvicorn==0.23.2
+    - pydantic>=2.7.4,<3.0.0
+    - python-multipart==0.0.6
+    - requests>=2.30.0 
+    - email-validator==2.1.0.post1
+    - tk==0.1.0
+    - langchain-ollama==0.3.3
+    - sentence-transformers>=2.2.2
+```
+
+To update the environment after changing dependencies:
+
+```bash
+# Update conda environment from environment.yml
+conda env update -f environment.yml --prune
+```
+
+### Troubleshooting
+
+If you encounter any issues with dependencies:
+
+```bash
+# If missing a package (e.g., dotenv)
+conda activate agir-learning
+pip install python-dotenv
+
+# To check if a package is installed
+pip show python-dotenv
+
+# If you need to remove the environment and start over
+conda deactivate
+conda remove -n agir-learning --all
+conda env create -f environment.yml
 ```
 
 ## Usage
