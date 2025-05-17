@@ -5,14 +5,17 @@ import logging
 import uuid
 import sys
 import time
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict, Any
 
 from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
-
+from agir_db.models.user import User
+from agir_db.models.agent_role import AgentRole
 from agir_db.models.state import State
 from agir_db.models.episode import Episode, EpisodeStatus
 from agir_db.models.step import Step, StepStatus
+from agir_db.models.chat_message import ChatMessage
+from agir_db.models.chat_conversation import ChatConversation
 
 from src.evolution.a_create_or_find_episode import a_create_or_find_episode
 from src.evolution.b_get_initial_state import b_get_initial_state
@@ -20,6 +23,8 @@ from src.evolution.c_get_state_roles import c_get_state_roles
 from src.evolution.d_get_or_create_user_for_state import d_get_or_create_user_for_state
 from src.evolution.e_create_or_find_step import e_create_or_find_step
 from src.evolution.g_update_step import g_update_step
+from src.common.utils.memory_utils import create_user_memory
+from src.evolution.k_create_memory import create_episode_memories
 
 from .j_get_next_state import j_get_next_state
 from .f_generate_llm_response import f_generate_llm_response
@@ -144,6 +149,14 @@ def start_episode(scenario_id: int) -> Optional[int]:
                 logger.info(f"Episode {episode_id} completed successfully")
                 episode.status = EpisodeStatus.COMPLETED
                 db.commit()
+                
+                # Create memories for the episode after it completes
+                memory_created = create_episode_memories(db, episode_id)
+                if memory_created:
+                    logger.info(f"Successfully created memories for episode {episode_id}")
+                else:
+                    logger.warning(f"Failed to create memories for episode {episode_id}")
+                
                 break
             
             # Move to next state
