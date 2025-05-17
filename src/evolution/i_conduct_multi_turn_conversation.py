@@ -21,7 +21,7 @@ def i_conduct_multi_turn_conversation(
   conversation: ChatConversation, 
   state: State, 
   role_users: List[Tuple[AgentRole, User]], 
-  max_turns: int = 10
+  max_turns: int = 20
 ) -> Optional[str]:
   """
   Conduct a multi-turn conversation between multiple roles using LangChain.
@@ -50,16 +50,16 @@ def i_conduct_multi_turn_conversation(
           model_name = user.llm_model
           
           # Create a system prompt for this role
-          system_prompt = f"""You are roleplaying as {role.name}.
+          system_prompt = f"""You are roleplaying as {role.name}. Your name is {user.first_name} {user.last_name}.
 
 State Context: {state.name}
 Task: {state.description}
 
 IMPORTANT INSTRUCTIONS:
-1. Respond ONLY as {user.username}
+1. Respond ONLY as {user.first_name} {user.last_name}
 2. Generate ONLY ONE message as a response
 3. DO NOT include messages from other participants
-4. Stay in character as {user.username}
+4. Stay in character as {user.first_name} {user.last_name}
 5. If the conversation seems complete, include "I THINK WE'VE REACHED A CONCLUSION" at the end
 """
           
