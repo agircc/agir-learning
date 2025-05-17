@@ -17,7 +17,7 @@ from agir_db.models.custom_field import CustomField
 from src.models.process import Process, ProcessNode
 from src.models.agent import Agent
 from src.llms import BaseLLMProvider, OpenAIProvider, AnthropicProvider
-from src.llms.ollama import OllamaProvider
+from src.llms.providers.ollama import OllamaProvider
 from src.llms.llm_langchain import get_langchain_provider, BaseLangChainProvider
 
 # Configure logging

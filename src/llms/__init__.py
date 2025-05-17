@@ -2,9 +2,9 @@
 LLM models management
 """
 
-from .base import BaseLLMProvider
-from .openai import OpenAIProvider
-from .anthropic import AnthropicProvider
-from .ollama import OllamaProvider
+from .providers.base import BaseLLMProvider
+from .providers.openai import OpenAIProvider
+from .providers.anthropic import AnthropicProvider
+from .providers.ollama import OllamaProvider
 
 __all__ = ["BaseLLMProvider", "OpenAIProvider", "AnthropicProvider", "OllamaProvider"] 
