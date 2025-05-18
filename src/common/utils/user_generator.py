@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 from sqlalchemy.orm import Session
 from agir_db.models.user import User
 from agir_db.db.session import get_db
-from src.common.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model
 from src.common.utils.memory_utils import create_user_memory, DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)

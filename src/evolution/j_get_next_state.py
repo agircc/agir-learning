@@ -17,7 +17,7 @@ from agir_db.models.step import Step
 from agir_db.models.agent_assignment import AgentAssignment
 from agir_db.schemas.state import StateInDBBase
 
-from src.common.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model
 
 
 logger = logging.getLogger(__name__)

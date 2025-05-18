@@ -16,7 +16,7 @@ from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
 from src.common.utils.memory_utils import get_user_memories, search_user_memories, add_user_memory, search_user_memories_vector
-from src.common.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 

@@ -11,7 +11,7 @@ from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
 from agir_db.models.state import State
 from agir_db.db.session import get_db
-from src.common.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model
 import uuid
 import datetime
 import numpy as np

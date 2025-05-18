@@ -7,7 +7,7 @@ from agir_db.models.state import State
 from agir_db.models.step import Step
 from sqlalchemy.orm import Session
 
-from src.common.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain_core.messages import BaseMessage
 
