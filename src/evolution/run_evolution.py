@@ -147,6 +147,7 @@ def start_episode(scenario_id: int) -> Optional[int]:
             # If no next state, we've reached the end
             if not next_state:
                 logger.info(f"Episode {episode_id} completed successfully")
+                episode = db.query(Episode).filter(Episode.id == episode_id).first()
                 episode.status = EpisodeStatus.COMPLETED
                 db.commit()
                 
@@ -205,6 +206,7 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
                 logger.error(f"Failed to execute episode {i+1}")
                 success = False
             else:
+                   
                 logger.info(f"Successfully completed episode {i+1}")
         
         return success
