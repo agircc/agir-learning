@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 import os
 import random
 import colorsys
+import atexit
 
 from agir_db.db.session import get_db
 # Debug print to see database configuration
@@ -135,6 +136,22 @@ class ScenarioVisualizer:
         # Set window size and position
         self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
         
+        # Create a persistent database session
+        try:
+            self.db = next(get_db())
+            print("Opened persistent database session")
+            
+            # Register a callback to close the session when the application exits
+            atexit.register(self.close_db)
+            # Also bind to window close event
+            self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        except Exception as e:
+            print(f"Failed to create persistent database connection: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Database Error", f"Failed to connect to database: {str(e)}")
+            self.db = None
+        
         # Try to maximize window in a cross-platform way
         try:
             # Windows
@@ -183,6 +200,17 @@ class ScenarioVisualizer:
         
         # Load scenarios data
         self.load_scenarios()
+
+    def close_db(self):
+        """Close the database connection properly."""
+        if hasattr(self, 'db') and self.db is not None:
+            print("Closing persistent database session")
+            self.db.close()
+
+    def on_close(self):
+        """Handle window close event."""
+        self.close_db()
+        self.root.destroy()
 
     def setup_left_column(self):
         # Create vertical paned window for scenarios and episodes
@@ -304,14 +332,13 @@ class ScenarioVisualizer:
         self.conversation_display.pack(fill=tk.BOTH, expand=True)
 
     def load_scenarios(self):
-        db = None
         try:
-            print("Attempting to get database session...")
-            db = next(get_db())
-            print(f"Got database session: {db}")
-            
+            if self.db is None:
+                print("No database connection available")
+                return
+                
             print("Querying scenarios...")
-            scenarios = db.query(Scenario).all()
+            scenarios = self.db.query(Scenario).all()
             print(f"Found {len(scenarios)} scenarios")
             
             # Clear existing items
@@ -328,25 +355,38 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load scenarios: {str(e)}")
-        finally:
-            if db:
-                db.close()
-                print("Database session closed")
+            
+            # If there's a database error, try to reconnect
+            self.reconnect_db()
+
+    def reconnect_db(self):
+        """Try to reconnect to the database if connection fails."""
+        try:
+            print("Attempting to reconnect to database...")
+            if hasattr(self, 'db') and self.db is not None:
+                self.db.close()
+            
+            self.db = next(get_db())
+            print("Successfully reconnected to database")
+            return True
+        except Exception as e:
+            print(f"Failed to reconnect to database: {str(e)}")
+            messagebox.showerror("Database Error", f"Failed to reconnect to database: {str(e)}")
+            self.db = None
+            return False
 
     def on_scenario_selected(self, event):
         item_id = self.scenarios_tree.focus()
-        if not item_id:
+        if not item_id or self.db is None:
             return
             
-        db = None
         try:
             print(f"Scenario selected: {item_id}")
             scenario_id = uuid.UUID(item_id)
-            db = next(get_db())
             
             # Get scenario details
             print(f"Querying scenario details for ID: {scenario_id}")
-            scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
+            scenario = self.db.query(Scenario).filter(Scenario.id == scenario_id).first()
             if not scenario:
                 print("Scenario not found")
                 return
@@ -365,7 +405,7 @@ class ScenarioVisualizer:
             
             # Get episodes for this scenario
             print(f"Getting episodes for scenario: {scenario_id}")
-            episodes = db.query(Episode).filter(
+            episodes = self.db.query(Episode).filter(
                 Episode.scenario_id == scenario_id
             ).all()
             print(f"Found {len(episodes)} episodes")
@@ -382,25 +422,22 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load scenario episodes: {str(e)}")
-        finally:
-            if db:
-                db.close()
-                print("Database session closed for scenario selection")
+            
+            # Try to reconnect if there's a database error
+            self.reconnect_db()
 
     def on_episode_selected(self, event):
         item_id = self.episodes_tree.focus()
-        if not item_id:
+        if not item_id or self.db is None:
             return
             
-        db = None
         try:
             print(f"Episode selected: {item_id}")
             episode_id = uuid.UUID(item_id)
-            db = next(get_db())
             
             # Get episode details
             print(f"Querying episode details for ID: {episode_id}")
-            episode = db.query(Episode).filter(Episode.id == episode_id).first()
+            episode = self.db.query(Episode).filter(Episode.id == episode_id).first()
             if not episode:
                 print("Episode not found")
                 return
@@ -415,7 +452,7 @@ class ScenarioVisualizer:
             
             # Get steps for this episode
             print(f"Getting steps for episode: {episode_id}")
-            steps = db.query(Step).filter(
+            steps = self.db.query(Step).filter(
                 Step.episode_id == episode_id
             ).order_by(Step.created_at).all()
             print(f"Found {len(steps)} steps")
@@ -434,25 +471,22 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load episode details: {str(e)}")
-        finally:
-            if db:
-                db.close()
-                print("Database session closed for episode details")
+            
+            # Try to reconnect if there's a database error
+            self.reconnect_db()
 
     def on_step_selected(self, event):
         item_id = self.steps_tree.focus()
-        if not item_id:
+        if not item_id or self.db is None:
             return
             
-        db = None
         try:
             print(f"Step selected: {item_id}")
             step_id = uuid.UUID(item_id)
-            db = next(get_db())
             
             # Get step details
             print(f"Querying step details for ID: {step_id}")
-            step = db.query(Step).filter(Step.id == step_id).first()
+            step = self.db.query(Step).filter(Step.id == step_id).first()
             if not step:
                 print("Step not found")
                 return
@@ -473,7 +507,7 @@ class ScenarioVisualizer:
             
             # Load related conversations
             print(f"Getting conversations for step: {step_id}")
-            conversations = get_conversations_for_step(db, step_id)
+            conversations = get_conversations_for_step(self.db, step_id)
             print(f"Found {len(conversations)} conversations")
             
             # If there are conversations, display the first one
@@ -482,7 +516,7 @@ class ScenarioVisualizer:
                 print(f"Displaying conversation: {conversation.id} - {conversation.title}")
                 
                 # Get and display messages
-                messages = get_messages_for_conversation(db, conversation.id)
+                messages = get_messages_for_conversation(self.db, conversation.id)
                 if messages:
                     formatted_messages = format_messages(messages)
                     # Display using our enhanced chat display
@@ -499,10 +533,9 @@ class ScenarioVisualizer:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load step details: {str(e)}")
-        finally:
-            if db:
-                db.close()
-                print("Database session closed for step details")
+            
+            # Try to reconnect if there's a database error
+            self.reconnect_db()
 
 
 def main():
