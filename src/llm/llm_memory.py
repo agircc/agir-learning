@@ -33,9 +33,16 @@ class UserMemoryManager:
             # Create a directory for vector stores if it doesn't exist
             os.makedirs(f"./vector_stores/{self.user_id}", exist_ok=True)
             
-            # Initialize FAISS vector store for the user
+            # Create a dummy document to initialize FAISS
+            # This avoids the list index out of range error when starting with empty docs
+            dummy_doc = Document(
+                page_content="Initialization document - can be ignored",
+                metadata={"user_id": self.user_id, "is_dummy": True}
+            )
+            
+            # Initialize FAISS vector store for the user with dummy document
             self.vector_store = FAISS.from_documents(
-                documents=[],  # Start with empty documents
+                documents=[dummy_doc],  # Use dummy doc instead of empty list
                 embedding=self.embedding_model
             )
             
@@ -102,7 +109,16 @@ class UserMemoryManager:
             List of relevant documents
         """
         try:
-            return self.retriever.get_relevant_documents(query, k=k)
+            if not query:
+                return []
+                
+            try:
+                docs = self.retriever.get_relevant_documents(query, k=k)
+                # Filter out initialization documents
+                return [doc for doc in docs if not doc.metadata.get("is_dummy", False)]
+            except IndexError:
+                logger.warning(f"No relevant documents found for query: {query}")
+                return []
         except Exception as e:
             logger.error(f"Failed to retrieve memories: {str(e)}")
             return []
@@ -118,7 +134,17 @@ class UserMemoryManager:
             Dictionary with memory_key and relevant memories as string
         """
         try:
-            return self.memory.load_memory_variables({"input": query})
+            if not query:
+                return {self.memory_key: ""}
+                
+            # Safely retrieve memory variables
+            try:
+                result = self.memory.load_memory_variables({"input": query})
+                return result
+            except IndexError:
+                # Handle the case where no documents are retrieved
+                logger.warning(f"No documents retrieved for query: {query}")
+                return {self.memory_key: ""}
         except Exception as e:
             logger.error(f"Failed to load memory variables: {str(e)}")
             return {self.memory_key: ""}
@@ -141,17 +167,25 @@ def enhance_messages_with_memories(
         Enhanced messages with memory context
     """
     try:
+        # Validate input
+        if not messages or not isinstance(messages, list):
+            logger.warning("No messages provided to enhance_messages_with_memories")
+            return messages  # Return original messages if empty or invalid
+            
         # Initialize memory manager
         memory_manager = UserMemoryManager(user_id)
         
         # If no query provided, use the last human message
         if query is None:
+            query = ""  # Default empty query
             for msg in reversed(messages):
                 if isinstance(msg, HumanMessage):
                     query = msg.content
                     break
-            else:
-                query = ""  # Fallback if no human message found
+        
+        if not query:
+            logger.warning("No query found for memory retrieval")
+            return messages  # Return original messages if no query found
         
         # Get relevant memories
         memory_vars = memory_manager.get_memory_variables(query)
