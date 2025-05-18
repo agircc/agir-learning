@@ -10,7 +10,7 @@ scenario:
   roles:
     - name: "user"
       model: "gpt-4.1-nano"
-      description: "A user who shares a personal post"
+      description: "A user submits a personal post, which may express positive, negative, or neutral emotions."
     - name: "analyst"
       model: "gpt-4.1-nano"
       description: "A mental health analyst who assesses the user's post for emotional distress and explains their reasoning."
