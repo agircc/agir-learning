@@ -13,47 +13,12 @@ import time
 from datetime import datetime
 
 from src.evolution.store import get_episode
+from src.common.utils.user_generator import generate_user_with_llm
+from src.common.utils.memory_utils import DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
-# Lists of common first and last names for more realistic user generation
-FIRST_NAMES = [
-    "James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles",
-    "Mary", "Patricia", "Jennifer", "Linda", "Elizabeth", "Barbara", "Susan", "Jessica", "Sarah", "Karen",
-    "Daniel", "Matthew", "Anthony", "Mark", "Donald", "Steven", "Paul", "Andrew", "Joshua", "Kenneth",
-    "Lisa", "Nancy", "Betty", "Sandra", "Margaret", "Ashley", "Kimberly", "Emily", "Donna", "Michelle"
-]
-
-LAST_NAMES = [
-    "Smith", "Johnson", "Williams", "Jones", "Brown", "Davis", "Miller", "Wilson", "Moore", "Taylor",
-    "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson", "Garcia", "Martinez", "Robinson",
-    "Clark", "Rodriguez", "Lewis", "Lee", "Walker", "Hall", "Allen", "Young", "Hernandez", "King",
-    "Wright", "Lopez", "Hill", "Scott", "Green", "Adams", "Baker", "Gonzalez", "Nelson", "Carter"
-]
-
-def generate_realistic_user(role, scenario_id):
-    """
-    Generate a realistic user with unique username based on role and scenario_id
-    
-    Args:
-        role: The role of the user
-        scenario_id: The scenario ID
-        
-    Returns:
-        tuple: (username, first_name, last_name)
-    """
-    first_name = random.choice(FIRST_NAMES)
-    last_name = random.choice(LAST_NAMES)
-    
-    # Create a unique identifier using timestamp and a random number
-    unique_id = f"{int(time.time() * 1000) % 100000:05d}{random.randint(100, 999)}"
-    
-    # Create username: combine parts of first and last name with unique ID
-    username = f"{first_name.lower()[:4]}_{last_name.lower()[:4]}_{unique_id}"
-    
-    return username, first_name, last_name
-
-def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: Optional[str] = None, model: Optional[str] = None) -> User:
+def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: Optional[str] = None, model: Optional[str] = None, embedding_model: Optional[str] = None) -> User:
     """
     Create a user for a specific role and scenario and associate them in agent_assignments.
     
@@ -63,6 +28,7 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
         scenario_id: ID of the scenario
         username: Username (optional, will be generated if None)
         model: LLM model to use (optional)
+        embedding_model: Embedding model to use (optional)
         
     Returns:
         User: Created or found user
@@ -71,10 +37,15 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
         scenario = get_scenario()
         episode = get_episode()
         
-        # Check if this is the learner role
-        logger.info(f"Scenario learner role: {scenario.learner_role}")
+        # Check if this is the learner role (if scenario is available)
+        learner_role = None
+        if scenario:
+            logger.info(f"Scenario learner role: {scenario.learner_role}")
+            learner_role = scenario.learner_role
+        else:
+            logger.warning("Scenario not found in data store, creating user without learner role check")
         
-        if scenario.learner_role == role:
+        if learner_role and learner_role == role:
             # Use existing learner
             learner = get_learner()
             if learner:
@@ -83,69 +54,71 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
                 if user:
                     return user
         
-        # Generate user information
-        if not username:
-            # Generate a new username and name information
-            username, first_name, last_name = generate_realistic_user(role, scenario_id)
-        else:
-            # Username was provided, assign default names
-            first_name = random.choice(FIRST_NAMES)
-            last_name = random.choice(LAST_NAMES)
-        
         # Find or create user
-        user = db.query(User).filter(User.username == username).first()
+        if username:
+            user = db.query(User).filter(User.username == username).first()
+        else:
+            user = None
         
         if not user:
-            # Create new user
-            user = User(
+            # If model is not specified, use a default model for user generation
+            llm_model = model or "gpt-3.5-turbo"
+            
+            # Get scenario description if available for better context
+            scenario_description = getattr(scenario, 'description', None) if scenario else None
+            
+            # Use default embedding model if not specified
+            if not embedding_model:
+                embedding_model = DEFAULT_EMBEDDING_MODEL
+            
+            # Generate user with LLM
+            user, memory_ids = generate_user_with_llm(
+                db=db,
+                role=role,
+                model_name=llm_model,
                 username=username,
-                first_name=first_name,
-                last_name=last_name,
-                email=f"{username}@agir.ai",
-                is_active=True
+                scenario_id=scenario_id,
+                scenario_description=scenario_description,
+                embedding_model=embedding_model
             )
             
-            # Set model if provided
-            if model and hasattr(user, 'llm_model'):
-                user.llm_model = model
+            logger.info(f"Created new LLM-generated user: {user.username} with ID: {user.id} and {len(memory_ids)} memories")
+        
+        # Find the agent role if episode exists
+        if episode:
+            agent_role = db.query(AgentRole).filter(
+                AgentRole.scenario_id == scenario_id,
+                AgentRole.name == role
+            ).first()
+            
+            if not agent_role:
+                logger.warning(f"Role '{role}' not found for scenario {scenario_id}. Creating a default role.")
+                sys.exit(1)
+            
+            # Create role-user association if it doesn't exist
+            existing_assignment = db.query(AgentAssignment).filter(
+                AgentAssignment.role_id == agent_role.id,
+                AgentAssignment.user_id == user.id,
+                AgentAssignment.episode_id == episode.id
+            ).first()
+            
+            if not existing_assignment:
+                agent_assignment = AgentAssignment(
+                    role_id=agent_role.id,
+                    user_id=user.id,
+                    episode_id=episode.id
+                )
                 
-            db.add(user)
-            db.flush()  # Get ID without committing
+                db.add(agent_assignment)
+                logger.info(f"Created agent assignment for user {user.username} with role {role}")
             
-            logger.info(f"Created new user: {username} with ID: {user.id}")
-        
-        # Find the agent role
-        agent_role = db.query(AgentRole).filter(
-            AgentRole.scenario_id == scenario_id,
-            AgentRole.name == role
-        ).first()
-        
-        if not agent_role:
-            logger.warning(f"Role '{role}' not found for scenario {scenario_id}. Creating a default role.")
-            sys.exit(1)
-        
-        # Create role-user association if it doesn't exist
-        existing_assignment = db.query(AgentAssignment).filter(
-            AgentAssignment.role_id == agent_role.id,
-            AgentAssignment.user_id == user.id,
-            AgentAssignment.episode_id == episode.id
-        ).first()
-        
-        if not existing_assignment:
-            agent_assignment = AgentAssignment(
-                role_id=agent_role.id,
-                user_id=user.id,
-                episode_id=episode.id
-            )
-            
-            db.add(agent_assignment)
-            logger.info(f"Created agent assignment for user {user.username} with role {role}")
+            # Set as learner if this is the learner role
+            if scenario and scenario.learner_role == role:
+                set_learner(user)
+        else:
+            logger.warning(f"Episode not found, skipping agent assignment creation for user {user.username}")
         
         db.commit()
-        
-        if scenario.learner_role == role:
-            # Store as learner
-            set_learner(user)
         
         return user
         
