@@ -12,11 +12,10 @@ load_dotenv()
 from src.common.utils.check_database_tables import check_database_tables
 from src.construction.run_construction import run_construction
 from src.evolution.run_evolution import run_evolution
+from src.common.utils.log_config import configure_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Replace the basic logging setup with our Rich-based colorized logging
+configure_logging(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def parse_args():
@@ -72,15 +71,34 @@ def parse_args():
         help='Number of episodes to run (default: 1)'
     )
     
+    parser.add_argument(
+        '--no-color',
+        action='store_true',
+        help='Disable colorized logging output'
+    )
+    
+    parser.add_argument(
+        '--log-file',
+        type=str,
+        help='Path to write logs to a file'
+    )
+    
     return parser.parse_args()
 
 def main():
     """Main entry point for the CLI."""
     args = parse_args()
     
-    # Set log level
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+    # Configure logging based on arguments
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    log_file = args.log_file if hasattr(args, 'log_file') and args.log_file else None
+    use_rich = not args.no_color if hasattr(args, 'no_color') else True
+    
+    configure_logging(
+        level=log_level,
+        log_file=log_file,
+        use_rich=use_rich
+    )
     
     if not args.skip_db_check:
         logger.info("Checking database tables...")
