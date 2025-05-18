@@ -7,6 +7,9 @@ from langchain_anthropic import ChatAnthropic
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import BaseMessage
+
+from src.llm.llm_memory import enhance_messages_with_memories
 
 logger = logging.getLogger(__name__)
 
@@ -36,29 +39,44 @@ class BaseLangChainProvider:
         """Initialize the LangChain LLM model"""
         raise NotImplementedError("Subclasses must implement _initialize_llm")
     
-    def generate(self, prompt: str, temperature: float = 0.7) -> str:
+    def generate(self, prompt: str, temperature: float = 0.7, user_id: Optional[str] = None) -> str:
         """Generate text completion
         
         Args:
             prompt: Text prompt
             temperature: Sampling temperature
+            user_id: Optional user ID for memory integration
             
         Returns:
             Generated text
         """
         chat = self.get_llm()
-        result = chat.invoke(prompt)
+        
+        # Handle memory integration if user_id is provided
+        if user_id:
+            # Create a SystemMessage with the prompt
+            messages = [SystemMessage(content=prompt)]
+            result = call_llm_with_memory(chat, messages, user_id, query=prompt)
+        else:
+            try:
+                result = chat.invoke(prompt)
+            except (AttributeError, TypeError):
+                try:
+                    result = chat(prompt)
+                except:
+                    result = chat.generate(prompt)
         
         # Extract result content
         if hasattr(result, 'content'):
             return result.content
         return str(result)
     
-    def generate_with_history(self, messages: List[Dict[str, str]]) -> str:
+    def generate_with_history(self, messages: List[Dict[str, str]], user_id: Optional[str] = None) -> str:
         """Generate response with conversation history
         
         Args:
             messages: List of message dictionaries with 'role' and 'content'
+            user_id: Optional user ID for memory integration
             
         Returns:
             Generated response
@@ -78,8 +96,25 @@ class BaseLangChainProvider:
             elif role == 'assistant':
                 lc_messages.append(AIMessage(content=content))
         
-        # Generate response
-        response = chat.invoke(lc_messages)
+        # Generate response with or without memory
+        if user_id:
+            # Determine query from the last user message
+            query = None
+            for msg in reversed(messages):
+                if msg.get('role') == 'user':
+                    query = msg.get('content', '')
+                    break
+                    
+            response = call_llm_with_memory(chat, lc_messages, user_id, query)
+        else:
+            try:
+                response = chat.invoke(lc_messages)
+            except (AttributeError, TypeError):
+                try:
+                    response = chat(lc_messages)
+                except:
+                    response = chat.generate(lc_messages)
+            
         if hasattr(response, 'content'):
             return response.content
         return str(response)
@@ -113,17 +148,23 @@ class BaseLangChainProvider:
         # Create the prompt
         prompt = ChatPromptTemplate.from_messages(messages)
         
+        # Log model information for debugging
+        logger.info(f"Creating chain with model: {type(chat).__name__}")
+        
         # Create a runnable sequence using the pipe operator
         chain = prompt | chat
+        
+        # Log the resulting chain type
+        logger.info(f"Created chain type: {type(chain).__name__}")
         
         return chain
 
 class OpenAILangChainProvider(BaseLangChainProvider):
-    """LangChain provider for OpenAI"""
+    """LangChain provider for OpenAI models"""
     
     def _initialize_llm(self):
-        """Initialize the OpenAI LLM"""
-        api_key = os.getenv('OPENAI_API_KEY')
+        """Initialize OpenAI LLM"""
+        api_key = os.environ.get('OPENAI_API_KEY')
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
         
@@ -134,43 +175,39 @@ class OpenAILangChainProvider(BaseLangChainProvider):
         )
 
 class AnthropicLangChainProvider(BaseLangChainProvider):
-    """LangChain provider for Anthropic"""
+    """LangChain provider for Anthropic models"""
     
     def _initialize_llm(self):
-        """Initialize the Anthropic LLM"""
-        api_key = os.getenv('ANTHROPIC_API_KEY')
+        """Initialize Anthropic LLM"""
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable not set")
         
         self._llm = ChatAnthropic(
             model_name=self.model_name,
             temperature=0.7,
-            api_key=api_key
+            anthropic_api_key=api_key
         )
 
 def detect_provider_type(model_name: str) -> str:
-    """Detect provider type from model name
+    """Detect the provider type based on model name
     
     Args:
         model_name: Name of the model
         
     Returns:
-        Provider type string
-        
-    Raises:
-        ValueError: If provider type cannot be determined
+        Provider type string ('openai', 'anthropic', etc.)
     """
-    if not model_name:
-        raise ValueError("Model name must be specified")
-        
     model_name = model_name.lower()
-    if model_name in ["gpt-3", "gpt-3.5", "gpt-4", "gpt-4o", "gpt-3.5-turbo", "gpt-4-turbo"] or model_name.startswith("gpt-"):
+    
+    if model_name.startswith("gpt-") or model_name.startswith("text-davinci-"):
         return "openai"
-    elif model_name in ["claude", "claude-3", "claude-3-opus", "claude-3-sonnet"] or model_name.startswith("claude-"):
+    elif model_name.startswith("claude-"):
         return "anthropic"
     else:
-        raise ValueError(f"Could not determine provider type for model: {model_name}")
-
+        # Default to OpenAI for unknown models
+        logger.warning(f"Unknown model type: {model_name}, defaulting to OpenAI")
+        return "openai"
 
 def get_llm_model(model_name: str) -> BaseChatModel:
     """Get a LangChain provider for the specified model
@@ -193,3 +230,38 @@ def get_llm_model(model_name: str) -> BaseChatModel:
         provider = AnthropicLangChainProvider(model_name=model_name)
     
     return provider.get_llm()
+
+def call_llm_with_memory(llm: BaseChatModel, messages: List[BaseMessage], user_id: str, query: str = None) -> Any:
+    """Call LLM with memory enhancement
+    
+    A simplified approach to calling an LLM with memory enhancement.
+    
+    Args:
+        llm: The LLM model to use
+        messages: List of messages to send to the LLM
+        user_id: User ID for memory lookups
+        query: Optional query string for memory retrieval
+        
+    Returns:
+        LLM response
+    """
+    # Enhance messages with memories if query is provided
+    if query:
+        messages = enhance_messages_with_memories(messages, user_id, query)
+    
+    # Try different invocation methods since LangChain versions have different interfaces
+    try:
+        logger.info(f"Attempting to call LLM using invoke() method")
+        return llm.invoke(messages)
+    except (AttributeError, TypeError) as e:
+        logger.info(f"invoke() failed: {str(e)}, trying direct call")
+        try:
+            return llm(messages)
+        except Exception as e2:
+            logger.info(f"Direct call failed: {str(e2)}, trying generate()")
+            try:
+                return llm.generate(messages)
+            except Exception as e3:
+                logger.error(f"All LLM call methods failed: {str(e3)}")
+                # Return a simple error message as the last resort
+                return AIMessage(content="I apologize, but I'm having trouble processing your request.")

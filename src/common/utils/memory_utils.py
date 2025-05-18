@@ -136,81 +136,67 @@ def python_vector_search(query_vector: List[float], memories: List[UserMemory],
 
 def extract_knowledge_from_content(content: str, model_name: str) -> str:
     """
-    Extract knowledge points and lessons learned from original content using LLM.
+    Extract knowledge from content using LLM.
     
     Args:
-        content: Original content text
-        model_name: LLM model name to use
+        content: Original content to extract knowledge from
+        model_name: LLM model to use
         
     Returns:
-        str: Extracted knowledge points and lessons
+        Extracted knowledge string
     """
-    try:
-        if not model_name:
-            logger.error("No model name provided for knowledge extraction")
-            sys.exit(1)
-            
-        llm_model = get_llm_model(model_name)
-        
-        prompt = f"""Please extract key knowledge points and lessons learned from the following content. 
-Don't retain the original dialogue format, just extract valuable information in concise bullet points.
+    if not content.strip():
+        logger.warning("Empty content provided for knowledge extraction")
+        return ""
+    
+    # Get LLM model without memory (not needed for simple extraction)
+    llm_model = get_llm_model(model_name)
+    
+    # Create prompt for knowledge extraction
+    prompt = f"""
+Extract the most important information from the following content. 
+Focus on facts, relationships, key events, and information that would be valuable to remember.
+Format the knowledge in clear, concise statements. Exclude any opinions or subjective interpretations.
 
-Content:
+CONTENT:
 {content}
 
-Please extract key knowledge points and lessons:"""
+EXTRACTED KNOWLEDGE:
+"""
+    
+    # Call the LLM with the prompt and handle different response types
+    try:
+        # Use invoke method which is safer for different LLM providers
+        response = llm_model.invoke(prompt)
         
-        # Call the LLM with the prompt and handle different response types
-        try:
-            # Use invoke method which is safer for different LLM providers
-            response = llm_model.invoke(prompt)
+        logger.info(f"LLM Memory Extraction Response type: {type(response)}")
+        
+        # Extract content from different possible response formats
+        if hasattr(response, 'content'):
+            # LangChain AIMessage format
+            knowledge = response.content
+        elif isinstance(response, dict) and 'text' in response:
+            # Some models return dict with 'text' key
+            knowledge = response['text']
+        elif isinstance(response, dict) and 'content' in response:
+            # Some models return dict with 'content' key
+            knowledge = response['content']
+        elif hasattr(response, 'text'):
+            # Some models return object with text attribute
+            knowledge = response.text
+        else:
+            # Fallback to string conversion
+            knowledge = str(response)
+        
+        # Truncate if too long
+        if len(knowledge) > 2000:
+            knowledge = knowledge[:2000] + "..."
             
-            logger.info(f"LLM Memory Extraction Response type: {type(response)}")
-            
-            # Extract content from different possible response formats
-            if hasattr(response, 'content'):
-                # LangChain AIMessage format
-                knowledge = response.content
-            elif isinstance(response, dict) and 'text' in response:
-                # Some models return dict with 'text' key
-                knowledge = response['text']
-            elif isinstance(response, dict) and 'content' in response:
-                # Some models return dict with 'content' key
-                knowledge = response['content']
-            elif hasattr(response, 'text'):
-                # Some models return object with text attribute
-                knowledge = response.text
-            else:
-                # Fallback to string conversion
-                knowledge = str(response)
-            
-            # Truncate if too long
-            if len(knowledge) > 2000:
-                knowledge = knowledge[:2000] + "..."
-                
-            return knowledge
-            
-        except AttributeError as e:
-            # Handle case where invoke is not available
-            logger.warning(f"LLM invoke method not available, trying generate: {str(e)}")
-            try:
-                response = llm_model.generate(prompt)
-                
-                # Just convert to string to handle any response format
-                knowledge = str(response)
-                
-                # Truncate if too long
-                if len(knowledge) > 2000:
-                    knowledge = knowledge[:2000] + "..."
-                    
-                return knowledge
-            except Exception as e2:
-                logger.error(f"Failed to generate with LLM: {str(e2)}")
-                return f"Failed to extract knowledge. Content summary: {content[:100]}..."
+        return knowledge
         
     except Exception as e:
-        logger.error(f"Failed to extract knowledge: {str(e)}")
-        sys.exit(1)
+        logger.error(f"Failed to extract knowledge with LLM: {str(e)}")
+        return content[:500] + "..."  # Return truncated original content on error
 
 def create_user_memory(
     db: Session,

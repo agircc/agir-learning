@@ -7,7 +7,7 @@ from agir_db.models.state import State
 from agir_db.models.step import Step
 from sqlalchemy.orm import Session
 
-from src.llm.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model, call_llm_with_memory
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
 from langchain_core.messages import BaseMessage
 
@@ -36,7 +36,10 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       
       logger.info(f"Using model {model_name} for state {state.name}")
       
-      # Get LangChain model
+      # Get user ID for memory functionality
+      user_id = str(user.id)
+      
+      # Get LangChain model (without memory patching)
       llm_model = get_llm_model(model_name)
       
       # Prepare system prompt
@@ -59,8 +62,10 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       current_message = f"Please respond as {user.username} for the current step: {state.name}"
       messages.append(HumanMessage(content=current_message))
       
-      # Generate response using the LLM model with message history
-      response = llm_model.invoke(messages)
+      # Generate response using our simplified memory function
+      # Extract a query for memory retrieval from the messages
+      query = f"{state.name} {state.description} {current_message}"
+      response = call_llm_with_memory(llm_model, messages, user_id, query=query)
       
       logger.info(f"Generated LLM response for state {state.name} with user {user.username}")
       

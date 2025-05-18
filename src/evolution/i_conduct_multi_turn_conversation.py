@@ -9,10 +9,12 @@ from agir_db.models.state import State
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
-from src.llm.llm_provider import get_llm_model
+from src.llm.llm_provider import get_llm_model, call_llm_with_memory
+from src.llm.llm_memory import enhance_messages_with_memories, store_conversation_as_memory
 
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
+from langchain_core.runnables.base import RunnableSequence
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +74,15 @@ IMPORTANT INSTRUCTIONS:
               HumanMessagePromptTemplate.from_template("{input}")
           ])
           
+          # Get the llm but don't enable memory yet (we'll handle it manually)
+          user_id = str(user.id)
+          llm = get_llm_model(model_name)
+          
           # Create the chain using pipe operator (|) for RunnableSequence
-          role_chains[user.id] = prompt | get_llm_model(model_name)
+          role_chains[user.id] = prompt | llm
+          
+          # Log the details for debugging
+          logger.info(f"Created chain for user {user_id}, model: {model_name}, chain type: {type(role_chains[user.id])}")
           
           # Initialize empty chat history for each role
           chat_histories[user.id] = []
@@ -106,11 +115,47 @@ IMPORTANT INSTRUCTIONS:
                   else:
                       lc_messages.append(HumanMessage(content=f"{sender.username}: {msg.content}"))
               
-              # Generate response using the chain with invoke() instead of run()
-              response = chain.invoke({
+              # Prepare the input data for the chain
+              input_data = {
                   "input": conversation_history,
                   "chat_history": lc_messages[-10:] if lc_messages else []
-              })
+              }
+              
+              logger.info(f"Calling chain for user {user.id}, chain type: {type(chain)}")
+              
+              # Try to run the chain with memory enhancement
+              try:
+                  # First try using RunnableSequence APIs with robust error handling
+                  try:
+                      response = chain.invoke(input_data)
+                      logger.info(f"Chain invocation successful, response type: {type(response)}")
+                  except Exception as e:
+                      logger.error(f"Error calling chain.invoke: {str(e)}")
+                      # If that fails, try the direct call
+                      try:
+                          response = chain(input_data)
+                          logger.info(f"Chain direct call successful, response type: {type(response)}")
+                      except Exception as e2:
+                          logger.error(f"Error with direct chain call: {str(e2)}")
+                          # As a last resort, try to call the LLM directly with memory integration
+                          logger.info("Attempting to call LLM directly with memory integration")
+                          llm = get_llm_model(user.llm_model)
+                          
+                          # Prepare a simplified set of messages for direct LLM call
+                          direct_messages = [SystemMessage(content=system_prompt)]
+                          direct_messages.extend(input_data["chat_history"])
+                          
+                          # Call LLM with memory integration
+                          response = call_llm_with_memory(
+                              llm, 
+                              direct_messages, 
+                              str(user.id), 
+                              query=conversation_history
+                          )
+              except Exception as e:
+                  logger.error(f"All methods failed, creating error response: {str(e)}")
+                  # Create a simulated error response as last resort
+                  response = AIMessage(content=f"I apologize, but I'm experiencing technical difficulties.")
               
               # Extract content from response
               if hasattr(response, 'content'):
@@ -163,4 +208,4 @@ IMPORTANT INSTRUCTIONS:
       
   except Exception as e:
       logger.error(f"Failed to conduct multi-turn conversation: {str(e)}")
-      sys.exit(1)
+      return f"Error conducting conversation: {str(e)}"
