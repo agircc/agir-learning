@@ -1,0 +1,36 @@
+scenario:
+  name: "Reddit Distress Analysis with User Feedback"
+  description: "A Reddit user posts a message, the analyst evaluates distress and explains their reasoning, and the user provides feedback."
+  learner_role: "analyst"
+
+  learner:
+    username: analyst_001
+    model: "gpt-4.1-nano"
+
+  roles:
+    - name: "user"
+      model: "gpt-4.1-nano"
+      description: "A Reddit user who shares a personal post and later responds to the analyst's assessment."
+    - name: "analyst"
+      model: "gpt-4.1-nano"
+      description: "A mental health analyst who assesses the user's post for emotional distress and explains their reasoning."
+
+  states:
+    - name: "User Post Submission"
+      roles: ["user"]
+      description: "The Reddit user submits a personal post describing their feelings or situation."
+
+    - name: "Analyst Evaluation"
+      roles: ["analyst"]
+      description: "The analyst reviews the post, identifies the type of emotional state (e.g., stress, anxiety, trauma, or none), and explains the reasoning behind the classification."
+
+    - name: "User Feedback"
+      roles: ["user"]
+      description: "The user reads the analyst’s classification and explanation, and replies whether they agree with the assessment."
+
+  transitions:
+    - from_state_name: User Post Submission
+      to_state_name: Analyst Evaluation
+
+    - from_state_name: Analyst Evaluation
+      to_state_name: User Feedback
