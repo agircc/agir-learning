@@ -1,6 +1,6 @@
 scenario:
-  name: "Reddit Post Analysis"
-  description: "A Reddit user posts a message, the analyst evaluates distress and explains their reasoning, and the user provides feedback."
+  name: "Post Analysis"
+  description: "A user posts a message, the analyst evaluates distress and explains their reasoning, and the user provides feedback."
   learner_role: "analyst"
 
   learner:
@@ -10,7 +10,7 @@ scenario:
   roles:
     - name: "user"
       model: "gpt-4.1-nano"
-      description: "A Reddit user who shares a personal post"
+      description: "A user who shares a personal post"
     - name: "analyst"
       model: "gpt-4.1-nano"
       description: "A mental health analyst who assesses the user's post for emotional distress and explains their reasoning."
@@ -18,7 +18,7 @@ scenario:
   states:
     - name: "User Post Submission"
       roles: ["user"]
-      description: "The Reddit user submits a personal post describing their feelings or situation."
+      description: "A user submits a personal post"
 
     - name: "Analyst Evaluation"
       roles: ["analyst"]
