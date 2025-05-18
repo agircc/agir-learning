@@ -148,6 +148,7 @@ def start_episode(scenario_id: int) -> Optional[int]:
             if not next_state:
                 logger.info(f"Episode {episode_id} completed successfully")
                 episode = db.query(Episode).filter(Episode.id == episode_id).first()
+                episode.current_state_id = current_state.id
                 episode.status = EpisodeStatus.COMPLETED
                 db.commit()
                 
