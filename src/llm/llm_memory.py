@@ -2,9 +2,8 @@ import logging
 import os
 from typing import List, Optional, Dict, Any, Union, Callable
 
-from langchain.memory import VectorStoreRetrieverMemory
 from langchain.schema import Document
-from langchain_community.vectorstores import Chroma, FAISS
+from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -49,12 +48,6 @@ class UserMemoryManager:
             # Create retriever from vector store
             self.retriever = self.vector_store.as_retriever(
                 search_kwargs={"k": 5}  # Return top 5 most relevant memories
-            )
-            
-            # Initialize memory with the retriever
-            self.memory = VectorStoreRetrieverMemory(
-                retriever=self.retriever,
-                memory_key=self.memory_key
             )
             
             logger.info(f"Initialized vector store for user {self.user_id}")
@@ -110,12 +103,25 @@ class UserMemoryManager:
         """
         try:
             if not query:
+                logger.warning("Empty query provided to retrieve_relevant_memories")
                 return []
+            
+            logger.info(f"Retrieving memories for query: '{query}'")
                 
             try:
-                docs = self.retriever.get_relevant_documents(query, k=k)
+                # Use invoke() instead of get_relevant_documents()
+                docs = self.retriever.invoke(query)
+                logger.info(f"Retrieved {len(docs)} raw documents")
+                
                 # Filter out initialization documents
-                return [doc for doc in docs if not doc.metadata.get("is_dummy", False)]
+                filtered_docs = [doc for doc in docs if not doc.metadata.get("is_dummy", False)]
+                logger.info(f"After filtering, {len(filtered_docs)} documents remain")
+                
+                # Log document contents for debugging
+                for i, doc in enumerate(filtered_docs):
+                    logger.info(f"Document {i+1}: {doc.page_content} (Metadata: {doc.metadata})")
+                
+                return filtered_docs
             except IndexError:
                 logger.warning(f"No relevant documents found for query: {query}")
                 return []
@@ -137,10 +143,16 @@ class UserMemoryManager:
             if not query:
                 return {self.memory_key: ""}
                 
-            # Safely retrieve memory variables
+            # Retrieve relevant documents directly using the retriever
             try:
-                result = self.memory.load_memory_variables({"input": query})
-                return result
+                docs = self.retrieve_relevant_memories(query)
+                
+                # Format documents into a string
+                if docs:
+                    memories_string = "\n\n".join([doc.page_content for doc in docs])
+                    return {self.memory_key: memories_string}
+                else:
+                    return {self.memory_key: ""}
             except IndexError:
                 # Handle the case where no documents are retrieved
                 logger.warning(f"No documents retrieved for query: {query}")
@@ -191,20 +203,29 @@ def enhance_messages_with_memories(
         memory_vars = memory_manager.get_memory_variables(query)
         relevant_memories = memory_vars.get(memory_manager.memory_key, "")
         
+        # Debug log to verify we're getting memories
+        logger.info(f"Retrieved memories: {relevant_memories}")
+        
         if relevant_memories:
+            # Make a copy of the messages list to avoid modifying the original
+            enhanced_messages = messages.copy()
+            
             # Insert memory context after system message if present
-            for i, msg in enumerate(messages):
+            for i, msg in enumerate(enhanced_messages):
                 if isinstance(msg, SystemMessage):
                     # Append memory to system message
                     updated_content = f"{msg.content}\n\nRelevant context from user memories:\n{relevant_memories}"
-                    messages[i] = SystemMessage(content=updated_content)
-                    break
-            else:
-                # No system message found, add a new one at the beginning
-                memory_msg = SystemMessage(content=f"Relevant context from user memories:\n{relevant_memories}")
-                messages.insert(0, memory_msg)
+                    enhanced_messages[i] = SystemMessage(content=updated_content)
+                    logger.info(f"Enhanced system message with memories")
+                    return enhanced_messages
+            
+            # No system message found, add a new one at the beginning
+            memory_msg = SystemMessage(content=f"Relevant context from user memories:\n{relevant_memories}")
+            enhanced_messages.insert(0, memory_msg)
+            logger.info(f"Added new system message with memories")
+            return enhanced_messages
         
-        return messages
+        return messages  # No relevant memories found
     
     except Exception as e:
         logger.error(f"Failed to enhance messages with memories: {str(e)}")
