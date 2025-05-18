@@ -209,8 +209,8 @@ def generate_user_memories(
         
         # Generate prompt for memories
         prompt = f"""
-Based on the following user profile, generate 3-5 distinct memories for this person that would influence their behavior and personality.
-Each memory should be detailed and personal, covering various life stages.
+Based on the following user profile, generate an array of 4-6 distinct memories for this person that would influence their behavior and personality.
+The memories should cover different stages of life from childhood to the present day, showing key moments that shaped who they are.
 
 User Profile:
 - Role: {role}
@@ -224,10 +224,21 @@ User Profile:
 
 Scenario Context (if relevant): {scenario_description or "N/A"}
 
-Format each memory as a paragraph describing a significant life event or experience.
-Include emotions, lessons learned, and how it shaped the person. Make them realistic and detailed.
+Return the memories as a JSON array where each memory object has the following structure:
+[
+  {{
+    "title": "Brief title for the memory",
+    "content": "Detailed description of the memory including emotions, impact, and lessons learned",
+    "age": "Approximate age when this memory occurred",
+    "life_stage": "childhood/adolescence/young_adult/adult",
+    "importance": "A value from 0.7 to 1.0 indicating how important this memory is to the person",
+    "emotions": ["list", "of", "emotions", "felt"]
+  }},
+  ...more memories
+]
 
-Return only the memories, each separated by three hyphens (---).
+Make sure the memories are diverse, realistic, and provide insight into how the person developed over time.
+Respond with ONLY the JSON array, nothing else.
 """
         
         # Generate memories using LLM
@@ -245,15 +256,44 @@ Return only the memories, each separated by three hyphens (---).
         else:
             memories_text = str(response)
         
-        # Split into individual memories
-        individual_memories = [m.strip() for m in memories_text.split('---') if m.strip()]
+        # Clean up response for JSON parsing
+        memories_text = memories_text.strip()
+        if memories_text.startswith('```json'):
+            memories_text = memories_text[7:]
+        if memories_text.endswith('```'):
+            memories_text = memories_text[:-3]
+        memories_text = memories_text.strip()
         
-        # Create memory entries
-        for i, memory_content in enumerate(individual_memories):
+        # Parse JSON array of memories
+        try:
+            memories_array = json.loads(memories_text)
+            if not isinstance(memories_array, list):
+                logger.error("LLM did not return a list of memories")
+                sys.exit(1)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse memories as JSON: {str(e)}")
+            logger.debug(f"LLM response: {memories_text}")
+            sys.exit(1)
+        
+        # Create memory entries for each memory in the array
+        for i, memory_obj in enumerate(memories_array):
+            # Get memory content and metadata
+            memory_content = memory_obj.get("content", "")
+            if not memory_content:
+                logger.error(f"Memory {i+1} is missing content")
+                sys.exit(1)
+                
+            # Validate required memory fields
+            required_fields = ["title", "age", "life_stage", "importance"]
+            for field in required_fields:
+                if field not in memory_obj or not memory_obj[field]:
+                    logger.error(f"Memory {i+1} is missing required field: {field}")
+                    sys.exit(1)
+                
             # Context info for memory
             context_info = {
                 "state_name": f"User {role} Memory",
-                "task": f"Memory {i+1}",
+                "task": memory_obj.get("title"),
                 "content_type": "Personal Memory"
             }
             
@@ -262,7 +302,11 @@ Return only the memories, each separated by three hyphens (---).
                 "memory_type": "personal",
                 "role": role,
                 "generated": True,
-                "importance_score": random.uniform(0.7, 1.0)  # Random high importance
+                "title": memory_obj.get("title"),
+                "age": memory_obj.get("age"),
+                "life_stage": memory_obj.get("life_stage"),
+                "emotions": memory_obj.get("emotions", []),
+                "importance_score": float(memory_obj.get("importance", random.uniform(0.7, 1.0)))
             }
             
             # Create the memory
@@ -279,7 +323,7 @@ Return only the memories, each separated by three hyphens (---).
             
             if memory_id:
                 memory_ids.append(memory_id)
-                logger.info(f"Created memory {i+1} for user {user_id}")
+                logger.info(f"Created memory {i+1} ({metadata['life_stage']}) for user {user_id}")
             
         logger.info(f"Generated {len(memory_ids)} memories for user {user_id}")
         return memory_ids
