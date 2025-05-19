@@ -322,15 +322,20 @@ Respond with ONLY the JSON array, nothing else.
             # Get memory content and metadata
             memory_content = memory_obj.get("content", "")
             if not memory_content:
-                logger.error(f"Memory {i+1} is missing content")
-                sys.exit(1)
+                logger.error(f"Memory {i+1} is missing content, skipping")
+                continue
                 
             # Validate required memory fields
+            skip_memory = False
             required_fields = ["title", "age", "life_stage", "importance"]
             for field in required_fields:
                 if field not in memory_obj or not memory_obj[field]:
-                    logger.error(f"Memory {i+1} is missing required field: {field}")
-                    sys.exit(1)
+                    logger.error(f"Memory {i+1} is missing required field: {field}, skipping")
+                    skip_memory = True
+                    break
+            
+            if skip_memory:
+                continue
                 
             # Context info for memory
             context_info = {
