@@ -71,37 +71,25 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       # Log the actual prompt being used
       logger.info(f"Using prompt (first 100 chars): {system_prompt[:100]}...")
       
-      # Determine if we should include previous conversation history
-      # This makes the code independent of hardcoded state names
-      # Instead, the behavior is determined by the existence of custom prompts
-      include_history = True
-      
-      # Check if this state has custom prompts that are meant to be used in a zero-shot way
-      # States with custom prompts may need to generate content from scratch without conversation history
-      if custom_prompt and "write" in system_prompt.lower() and "post" in system_prompt.lower():
-          include_history = False
-          logger.info(f"Zero-shot generation mode detected for state {state.name}")
-      
-      # Convert previous steps to LangChain message format
+      # Always convert previous steps to LangChain message format and include conversation history
       messages = [SystemMessage(content=system_prompt)]
       
-      # Add previous step data as conversation history only if include_history is True
-      if include_history:
-          for step in previous_steps:
-              if step.generated_text:
-                  # Determine if this is from the user or AI based on user_id comparison
-                  if step.user_id == user.id:
-                      messages.append(HumanMessage(content=step.generated_text))
-                  else:
-                      messages.append(AIMessage(content=step.generated_text))
+      # Add previous step data as conversation history - always include history
+      for step in previous_steps:
+          if step.generated_text:
+              # Determine if this is from the user or AI based on user_id comparison
+              if step.user_id == user.id:
+                  messages.append(HumanMessage(content=step.generated_text))
+              else:
+                  messages.append(AIMessage(content=step.generated_text))
       
-          # Add current request only if we're not using a custom prompt
-          if not custom_prompt:
-              current_message = f"Please respond as {user.username} for the current step: {state.name}"
-              messages.append(HumanMessage(content=current_message))
+      # Add current request only if we're not using a custom prompt
+      if not custom_prompt:
+          current_message = f"Please respond as {user.username} for the current step: {state.name}"
+          messages.append(HumanMessage(content=current_message))
       
-      # Generate response using our simplified memory function
-      # Extract a query for memory retrieval from the messages
+      # Generate response using memory function - this ensures user memories are used for personalization
+      # The query is used to retrieve relevant memories for the current context
       query = f"{state.name} {state.description}"
       
       # Log the messages being sent to the LLM
@@ -109,6 +97,8 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       for i, msg in enumerate(messages):
           logger.info(f"Message {i+1} type: {type(msg).__name__}, content: {msg.content[:50]}...")
       
+      # call_llm_with_memory automatically includes user memories for personalization
+      # by retrieving relevant memories based on the query and including them in the context
       response = call_llm_with_memory(llm_model, messages, user_id, query=query)
       
       logger.info(f"Generated LLM response for state {state.name} with user {user.username}")
