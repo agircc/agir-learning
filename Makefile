@@ -8,7 +8,7 @@ run_visualizer:
 	python -m src.visualization.run_visualizer
 
 clear_db:
-	python clear_db.py
+	python commands/clear_db.py
 
 learning:
 	python run.py $(SCENARIO) --episodes=$(EPISODES)
