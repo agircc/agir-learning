@@ -6,7 +6,9 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.schemas.user import UserDTO
-from src.common.data_store import set_learner
+from src.common.data_store import set_learner, get_scenario
+from src.common.utils.user_generator import generate_user_with_llm
+from src.common.utils.memory_utils import DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -46,34 +48,42 @@ def create_or_find_learner(db: Session, learner_data: Dict[str, Any]) -> Optiona
                 
                 return user.id
             
-            # Prepare user data
-            user_data = {
-                "username": username,
-                "first_name": learner_data.get("first_name", ""),
-                "last_name": learner_data.get("last_name", ""),
-                "email": learner_data.get("email", f"{username}@example.com"),
-                "is_active": True
+            # Get scenario for context if available
+            scenario = get_scenario()
+            scenario_description = scenario.description if scenario else None
+            
+            # Get model from learner data or use default
+            model_name = learner_data.get("model", "gpt-3.5-turbo")
+            
+            # Extract YAML-defined profile data
+            yaml_profile = {
+                "first_name": learner_data.get("first_name"),
+                "last_name": learner_data.get("last_name"),
+                "gender": learner_data.get("gender"),
+                "birth_date": learner_data.get("birth_date"),
+                "profession": learner_data.get("profession"),
+                "skills": learner_data.get("skills", []),
+                "interests": learner_data.get("interests", []),
+                "personality_traits": learner_data.get("personality_traits", []),
+                "background": learner_data.get("background"),
+                "description": learner_data.get("description")
             }
             
-            # Add model if it exists in YAML
-            if "model" in learner_data:
-                user_data["llm_model"] = learner_data["model"]
+            # Remove None values from yaml_profile
+            yaml_profile = {k: v for k, v in yaml_profile.items() if v is not None}
             
-            # Create new user
-            user = User(**user_data)
+            # Generate user with LLM including profile and memories
+            user, memory_ids = generate_user_with_llm(
+                db=db,
+                role="learner",
+                model_name=model_name,
+                username=username,
+                scenario_description=scenario_description,
+                embedding_model=DEFAULT_EMBEDDING_MODEL,
+                existing_profile=yaml_profile  # Pass YAML profile to merge with LLM generation
+            )
             
-            # Add additional profile data
-            profile_data = {}
-            for key, value in learner_data.items():
-                if key not in ["username", "first_name", "last_name", "email", "model"]:
-                    profile_data[key] = value
-            
-            if profile_data:
-                user.profile = json.dumps(profile_data)
-            
-            db.add(user)
-            db.commit()
-            logger.info(f"Created new user: {username} with ID: {user.id}")
+            logger.info(f"Created new learner: {username} with ID: {user.id} and {len(memory_ids)} memories")
             
             # Store learner data in data_store
             learner_info = UserDTO(
@@ -81,6 +91,7 @@ def create_or_find_learner(db: Session, learner_data: Dict[str, Any]) -> Optiona
                 username=user.username,
                 first_name=user.first_name,
                 last_name=user.last_name,
+                llm_model=user.llm_model,
                 email=user.email
             )
             set_learner(learner_info)

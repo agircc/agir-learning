@@ -26,7 +26,8 @@ def generate_user_with_llm(
     username: Optional[str] = None,
     scenario_id: Optional[Any] = None,
     scenario_description: Optional[str] = None,
-    embedding_model: Optional[str] = None
+    embedding_model: Optional[str] = None,
+    existing_profile: Optional[Dict[str, Any]] = None
 ) -> Tuple[User, List[str]]:
     """
     Generate a user with LLM, including personal information and memories.
@@ -39,6 +40,7 @@ def generate_user_with_llm(
         scenario_id: Optional scenario ID for context
         scenario_description: Optional scenario description for better user generation
         embedding_model: Optional embedding model name to use
+        existing_profile: Optional existing profile data to merge with LLM generation
         
     Returns:
         Tuple of (User, List[memories]) - the created user and list of memory IDs created
@@ -116,6 +118,24 @@ Respond with ONLY the JSON object, nothing else.
                 "profession": role.capitalize(),
                 "description": f"Auto-generated user for role: {role}"
             }
+        
+        # Merge with existing profile if provided
+        if existing_profile:
+            # For list fields, combine unique values
+            list_fields = ["personality_traits", "interests", "skills"]
+            for field in list_fields:
+                if field in existing_profile and field in user_data:
+                    existing_values = set(existing_profile[field])
+                    new_values = set(user_data[field])
+                    user_data[field] = list(existing_values.union(new_values))
+                elif field in existing_profile:
+                    user_data[field] = existing_profile[field]
+            
+            # For string fields, prefer existing values if they exist
+            string_fields = ["first_name", "last_name", "gender", "birth_date", "profession", "description", "background"]
+            for field in string_fields:
+                if field in existing_profile and existing_profile[field]:
+                    user_data[field] = existing_profile[field]
         
         # Process birth_date string to datetime if provided
         birth_date = None
