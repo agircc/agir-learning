@@ -1,4 +1,4 @@
-EPISODES ?= 11
+EPISODES ?= 1
 SCENARIO ?= scenarios/hello.yml
 
 migrate:
@@ -10,5 +10,5 @@ run_visualizer:
 clear_db:
 	python clear_db.py
 
-learning
+learning:
 	python run.py $(SCENARIO) --episodes=$(EPISODES)
