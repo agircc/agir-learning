@@ -30,47 +30,47 @@ scenario:
 
   states:
     - name: "Disease Onset"
-      role: "patient"
+      roles: ["patient"]
       description: "Patient experiences symptoms and decides to visit the hospital."
 
     - name: "Triage"
-      role: "nurse"
+      roles: ["nurse"]
       description: "Nurse conducts initial assessment and determines the appropriate department."
 
     - name: "Registration"
-      role: "nurse"
+      roles: ["nurse"]
       description: "Patient registers and waits for doctor consultation."
 
     - name: "Consultation"
-      role: "doctor"
+      roles: ["doctor"]
       description: "Doctor listens to symptoms and decides on required medical examination."
 
     - name: "Medical Examination"
-      role: "nurse"
+      roles: ["nurse"]
       description: "Nurse performs or assists with medical tests and generates reports."
 
     - name: "Diagnosis"
-      role: "doctor"
+      roles: ["doctor"]
       description: "Doctor reviews reports and provides diagnosis."
 
     - name: "Medicine Dispensary"
-      role: "nurse"
+      roles: ["nurse"]
       description: "Patient receives medication based on prescription."
 
     - name: "Convalescence"
-      role: "patient"
+      roles: ["patient"]
       description: "Patient returns home and recovers. May return if not healed."
 
     - name: "Recovery"
-      role: "patient"
+      roles: ["patient"]
       description: "Patient successfully recovers after treatment and completes the healthcare cycle."
 
     - name: "Post-Hospital Follow-up"
-      role: "doctor"
+      roles: ["doctor"]
       description: "Doctor handles patient follow-up and complaints."
 
     - name: "Case Closed"
-      role: "doctor"
+      roles: ["doctor"]
       description: "Patient follow-up is complete with no significant issues. Case is closed."
 
   transitions:

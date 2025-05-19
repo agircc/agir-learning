@@ -13,6 +13,7 @@ from src.common.utils.check_database_tables import check_database_tables
 from src.construction.run_construction import run_construction
 from src.evolution.run_evolution import run_evolution
 from src.common.utils.log_config import configure_logging
+from src.common.utils.yaml_validator import validate_yaml_file
 
 # Replace the basic logging setup with our Rich-based colorized logging
 configure_logging(level=logging.INFO)
@@ -37,6 +38,12 @@ def parse_args():
         '--skip-db-check',
         action='store_true',
         help='Skip database check (not recommended)'
+    )
+    
+    parser.add_argument(
+        '--skip-yaml-validation',
+        action='store_true',
+        help='Skip YAML validation'
     )
     
     parser.add_argument(
@@ -115,6 +122,14 @@ def main():
         if not os.path.exists(args.scenario_file):
             logger.error(f"Scenario file not found: {args.scenario_file}")
             sys.exit(1)
+        
+        # Validate YAML structure unless skip flag is set
+        if not args.skip_yaml_validation:
+            logger.info(f"Validating scenario YAML structure: {args.scenario_file}")
+            if not validate_yaml_file(args.scenario_file):
+                logger.error(f"YAML validation failed for file: {args.scenario_file}")
+                sys.exit(1)
+            logger.info("YAML validation successful")
             
         # Create scenario from YAML file
         logger.info(f"Creating scenario from file: {args.scenario_file}")
