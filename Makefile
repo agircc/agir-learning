@@ -8,7 +8,7 @@ visualizer:
 	python -m src.visualization.run_visualizer
 
 clear_db:
-	python commands/clear_db.py
+	PYTHONPATH=$(shell pwd) python commands/clear_db.py
 
 learning:
 	python run.py $(SCENARIO) --episodes=$(EPISODES)
