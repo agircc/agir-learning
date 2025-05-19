@@ -19,6 +19,27 @@ scenario:
     - name: "User Post Submission"
       roles: ["user"]
       description: "A user submits a personal post, which may express positive, negative, or neutral emotions."
+      prompts:
+        - |
+          You are simulating a Reddit user posting in r/vent, r/anxiety, or r/ptsd.
+      
+          Please write a realistic Reddit post that:
+          - Describes a distressing or emotionally difficult real-life situation
+          - Clearly reflects negative emotions such as anxiety, depression, trauma, or hopelessness
+          - Is personal, vulnerable, and emotionally expressive (but not exaggerated)
+          - Is between 50–150 words
+      
+          Return only the post content. Do NOT include any labels or metadata.
+        - |
+          You are simulating a Reddit user posting in r/life or r/TrueOffMyChest.
+      
+          Please write a realistic Reddit post that:
+          - Expresses normal, neutral, or even positive emotions
+          - Shares a real-life experience or thought
+          - Is emotionally expressive but does NOT indicate distress (like anxiety or depression)
+          - Is between 50–150 words
+      
+          Return only the post content. Do NOT include any labels or metadata.
 
     - name: "Analyst Evaluation"
       roles: ["analyst"]
