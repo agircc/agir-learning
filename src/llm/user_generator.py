@@ -64,7 +64,6 @@ Return the profile as a valid JSON object with the following fields:
 {{
   "first_name": "First name of the user",
   "last_name": "Last name of the user",
-  "email": "Email address or leave as null to be auto-generated",
   "gender": "Gender of the user: male, female, or other",
   "birth_date": "Birth date in YYYY-MM-DD format",
   "profession": "User's profession or occupation",
@@ -157,7 +156,7 @@ Respond with ONLY the JSON object, nothing else.
             username=username,
             first_name=user_data.get("first_name"),
             last_name=user_data.get("last_name"),
-            email=user_data.get("email") or f"{username}@agir.ai",
+            email=f"{username}@agir.cc",  # Always use username@agir.cc format to avoid duplicates
             gender=user_data.get("gender"),
             birth_date=birth_date,
             avatar=user_data.get("avatar"),
