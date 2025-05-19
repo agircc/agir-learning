@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 
 from src.evolution.store import get_episode
-from src.common.utils.user_generator import generate_user_with_llm
+from src.llm.user_generator import generate_user_with_llm
 from src.common.utils.memory_utils import DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)

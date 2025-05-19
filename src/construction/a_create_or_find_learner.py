@@ -7,7 +7,7 @@ from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.schemas.user import UserDTO
 from src.common.data_store import set_learner, get_scenario
-from src.common.utils.user_generator import generate_user_with_llm
+from src.llm.user_generator import generate_user_with_llm
 from src.common.utils.memory_utils import DEFAULT_EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
