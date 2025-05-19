@@ -60,10 +60,13 @@ def generate_user_with_llm(
 Generate a realistic profile for a user with the role of "{role}".
 If provided, consider the following scenario context: {scenario_description or "No specific scenario"}.
 
+IMPORTANT: Generate unique and diverse names. Avoid common combinations like "Alex Johnson" or other frequently used names.
+Choose creative, distinctive, and culturally diverse first and last names that are not likely to be duplicated.
+
 Return the profile as a valid JSON object with the following fields:
 {{
-  "first_name": "First name of the user",
-  "last_name": "Last name of the user",
+  "first_name": "Unique first name of the user (avoid common names like Alex, John, etc.)",
+  "last_name": "Unique last name of the user (avoid common names like Johnson, Smith, etc.)",
   "gender": "Gender of the user: male, female, or other",
   "birth_date": "Birth date in YYYY-MM-DD format",
   "profession": "User's profession or occupation",
@@ -117,7 +120,7 @@ Respond with ONLY the JSON object, nothing else.
                 "profession": role.capitalize(),
                 "description": f"Auto-generated user for role: {role}"
             }
-        
+
         # Merge with existing profile if provided
         if existing_profile:
             # For list fields, combine unique values
