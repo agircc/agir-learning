@@ -43,7 +43,14 @@ def a_create_or_find_episode(scenario_id: int) -> Optional[Episode]:
             logger.error(f"Scenario not found: {scenario_id}")
             sys.exit(1)
         
-        learner = get_learner()            
+        learner = get_learner()
+        
+        if not learner or not hasattr(learner, 'id'):
+            logger.error("No learner found and no fallback user available")
+            sys.exit(1)
+            
+        logger.info(f"Using learner: {learner.username} with ID {learner.id}")
+        
         # Create episode
         episode = Episode(
             scenario_id=scenario_id,

@@ -53,6 +53,9 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
                 user = db.query(User).filter(User.id == learner.id).first()
                 if user:
                     return user
+            else:
+                logger.error("No learner found in data store")
+                sys.exit(1)
         
         # Find or create user
         if username:
@@ -61,8 +64,7 @@ def create_agent_assignment(db: Session, role: str, scenario_id: Any, username: 
             user = None
         
         if not user:
-            # If model is not specified, use a default model for user generation
-            llm_model = model or "gpt-3.5-turbo"
+            llm_model = model
             
             # Get scenario description if available for better context
             scenario_description = getattr(scenario, 'description', None) if scenario else None
