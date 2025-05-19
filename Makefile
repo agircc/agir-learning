@@ -12,3 +12,10 @@ clear_db:
 
 learning:
 	python run.py $(SCENARIO) --episodes=$(EPISODES)
+
+chat:
+	@if [ -z "$(AGENT)" ]; then \
+		echo "❌ Error: You must provide AGENT. Usage: make chat_learn AGENT=alice_001"; \
+		exit 1; \
+	fi
+	python -m commands.chat_learner_cli $(AGENT)
