@@ -56,69 +56,86 @@ def load_scenario_from_file(file_path: str) -> Optional[Scenario]:
                 name=state_name,
                 roles=roles,  # Use the roles list
                 description=state_data["description"],
-                assigned_to=state_data.get("assigned_to")
+                assigned_to=state_data.get("assigned_to"),
+                prompts=state_data.get("prompts")
             ))
-            
-        # Handle transitions, which use state names in the YAML
+        
+        # Extract transitions between states
         transitions = []
         
-        for transition_data in scenario_data.get("transitions", []):
-            # Use the original state names for transitions - they will be resolved at database creation time
-            transitions.append(StateTransition(
-                from_state_name=transition_data["from_state_name"],
-                to_state_name=transition_data["to_state_name"],
-                condition=transition_data.get("condition", "")
-            ))
+        # Handle different transition formats
+        transition_list = scenario_data.get("transitions", []) or scenario_data.get("edges", [])
+        
+        for transition_data in transition_list:
+            # Handle different field naming conventions
+            from_state_name = transition_data.get("from_state_name") or transition_data.get("from")
+            to_state_name = transition_data.get("to_state_name") or transition_data.get("to")
             
-        # Prepare roles
-        roles = []
-        for role_data in scenario_data.get("roles", []):
-            # Add model field if present
-            role_args = {}
-            
-            # If id is not provided, use name as id
-            if "id" in role_data:
-                role_args["id"] = role_data["id"]
-            elif "name" in role_data:
-                # Use name as id if id is not provided
-                role_args["id"] = role_data["name"]
-            else:
-                # Skip if neither id nor name is provided
-                logger.warning("Role without id or name found, skipping")
+            if not from_state_name or not to_state_name:
+                logger.warning(f"Incomplete transition data: {transition_data}")
                 continue
                 
-            # Add required fields
-            if "name" in role_data:
-                role_args["name"] = role_data["name"]
-            else:
-                # Use id as name if name is not provided
-                role_args["name"] = role_args["id"]
-                
-            if "description" in role_data:
-                role_args["description"] = role_data["description"]
-            else:
-                role_args["description"] = f"Role {role_args['name']}"
-                
-            # Add optional fields
-            role_args["system_prompt_template"] = role_data.get("system_prompt_template", "")
+            # Get state IDs
+            from_id = state_name_to_id.get(from_state_name)
+            to_id = state_name_to_id.get(to_state_name)
             
-            # Add model if present
-            if "model" in role_data:
-                role_args["model"] = role_data["model"]
+            if not from_id or not to_id:
+                logger.warning(f"Invalid state reference in transition: {from_state_name} -> {to_state_name}")
+                continue
                 
-            roles.append(Role(**role_args))
-            
-        return Scenario(
+            transitions.append(StateTransition(
+                from_state_name=from_state_name,
+                to_state_name=to_state_name,
+                condition=transition_data.get("condition", "")
+            ))
+        
+        # Extract role information
+        roles = []
+        for i, role_data in enumerate(scenario_data.get("roles", [])):
+            if isinstance(role_data, dict):
+                # Use name as ID or generate a unique ID if name is not suitable
+                role_id = role_data.get("id", role_data["name"])
+                capabilities = role_data.get("capabilities", [])
+                
+                roles.append(Role(
+                    id=role_id,
+                    name=role_data["name"],
+                    description=role_data.get("description", ""),
+                    system_prompt_template=role_data.get("system_prompt_template"),
+                    model=role_data.get("model"),
+                    required_skills=role_data.get("required_skills", []),
+                    knowledge_sources=role_data.get("knowledge_sources", [])
+                ))
+            else:
+                # Simple string format - use the string as both ID and name
+                role_name = str(role_data)
+                roles.append(Role(
+                    id=role_name,
+                    name=role_name,
+                    description="",
+                    system_prompt_template=None,
+                    required_skills=[],
+                    knowledge_sources=[]
+                ))
+                
+        # Extract learner information
+        learner = scenario_data.get("learner", {})
+        learner_role = scenario_data.get("learner_role")
+        
+        # Create scenario
+        scenario = Scenario(
             name=scenario_data.get("name", "Unnamed Scenario"),
-            description=scenario_data.get("description"),
-            learner_role=scenario_data.get("learner_role"),
-            learner=scenario_data.get("learner", {}),
+            description=scenario_data.get("description", ""),
             states=states,
             transitions=transitions,
             roles=roles,
+            learner=learner,
+            learner_role=learner_role,
             evolution=scenario_data.get("evolution", {})
         )
         
+        return scenario
+        
     except Exception as e:
-        logger.error(f"Failed to load scenario from file: {str(e)}")
+        logger.error(f"Failed to load scenario from {file_path}: {str(e)}")
         return None 

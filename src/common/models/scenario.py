@@ -16,12 +16,14 @@ class State(BaseModel):
         description: Description of the state
         roles: List of roles that can participate in this state
         assigned_to: Role that this state is assigned to
+        prompts: List of prompt templates for LLM generation
     """
     id: str
     name: str
     description: str
     roles: List[str] = Field(default_factory=list)
     assigned_to: Optional[str] = None
+    prompts: Optional[List[str]] = None
 
 
 class StateTransition(BaseModel):
@@ -198,7 +200,8 @@ class Scenario(BaseModel):
                 id=state_data.get("id", state_data["name"]),
                 name=state_data["name"],
                 description=state_data["description"],
-                roles=state_data.get("roles", [])
+                roles=state_data.get("roles", []),
+                prompts=state_data.get("prompts")
             ))
         
         transitions = []

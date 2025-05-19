@@ -7,6 +7,7 @@ from agir_db.models.state import State
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.state_role import StateRole
 from src.common.data_store import set_states, get_agent_roles
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,18 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
             print("State data: ")
             print(state_data)
             
+            # Handle prompts if they exist
+            prompts = None
+            if hasattr(state_data, 'prompts') and state_data.prompts:
+                prompts = json.dumps(state_data.prompts)
+                logger.info(f"Added prompts for state: {name}")
+            
             # Create state without role (we'll handle roles separately)
             state = State(
                 scenario_id=scenario_id,
                 name=name,
                 description=state_data.description,
+                prompts=prompts,
             )
             
             db.add(state)

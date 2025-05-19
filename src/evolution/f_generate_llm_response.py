@@ -1,5 +1,7 @@
 import logging
 import sys
+import random
+import json
 from typing import List, Optional, Dict
 from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
@@ -42,8 +44,28 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       # Get LangChain model (without memory patching)
       llm_model = get_llm_model(model_name)
       
+      # Check if state has prompts
+      custom_prompt = None
+      if state.prompts:
+          try:
+              # Handle different types of prompts data
+              if isinstance(state.prompts, list):
+                  prompts_list = state.prompts
+              else:
+                  prompts_list = json.loads(state.prompts)
+              
+              if prompts_list and len(prompts_list) > 0:
+                  # Randomly select a prompt if multiple are available
+                  custom_prompt = random.choice(prompts_list)
+                  logger.info(f"Using custom prompt for state {state.name}")
+          except (json.JSONDecodeError, TypeError) as e:
+              logger.warning(f"Failed to parse prompts for state {state.name}: {str(e)}")
+      
       # Prepare system prompt
-      system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {user.username}. Task: {state.description}"
+      if custom_prompt:
+          system_prompt = custom_prompt
+      else:
+          system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {user.username}. Task: {state.description}"
       
       # Convert previous steps to LangChain message format
       messages = [SystemMessage(content=system_prompt)]
@@ -59,12 +81,14 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
                   messages.append(AIMessage(content=step.generated_text))
       
       # Add current request
-      current_message = f"Please respond as {user.username} for the current step: {state.name}"
-      messages.append(HumanMessage(content=current_message))
+      # Only add this message if we're not using a custom prompt
+      if not custom_prompt:
+          current_message = f"Please respond as {user.username} for the current step: {state.name}"
+          messages.append(HumanMessage(content=current_message))
       
       # Generate response using our simplified memory function
       # Extract a query for memory retrieval from the messages
-      query = f"{state.name} {state.description} {current_message}"
+      query = f"{state.name} {state.description}"
       response = call_llm_with_memory(llm_model, messages, user_id, query=query)
       
       logger.info(f"Generated LLM response for state {state.name} with user {user.username}")

@@ -28,6 +28,7 @@ class StateModel(BaseModel):
     name: str
     roles: Optional[List[str]] = None
     description: str
+    prompts: Optional[List[str]] = None
     
     @model_validator(mode='after')
     def validate_roles_field(self):
