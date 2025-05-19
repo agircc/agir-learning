@@ -44,29 +44,23 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       # Get LangChain model (without memory patching)
       llm_model = get_llm_model(model_name)
       
-      # 处理prompts数组，随机选择一个prompt使用
+      # Handle prompts array - randomly select one prompt if available
       custom_prompt = None
       if state.prompts:
-          try:
-              # 记录prompts的类型和内容，便于调试
-              logger.info(f"State prompts type: {type(state.prompts)}")
-              logger.info(f"State prompts length: {len(state.prompts) if hasattr(state.prompts, '__len__') else 'N/A'}")
-              
-              # prompts应该是一个字符串列表（PostgreSQL的text[]）
-              if isinstance(state.prompts, list) and len(state.prompts) > 0:
-                  # 随机选择一个prompt
-                  custom_prompt = random.choice(state.prompts)
-                  logger.info(f"Randomly selected prompt from {len(state.prompts)} available prompts")
-              else:
-                  # 如果只有一个prompt或其它情况，直接使用
-                  custom_prompt = state.prompts[0] if isinstance(state.prompts, list) else state.prompts
-              
-              logger.info(f"Using custom prompt for state {state.name}")
-          except Exception as e:
-              logger.warning(f"Failed to parse prompts for state {state.name}: {str(e)}")
-              logger.warning(f"Prompt type: {type(state.prompts)}")
-              if hasattr(state.prompts, '__str__'):
-                  logger.warning(f"Prompt value: {str(state.prompts)[:100]}...")
+          # Log prompts type and content for debugging
+          logger.info(f"State prompts type: {type(state.prompts)}")
+          logger.info(f"State prompts length: {len(state.prompts) if hasattr(state.prompts, '__len__') else 'N/A'}")
+          
+          # Prompts should be a string list (PostgreSQL text[] type)
+          if isinstance(state.prompts, list) and len(state.prompts) > 0:
+              # Randomly select a prompt
+              custom_prompt = random.choice(state.prompts)
+              logger.info(f"Randomly selected prompt from {len(state.prompts)} available prompts")
+          else:
+              logger.error(f"Invalid prompts format for state {state.name}: {type(state.prompts)}")
+              sys.exit(1)
+          
+          logger.info(f"Using custom prompt for state {state.name}")
       
       # Prepare system prompt
       if custom_prompt:
@@ -98,10 +92,6 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
               current_message = f"Please respond as {user.username} for the current step: {state.name}"
               messages.append(HumanMessage(content=current_message))
       
-      # For post submission, we force a simple human message if there isn't a custom prompt
-      elif not custom_prompt and is_post_submission:
-          messages.append(HumanMessage(content="Please create a Reddit post as described."))
-      
       # Generate response using our simplified memory function
       # Extract a query for memory retrieval from the messages
       query = f"{state.name} {state.description}"
@@ -122,4 +112,4 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       
   except Exception as e:
       logger.error(f"Failed to generate LLM response: {str(e)}")
-      return f"Error generating response: {str(e)}" 
+      sys.exit(1) 

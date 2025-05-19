@@ -1,4 +1,5 @@
 import logging
+import sys
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional, Tuple, Union
@@ -37,7 +38,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
             name = state_data.name
             if not name:
                 logger.error("State name is required")
-                return None
+                sys.exit(1)
             
             # Check if state exists
             state = db.query(State).filter(
@@ -57,13 +58,11 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
             # Handle prompts if they exist
             prompts = None
             if hasattr(state_data, 'prompts') and state_data.prompts:
-                # 注意：PostgreSQL的text[]类型需要获取原始的prompt列表
-                # 不需要转换为JSON字符串
+                # Store the prompts list directly - SQLAlchemy will handle the PostgreSQL ARRAY type
                 if isinstance(state_data.prompts, list):
-                    # 直接使用列表，SQLAlchemy会自动处理为PostgreSQL的text[]
                     prompts = state_data.prompts
                 else:
-                    # 如果不是列表但有值，则包装为单元素列表
+                    # If not a list but has value, wrap as a single-element list
                     prompts = [state_data.prompts]
                 
                 # Debug output for prompts
@@ -77,7 +76,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                 scenario_id=scenario_id,
                 name=name,
                 description=state_data.description,
-                prompts=prompts,  # 直接传递列表，SQLAlchemy会将其存储为text[]
+                prompts=prompts,  # Direct list - SQLAlchemy handles PostgreSQL ARRAY type
             )
             
             db.add(state)
@@ -118,6 +117,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                         logger.info(f"Created state_role for state: {name} and role: {role_name}")
                     else:
                         logger.error(f"Role {role_name} not found in database for state: {name}")
+                        sys.exit(1)
             
             # Handle multiple roles (therapist.yml format)
             if hasattr(state_data, 'roles') and state_data.roles:
@@ -150,6 +150,7 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                             logger.info(f"Created state_role for state: {name} and role: {role_name}")
                         else:
                             logger.error(f"Role {role_name} not found in database for state: {name}")
+                            sys.exit(1)
         
         db.commit()
         logger.info(f"All states created successfully for scenario: {scenario_id}")
@@ -162,4 +163,4 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create or find states: {str(e)}")
-        return None
+        sys.exit(1)
