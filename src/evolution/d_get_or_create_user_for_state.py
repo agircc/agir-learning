@@ -47,8 +47,43 @@ def d_get_or_create_user_for_state(db: Session, role_id: int) -> Optional[User]:
         if user:
             logger.info(f"Found existing user {user.username} for role {agentRole.name}")
             return user
+    
+    # Find users who have been assigned to this role in other scenarios
+    # First, get all users assigned to this role
+    role_assignments = db.query(AgentAssignment).filter(
+        AgentAssignment.role_id == role_id
+    ).all()
+    
+    # Find episodes with the current scenario
+    episodes_in_scenario = db.query(Episode).filter(
+        Episode.scenario_id == episode.scenario_id
+    ).all()
+    scenario_episode_ids = [ep.id for ep in episodes_in_scenario]
+    
+    # Find users who have been assigned to this role but not in the current scenario
+    for assignment in role_assignments:
+        # Check if this user has been assigned to any episode in the current scenario
+        user_scenario_assignments = db.query(AgentAssignment).filter(
+            AgentAssignment.user_id == assignment.user_id,
+            AgentAssignment.episode_id.in_(scenario_episode_ids)
+        ).first()
+        
+        # If user hasn't been assigned to this scenario yet, we can reuse them
+        if not user_scenario_assignments:
+            user = db.query(User).filter(User.id == assignment.user_id).first()
+            if user:
+                logger.info(f"Reusing existing user {user.username} for role {agentRole.name} in new scenario")
+                # Create new assignment for this episode
+                new_assignment = AgentAssignment(
+                    user_id=user.id,
+                    role_id=role_id,
+                    episode_id=episode.id
+                )
+                db.add(new_assignment)
+                db.commit()
+                return user
       
-      # Create a new user for this role
+    # If no existing user can be reused, create a new user for this role
     logger.info(f"Creating new user for role {agentRole.name} in scenario {episode.scenario_id}")
     user = create_agent_assignment(
       db, 
