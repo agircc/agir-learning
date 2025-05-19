@@ -227,10 +227,10 @@ def generate_user_memories(
         skills = ", ".join(user_data.get("skills", []))
         background = user_data.get("background", "")
         
-        # Generate prompt for memories
+        # Generate prompt for memories with comprehensive categories
         prompt = f"""
-Based on the following user profile, generate an array of 4-6 distinct memories for this person that would influence their behavior and personality.
-The memories should cover different stages of life from childhood to the present day, showing key moments that shaped who they are.
+Based on the following user profile, generate an array of 12-15 distinct, highly detailed memories that would make this person feel like a real individual with a rich life history.
+The memories should cover different aspects of their life and include specific details to make them realistic (exact locations, company names, names of people, etc.).
 
 User Profile:
 - Role: {role}
@@ -244,20 +244,40 @@ User Profile:
 
 Scenario Context (if relevant): {scenario_description or "N/A"}
 
+Include memories from the following categories:
+
+1. Basic Life History (birthplace with specific city, childhood locations, relocations)
+2. Family Background (siblings, parents, family dynamics, specific family events)
+3. Education Journey (specific schools, teachers, classes, memorable experiences)
+4. Career Path (first job with company name, career transitions, projects)
+5. Relationships & Social Life (friendships, romantic relationships, community involvement)
+6. Personal Events & Turning Points (milestones, challenges, travel experiences with actual locations)
+7. Hobbies & Interests (childhood activities, current hobbies, skill development)
+8. Digital & Tech Life (first devices, online communities, technology experiences)
+9. Health & Lifestyle (health events, habit changes, fitness milestones)
+10. Unexpected Moments (surprises, accidents, coincidences that impacted them)
+
 Return the memories as a JSON array where each memory object has the following structure:
 [
   {{
     "title": "Brief title for the memory",
-    "content": "Detailed description of the memory including emotions, impact, and lessons learned",
+    "content": "Highly detailed description of the memory including specific names, places, companies, emotions, impact, and lessons learned",
     "age": "Approximate age when this memory occurred",
     "life_stage": "childhood/adolescence/young_adult/adult",
     "importance": "A value from 0.7 to 1.0 indicating how important this memory is to the person",
-    "emotions": ["list", "of", "emotions", "felt"]
+    "emotions": ["list", "of", "emotions", "felt"],
+    "category": "The category this memory belongs to (e.g., family_background, career_path)"
   }},
   ...more memories
 ]
 
-Make sure the memories are diverse, realistic, and provide insight into how the person developed over time.
+Make the memories extremely specific and detailed - like entries in a personal journal. Include concrete details like:
+- Exact locations (cities, countries, neighborhoods)
+- Names of institutions (schools, companies, organizations)
+- Names of people involved
+- Sensory details (what they saw, heard, felt)
+- The impact this memory had on their life choices or personality
+
 Respond with ONLY the JSON array, nothing else.
 """
         
@@ -326,7 +346,8 @@ Respond with ONLY the JSON array, nothing else.
                 "age": memory_obj.get("age"),
                 "life_stage": memory_obj.get("life_stage"),
                 "emotions": memory_obj.get("emotions", []),
-                "importance_score": float(memory_obj.get("importance", random.uniform(0.7, 1.0)))
+                "importance_score": float(memory_obj.get("importance", random.uniform(0.7, 1.0))),
+                "category": memory_obj.get("category", "general")
             }
             
             # Create the memory
@@ -343,9 +364,9 @@ Respond with ONLY the JSON array, nothing else.
             
             if memory_id:
                 memory_ids.append(memory_id)
-                logger.info(f"Created memory {i+1} ({metadata['life_stage']}) for user {user_id}")
+                logger.info(f"Created memory {i+1} ({metadata['category']}: {metadata['life_stage']}) for user {user_id}")
             
-        logger.info(f"Generated {len(memory_ids)} memories for user {user_id}")
+        logger.info(f"Generated {len(memory_ids)} detailed memories for user {user_id}")
         return memory_ids
         
     except Exception as e:
