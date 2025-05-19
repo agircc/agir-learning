@@ -29,8 +29,11 @@ from agir_db.models.episode import Episode
 from agir_db.models.step import Step
 from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.state_role import StateRole
+from agir_db.models.user import User
+from agir_db.models.memory import UserMemory
 
 from .chat_utils import get_conversations_for_step, get_messages_for_conversation, format_messages
+from src.chat.chat_with_learner import LearnerChatSession
 
 
 class ChatDisplayFrame(ttk.Frame):
@@ -118,6 +121,243 @@ class ChatDisplayFrame(ttk.Frame):
         self.text.see(tk.END)
 
 
+class UserChatFrame(ttk.Frame):
+    """Frame for chatting with a simulated user"""
+    
+    def __init__(self, parent, *args, **kwargs):
+        ttk.Frame.__init__(self, parent, *args, **kwargs)
+        
+        # Chat history display
+        self.chat_display = ChatDisplayFrame(self)
+        self.chat_display.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Input area at the bottom
+        self.input_frame = ttk.Frame(self)
+        self.input_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # Text entry
+        self.input_text = scrolledtext.ScrolledText(self.input_frame, height=3, wrap=tk.WORD)
+        self.input_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Send button
+        self.send_button = ttk.Button(self.input_frame, text="Send", command=self.send_message)
+        self.send_button.pack(side=tk.RIGHT, padx=5)
+        
+        # Bind Enter key to send message
+        self.input_text.bind("<Return>", self.on_enter)
+        
+        # Chat session
+        self.chat_session = None
+        self.chat_history = []
+    
+    def on_enter(self, event):
+        """Handle Enter key press"""
+        if not (event.state & 0x1):  # Check if Shift key is not pressed
+            self.send_message()
+            return "break"  # Prevent default Enter behavior
+        
+    def set_chat_session(self, user_id):
+        """Set the user to chat with"""
+        try:
+            self.chat_session = LearnerChatSession(user_id=user_id)
+            self.chat_history = []
+            self.chat_display.display_messages([])
+            self.input_text.config(state=tk.NORMAL)
+            self.send_button.config(state=tk.NORMAL)
+        except Exception as e:
+            messagebox.showerror("Chat Error", f"Failed to start chat session: {str(e)}")
+            self.chat_session = None
+            self.input_text.config(state=tk.DISABLED)
+            self.send_button.config(state=tk.DISABLED)
+    
+    def close_chat_session(self):
+        """Close the current chat session"""
+        if self.chat_session:
+            try:
+                self.chat_session.close()
+            except:
+                pass
+            self.chat_session = None
+            self.input_text.config(state=tk.DISABLED)
+            self.send_button.config(state=tk.DISABLED)
+    
+    def send_message(self):
+        """Send the current message to the user"""
+        if not self.chat_session:
+            messagebox.showinfo("Chat", "Please select a user to chat with first.")
+            return
+            
+        message = self.input_text.get("1.0", tk.END).strip()
+        if not message:
+            return
+            
+        # Clear input
+        self.input_text.delete("1.0", tk.END)
+        
+        # Add user message to chat history
+        self.chat_history.append({
+            "sender_name": "You",
+            "sender_id": "you",
+            "timestamp": "now",
+            "content": message
+        })
+        
+        # Get response from user
+        try:
+            response = self.chat_session.chat(message)
+            
+            # Add response to chat history
+            self.chat_history.append({
+                "sender_name": self.chat_session.user.username,
+                "sender_id": str(self.chat_session.user.id),
+                "timestamp": "now",
+                "content": response
+            })
+        except Exception as e:
+            messagebox.showerror("Chat Error", f"Failed to get response: {str(e)}")
+            return
+            
+        # Update chat display
+        self.chat_display.display_messages(self.chat_history)
+
+
+class MemoryPaginationFrame(ttk.Frame):
+    """Frame for displaying user memories with pagination"""
+    
+    def __init__(self, parent, db, *args, **kwargs):
+        ttk.Frame.__init__(self, parent, *args, **kwargs)
+        self.db = db
+        self.current_user_id = None
+        self.page = 1
+        self.page_size = 10
+        self.total_pages = 1
+        
+        # Create memory display
+        self.memory_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=15)
+        self.memory_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.memory_text.config(state=tk.DISABLED)
+        
+        # Pagination controls
+        self.pagination_frame = ttk.Frame(self)
+        self.pagination_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.prev_button = ttk.Button(self.pagination_frame, text="Previous", command=self.prev_page)
+        self.prev_button.pack(side=tk.LEFT)
+        
+        self.page_label = ttk.Label(self.pagination_frame, text="Page 1 of 1")
+        self.page_label.pack(side=tk.LEFT, padx=10)
+        
+        self.next_button = ttk.Button(self.pagination_frame, text="Next", command=self.next_page)
+        self.next_button.pack(side=tk.LEFT)
+        
+        # Disable buttons initially
+        self.prev_button.config(state=tk.DISABLED)
+        self.next_button.config(state=tk.DISABLED)
+    
+    def load_memories(self, user_id):
+        """Load memories for the specified user"""
+        self.current_user_id = user_id
+        self.page = 1
+        self.load_current_page()
+    
+    def load_current_page(self):
+        """Load the current page of memories"""
+        if not self.current_user_id:
+            return
+            
+        try:
+            # Calculate offset
+            offset = (self.page - 1) * self.page_size
+            
+            # Get total count
+            total_count = self.db.query(UserMemory).filter(
+                UserMemory.user_id == self.current_user_id
+            ).count()
+            
+            # Get memories for current page
+            memories = self.db.query(UserMemory).filter(
+                UserMemory.user_id == self.current_user_id
+            ).order_by(
+                UserMemory.created_at.desc()
+            ).offset(offset).limit(self.page_size).all()
+            
+            # Update total pages
+            self.total_pages = max(1, (total_count + self.page_size - 1) // self.page_size)
+            
+            # Update page label
+            self.page_label.config(text=f"Page {self.page} of {self.total_pages}")
+            
+            # Enable/disable pagination buttons
+            self.prev_button.config(state=tk.NORMAL if self.page > 1 else tk.DISABLED)
+            self.next_button.config(state=tk.NORMAL if self.page < self.total_pages else tk.DISABLED)
+            
+            # Display memories
+            self.memory_text.config(state=tk.NORMAL)
+            self.memory_text.delete(1.0, tk.END)
+            
+            if not memories:
+                self.memory_text.insert(tk.END, "No memories found.")
+            else:
+                for memory in memories:
+                    self.memory_text.insert(tk.END, f"[{memory.created_at}]\n", "timestamp")
+                    self.memory_text.insert(tk.END, f"{memory.content}\n\n", "")
+            
+            self.memory_text.config(state=tk.DISABLED)
+            
+        except Exception as e:
+            messagebox.showerror("Memory Error", f"Failed to load memories: {str(e)}")
+    
+    def next_page(self):
+        """Go to the next page"""
+        if self.page < self.total_pages:
+            self.page += 1
+            self.load_current_page()
+    
+    def prev_page(self):
+        """Go to the previous page"""
+        if self.page > 1:
+            self.page -= 1
+            self.load_current_page()
+
+
+class UserProfileFrame(ttk.Frame):
+    """Frame for displaying user profile information"""
+    
+    def __init__(self, parent, db, *args, **kwargs):
+        ttk.Frame.__init__(self, parent, *args, **kwargs)
+        self.db = db
+        
+        # Create profile display
+        self.profile_text = scrolledtext.ScrolledText(self, wrap=tk.WORD)
+        self.profile_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.profile_text.config(state=tk.DISABLED)
+    
+    def load_profile(self, user_id):
+        """Load and display the user profile"""
+        try:
+            user = self.db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return
+                
+            self.profile_text.config(state=tk.NORMAL)
+            self.profile_text.delete(1.0, tk.END)
+            
+            self.profile_text.insert(tk.END, f"Username: {user.username}\n\n")
+            self.profile_text.insert(tk.END, f"Name: {user.first_name} {user.last_name}\n\n")
+            
+            if user.description:
+                self.profile_text.insert(tk.END, f"Description:\n{user.description}\n\n")
+                
+            self.profile_text.insert(tk.END, f"LLM Model: {user.llm_model or 'Not set'}\n\n")
+            
+            # Add any other relevant user information here
+            
+            self.profile_text.config(state=tk.DISABLED)
+            
+        except Exception as e:
+            messagebox.showerror("Profile Error", f"Failed to load profile: {str(e)}")
+
+
 class ScenarioVisualizer:
     def __init__(self, root):
         self.root = root
@@ -180,187 +420,328 @@ class ScenarioVisualizer:
         self.main_frame = ttk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Create main paned window for two-column layout
-        self.main_paned = ttk.PanedWindow(self.main_frame, orient=tk.HORIZONTAL)
-        self.main_paned.pack(fill=tk.BOTH, expand=True)
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self.main_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
         
-        # Create left column (scenarios and episodes)
-        self.left_column = ttk.Frame(self.main_paned)
-        self.main_paned.add(self.left_column, weight=1)
+        # Create Scenarios tab
+        self.scenarios_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.scenarios_tab, text="Scenarios")
         
-        # Create right column (steps and step details/conversations)
-        self.right_column = ttk.Frame(self.main_paned)
-        self.main_paned.add(self.right_column, weight=1)
+        # Create Users tab
+        self.users_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.users_tab, text="Users")
         
-        # Setup left column
-        self.setup_left_column()
+        # Setup Scenarios tab
+        self.setup_scenarios_tab()
         
-        # Setup right column
-        self.setup_right_column()
+        # Setup Users tab
+        self.setup_users_tab()
         
-        # Load scenarios data
+        # Load initial data
         self.load_scenarios()
-
+        self.load_users()
+        
+        # Add tab change handler
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
+        
+        # Current chat session
+        self.current_chat_session = None
+    
     def close_db(self):
-        """Close the database connection properly."""
-        if hasattr(self, 'db') and self.db is not None:
-            print("Closing persistent database session")
+        """Close the database session."""
+        if self.db:
             self.db.close()
-
+            print("Closed database session")
+    
     def on_close(self):
         """Handle window close event."""
         self.close_db()
         self.root.destroy()
-
-    def setup_left_column(self):
+    
+    def on_tab_changed(self, event):
+        """Handle tab change event"""
+        if self.user_chat_frame and hasattr(self, 'user_chat_frame'):
+            self.user_chat_frame.close_chat_session()
+    
+    def setup_scenarios_tab(self):
+        """Setup the Scenarios tab content"""
+        # Create main paned window for two-column layout
+        self.scenarios_paned = ttk.PanedWindow(self.scenarios_tab, orient=tk.HORIZONTAL)
+        self.scenarios_paned.pack(fill=tk.BOTH, expand=True)
+        
+        # Create left column (scenarios and episodes)
+        self.scenarios_left_column = ttk.Frame(self.scenarios_paned)
+        self.scenarios_paned.add(self.scenarios_left_column, weight=1)
+        
+        # Create right column (steps and step details/conversations)
+        self.scenarios_right_column = ttk.Frame(self.scenarios_paned)
+        self.scenarios_paned.add(self.scenarios_right_column, weight=1)
+        
+        # Setup left column
+        self.setup_scenarios_left_column()
+        
+        # Setup right column
+        self.setup_scenarios_right_column()
+    
+    def setup_scenarios_left_column(self):
+        """Setup the left column of the Scenarios tab"""
         # Create vertical paned window for scenarios and episodes
-        self.left_paned = ttk.PanedWindow(self.left_column, orient=tk.VERTICAL)
-        self.left_paned.pack(fill=tk.BOTH, expand=True)
+        self.scenarios_left_paned = ttk.PanedWindow(self.scenarios_left_column, orient=tk.VERTICAL)
+        self.scenarios_left_paned.pack(fill=tk.BOTH, expand=True)
         
         # Create scenarios frame
-        self.scenarios_frame = ttk.LabelFrame(self.left_paned, text="Scenarios")
-        self.left_paned.add(self.scenarios_frame, weight=1)
-        
-        # Create scrollbar for scenarios
-        self.scenarios_scroll = ttk.Scrollbar(self.scenarios_frame)
-        self.scenarios_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.scenarios_frame = ttk.LabelFrame(self.scenarios_left_paned, text="Scenarios")
+        self.scenarios_left_paned.add(self.scenarios_frame, weight=1)
         
         # Create scenarios treeview
-        self.scenarios_tree = ttk.Treeview(self.scenarios_frame, 
-                                          columns=("name", "description", "learner_role"),
-                                          show="headings",
-                                          yscrollcommand=self.scenarios_scroll.set)
-        self.scenarios_scroll.config(command=self.scenarios_tree.yview)
-        
-        # Configure columns
+        self.scenarios_tree = ttk.Treeview(self.scenarios_frame, columns=("id", "name", "description"))
+        self.scenarios_tree.heading("#0", text="")
+        self.scenarios_tree.heading("id", text="ID")
         self.scenarios_tree.heading("name", text="Name")
         self.scenarios_tree.heading("description", text="Description")
-        self.scenarios_tree.heading("learner_role", text="Learner Role")
+        self.scenarios_tree.column("#0", width=0, stretch=tk.NO)
+        self.scenarios_tree.column("id", width=80, stretch=tk.NO)
         self.scenarios_tree.column("name", width=150)
-        self.scenarios_tree.column("description", width=300)
-        self.scenarios_tree.column("learner_role", width=150)
+        self.scenarios_tree.column("description", width=250)
         
-        # Pack the scenarios treeview
-        self.scenarios_tree.pack(fill=tk.BOTH, expand=True)
+        # Add scrollbar to scenarios treeview
+        scenarios_scrollbar = ttk.Scrollbar(self.scenarios_frame, orient=tk.VERTICAL, command=self.scenarios_tree.yview)
+        self.scenarios_tree.configure(yscrollcommand=scenarios_scrollbar.set)
         
-        # Bind click event
-        self.scenarios_tree.bind("<Double-1>", self.on_scenario_selected)
+        # Pack scenarios treeview and scrollbar
+        self.scenarios_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scenarios_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Create episodes frame
-        self.episodes_frame = ttk.LabelFrame(self.left_paned, text="Episodes")
-        self.left_paned.add(self.episodes_frame, weight=1)
-        
-        # Create scrollbar for episodes
-        self.episodes_scroll = ttk.Scrollbar(self.episodes_frame)
-        self.episodes_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.episodes_frame = ttk.LabelFrame(self.scenarios_left_paned, text="Episodes")
+        self.scenarios_left_paned.add(self.episodes_frame, weight=1)
         
         # Create episodes treeview
-        self.episodes_tree = ttk.Treeview(self.episodes_frame, 
-                                         columns=("scenario", "status", "current_state"),
-                                         show="headings",
-                                         yscrollcommand=self.episodes_scroll.set)
-        self.episodes_scroll.config(command=self.episodes_tree.yview)
-        
-        # Configure columns
-        self.episodes_tree.heading("scenario", text="Scenario")
+        self.episodes_tree = ttk.Treeview(self.episodes_frame, columns=("id", "name", "status"))
+        self.episodes_tree.heading("#0", text="")
+        self.episodes_tree.heading("id", text="ID")
+        self.episodes_tree.heading("name", text="Name")
         self.episodes_tree.heading("status", text="Status")
-        self.episodes_tree.heading("current_state", text="Current State")
-        self.episodes_tree.column("scenario", width=150)
+        self.episodes_tree.column("#0", width=0, stretch=tk.NO)
+        self.episodes_tree.column("id", width=80, stretch=tk.NO)
+        self.episodes_tree.column("name", width=150)
         self.episodes_tree.column("status", width=100)
-        self.episodes_tree.column("current_state", width=150)
         
-        # Pack the episodes treeview
-        self.episodes_tree.pack(fill=tk.BOTH, expand=True)
+        # Add scrollbar to episodes treeview
+        episodes_scrollbar = ttk.Scrollbar(self.episodes_frame, orient=tk.VERTICAL, command=self.episodes_tree.yview)
+        self.episodes_tree.configure(yscrollcommand=episodes_scrollbar.set)
         
-        # Bind click event
-        self.episodes_tree.bind("<Double-1>", self.on_episode_selected)
-
-    def setup_right_column(self):
+        # Pack episodes treeview and scrollbar
+        self.episodes_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        episodes_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Bind selection events
+        self.scenarios_tree.bind("<<TreeviewSelect>>", self.on_scenario_selected)
+        self.episodes_tree.bind("<<TreeviewSelect>>", self.on_episode_selected)
+    
+    def setup_scenarios_right_column(self):
+        """Setup the right column of the Scenarios tab"""
         # Create vertical paned window for steps and details
-        self.right_paned = ttk.PanedWindow(self.right_column, orient=tk.VERTICAL)
-        self.right_paned.pack(fill=tk.BOTH, expand=True)
+        self.scenarios_right_paned = ttk.PanedWindow(self.scenarios_right_column, orient=tk.VERTICAL)
+        self.scenarios_right_paned.pack(fill=tk.BOTH, expand=True)
         
         # Create steps frame
-        self.steps_frame = ttk.LabelFrame(self.right_paned, text="Steps")
-        self.right_paned.add(self.steps_frame, weight=1)
-        
-        # Create scrollbar for steps
-        self.steps_scroll = ttk.Scrollbar(self.steps_frame)
-        self.steps_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.steps_frame = ttk.LabelFrame(self.scenarios_right_paned, text="Steps")
+        self.scenarios_right_paned.add(self.steps_frame, weight=1)
         
         # Create steps treeview
-        self.steps_tree = ttk.Treeview(self.steps_frame, 
-                                      columns=("state", "user", "action", "created_at"),
-                                      show="headings",
-                                      yscrollcommand=self.steps_scroll.set)
-        self.steps_scroll.config(command=self.steps_tree.yview)
-        
-        # Configure columns
-        self.steps_tree.heading("state", text="State")
-        self.steps_tree.heading("user", text="User")
-        self.steps_tree.heading("action", text="Action")
+        self.steps_tree = ttk.Treeview(self.steps_frame, columns=("id", "description", "created_at"))
+        self.steps_tree.heading("#0", text="")
+        self.steps_tree.heading("id", text="ID")
+        self.steps_tree.heading("description", text="Description")
         self.steps_tree.heading("created_at", text="Created At")
-        self.steps_tree.column("state", width=150)
-        self.steps_tree.column("user", width=150)
-        self.steps_tree.column("action", width=100)
+        self.steps_tree.column("#0", width=0, stretch=tk.NO)
+        self.steps_tree.column("id", width=80, stretch=tk.NO)
+        self.steps_tree.column("description", width=200)
         self.steps_tree.column("created_at", width=150)
         
-        # Pack the steps treeview
-        self.steps_tree.pack(fill=tk.BOTH, expand=True)
+        # Add scrollbar to steps treeview
+        steps_scrollbar = ttk.Scrollbar(self.steps_frame, orient=tk.VERTICAL, command=self.steps_tree.yview)
+        self.steps_tree.configure(yscrollcommand=steps_scrollbar.set)
         
-        # Bind click event
-        self.steps_tree.bind("<Double-1>", self.on_step_selected)
+        # Pack steps treeview and scrollbar
+        self.steps_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        steps_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Create details paned window (horizontal)
-        self.details_paned = ttk.PanedWindow(self.right_paned, orient=tk.HORIZONTAL)
-        self.right_paned.add(self.details_paned, weight=1)
+        # Create details frame
+        self.details_frame = ttk.LabelFrame(self.scenarios_right_paned, text="Step Details & Conversations")
+        self.scenarios_right_paned.add(self.details_frame, weight=1)
         
-        # Create step details frame
-        self.step_detail_frame = ttk.LabelFrame(self.details_paned, text="Step Details")
-        self.details_paned.add(self.step_detail_frame, weight=1)
+        # Create notebook for step details and conversations
+        self.details_notebook = ttk.Notebook(self.details_frame)
+        self.details_notebook.pack(fill=tk.BOTH, expand=True)
         
-        # Create text widget for step details
-        self.step_text = tk.Text(self.step_detail_frame, wrap=tk.WORD)
-        self.step_text.pack(fill=tk.BOTH, expand=True)
+        # Create step details tab
+        self.step_details_tab = ttk.Frame(self.details_notebook)
+        self.details_notebook.add(self.step_details_tab, text="Step Details")
         
-        # Create conversation frame
-        self.conversation_frame = ttk.LabelFrame(self.details_paned, text="Conversation")
-        self.details_paned.add(self.conversation_frame, weight=1)
+        # Create conversations tab
+        self.conversations_tab = ttk.Frame(self.details_notebook)
+        self.details_notebook.add(self.conversations_tab, text="Conversations")
         
-        # Create enhanced chat display widget for conversation
-        self.conversation_display = ChatDisplayFrame(self.conversation_frame)
-        self.conversation_display.pack(fill=tk.BOTH, expand=True)
+        # Create chat display frame in conversations tab
+        self.chat_display = ChatDisplayFrame(self.conversations_tab)
+        self.chat_display.pack(fill=tk.BOTH, expand=True)
+        
+        # Create step details display in step details tab
+        self.step_details_text = scrolledtext.ScrolledText(self.step_details_tab, wrap=tk.WORD)
+        self.step_details_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.step_details_text.config(state=tk.DISABLED)
+        
+        # Bind selection events
+        self.steps_tree.bind("<<TreeviewSelect>>", self.on_step_selected)
+    
+    def setup_users_tab(self):
+        """Setup the Users tab content"""
+        # Create main paned window for two-column layout
+        self.users_paned = ttk.PanedWindow(self.users_tab, orient=tk.HORIZONTAL)
+        self.users_paned.pack(fill=tk.BOTH, expand=True)
+        
+        # Create left column (user list and profile)
+        self.users_left_column = ttk.Frame(self.users_paned)
+        self.users_paned.add(self.users_left_column, weight=1)
+        
+        # Create right column (memories and chat)
+        self.users_right_column = ttk.Frame(self.users_paned)
+        self.users_paned.add(self.users_right_column, weight=1)
+        
+        # Setup left column of Users tab
+        self.setup_users_left_column()
+        
+        # Setup right column of Users tab
+        self.setup_users_right_column()
+    
+    def setup_users_left_column(self):
+        """Setup the left column of the Users tab"""
+        # Create vertical paned window for user list and profile
+        self.users_left_paned = ttk.PanedWindow(self.users_left_column, orient=tk.VERTICAL)
+        self.users_left_paned.pack(fill=tk.BOTH, expand=True)
+        
+        # Create user list frame
+        self.user_list_frame = ttk.LabelFrame(self.users_left_paned, text="User List")
+        self.users_left_paned.add(self.user_list_frame, weight=1)
+        
+        # Create user list treeview
+        self.users_tree = ttk.Treeview(self.user_list_frame, columns=("id", "username", "name"))
+        self.users_tree.heading("#0", text="")
+        self.users_tree.heading("id", text="ID")
+        self.users_tree.heading("username", text="Username")
+        self.users_tree.heading("name", text="Name")
+        self.users_tree.column("#0", width=0, stretch=tk.NO)
+        self.users_tree.column("id", width=80, stretch=tk.NO)
+        self.users_tree.column("username", width=150)
+        self.users_tree.column("name", width=150)
+        
+        # Add scrollbar to user list treeview
+        users_scrollbar = ttk.Scrollbar(self.user_list_frame, orient=tk.VERTICAL, command=self.users_tree.yview)
+        self.users_tree.configure(yscrollcommand=users_scrollbar.set)
+        
+        # Pack user list treeview and scrollbar
+        self.users_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        users_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Create user profile frame
+        self.user_profile_frame = ttk.LabelFrame(self.users_left_paned, text="User Profile")
+        self.users_left_paned.add(self.user_profile_frame, weight=1)
+        
+        # Create user profile display
+        self.user_profile = UserProfileFrame(self.user_profile_frame, self.db)
+        self.user_profile.pack(fill=tk.BOTH, expand=True)
+        
+        # Bind selection events
+        self.users_tree.bind("<<TreeviewSelect>>", self.on_user_selected)
+    
+    def setup_users_right_column(self):
+        """Setup the right column of the Users tab"""
+        # Create vertical paned window for memories and chat
+        self.users_right_paned = ttk.PanedWindow(self.users_right_column, orient=tk.VERTICAL)
+        self.users_right_paned.pack(fill=tk.BOTH, expand=True)
+        
+        # Create memories frame
+        self.memories_frame = ttk.LabelFrame(self.users_right_paned, text="User Memories")
+        self.users_right_paned.add(self.memories_frame, weight=1)
+        
+        # Create memories display with pagination
+        self.memories_display = MemoryPaginationFrame(self.memories_frame, self.db)
+        self.memories_display.pack(fill=tk.BOTH, expand=True)
+        
+        # Create chat frame
+        self.chat_frame = ttk.LabelFrame(self.users_right_paned, text="Chat with User")
+        self.users_right_paned.add(self.chat_frame, weight=1)
+        
+        # Create chat interface
+        self.user_chat_frame = UserChatFrame(self.chat_frame)
+        self.user_chat_frame.pack(fill=tk.BOTH, expand=True)
 
     def load_scenarios(self):
-        try:
-            if self.db is None:
-                print("No database connection available")
-                return
-                
-            print("Querying scenarios...")
-            scenarios = self.db.query(Scenario).all()
-            print(f"Found {len(scenarios)} scenarios")
+        """Load scenarios from the database."""
+        if self.db is None:
+            messagebox.showerror("Database Error", "No database connection available.")
+            return
             
+        try:
             # Clear existing items
             for item in self.scenarios_tree.get_children():
                 self.scenarios_tree.delete(item)
+                
+            # Get all scenarios
+            scenarios = self.db.query(Scenario).all()
             
-            # Add scenarios to tree
+            # Add to treeview
             for scenario in scenarios:
-                print(f"Adding scenario: {scenario.id} - {scenario.name}")
-                self.scenarios_tree.insert("", tk.END, iid=str(scenario.id),
-                                        values=(scenario.name, scenario.description, scenario.learner_role))
+                self.scenarios_tree.insert("", "end", scenario.id, 
+                                          values=(scenario.id, scenario.name, scenario.description))
+                
+            print(f"Loaded {len(scenarios)} scenarios")
+            
         except Exception as e:
             print(f"Exception in load_scenarios: {str(e)}")
             import traceback
             traceback.print_exc()
-            messagebox.showerror("Error", f"Failed to load scenarios: {str(e)}")
+            messagebox.showerror("Database Error", f"Failed to load scenarios: {str(e)}")
             
-            # If there's a database error, try to reconnect
+            # Try to reconnect
             self.reconnect_db()
-
+    
+    def load_users(self):
+        """Load users from the database."""
+        if self.db is None:
+            messagebox.showerror("Database Error", "No database connection available.")
+            return
+            
+        try:
+            # Clear existing items
+            for item in self.users_tree.get_children():
+                self.users_tree.delete(item)
+                
+            # Get all users
+            users = self.db.query(User).all()
+            
+            # Add to treeview
+            for user in users:
+                full_name = f"{user.first_name} {user.last_name}" if user.first_name and user.last_name else ""
+                self.users_tree.insert("", "end", str(user.id), 
+                                      values=(user.id, user.username, full_name))
+                
+            print(f"Loaded {len(users)} users")
+            
+        except Exception as e:
+            print(f"Exception in load_users: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Database Error", f"Failed to load users: {str(e)}")
+            
+            # Try to reconnect
+            self.reconnect_db()
+    
     def reconnect_db(self):
-        """Try to reconnect to the database if connection fails."""
+        """Attempt to reconnect to the database."""
         try:
             print("Attempting to reconnect to database...")
             if hasattr(self, 'db') and self.db is not None:
@@ -376,163 +757,173 @@ class ScenarioVisualizer:
             return False
 
     def on_scenario_selected(self, event):
+        """Handle scenario selection."""
         item_id = self.scenarios_tree.focus()
         if not item_id or self.db is None:
             return
             
         try:
-            print(f"Scenario selected: {item_id}")
+            # Get the scenario ID
             scenario_id = uuid.UUID(item_id)
             
-            # Get scenario details
-            print(f"Querying scenario details for ID: {scenario_id}")
-            scenario = self.db.query(Scenario).filter(Scenario.id == scenario_id).first()
-            if not scenario:
-                print("Scenario not found")
-                return
-            
-            # Clear episodes tree
+            # Clear episodes, steps, and step details
             for item in self.episodes_tree.get_children():
                 self.episodes_tree.delete(item)
                 
-            # Clear steps tree
             for item in self.steps_tree.get_children():
                 self.steps_tree.delete(item)
                 
-            # Clear step details and conversation
-            self.step_text.delete(1.0, tk.END)
-            self.conversation_display.display_messages([])
+            self.step_details_text.config(state=tk.NORMAL)
+            self.step_details_text.delete(1.0, tk.END)
+            self.step_details_text.config(state=tk.DISABLED)
             
-            # Get episodes for this scenario
-            print(f"Getting episodes for scenario: {scenario_id}")
-            episodes = self.db.query(Episode).filter(
-                Episode.scenario_id == scenario_id
-            ).all()
-            print(f"Found {len(episodes)} episodes")
+            self.chat_display.display_messages([])
+            
+            # Load episodes for this scenario
+            episodes = self.db.query(Episode).filter(Episode.scenario_id == scenario_id).all()
             
             # Add episodes to tree
             for episode in episodes:
-                state_name = episode.current_state.name if episode.current_state else "None"
-                print(f"Adding episode: {episode.id} - {episode.status} - {state_name}")
-                self.episodes_tree.insert("", tk.END, iid=str(episode.id),
-                                       values=(scenario.name, episode.status, state_name))
+                self.episodes_tree.insert("", "end", str(episode.id), 
+                                         values=(episode.id, episode.name, episode.status))
                 
         except Exception as e:
             print(f"Exception in on_scenario_selected: {str(e)}")
             import traceback
             traceback.print_exc()
-            messagebox.showerror("Error", f"Failed to load scenario episodes: {str(e)}")
+            messagebox.showerror("Error", f"Failed to load episodes: {str(e)}")
             
             # Try to reconnect if there's a database error
             self.reconnect_db()
-
+    
     def on_episode_selected(self, event):
+        """Handle episode selection."""
         item_id = self.episodes_tree.focus()
         if not item_id or self.db is None:
             return
             
         try:
-            print(f"Episode selected: {item_id}")
+            # Get the episode ID
             episode_id = uuid.UUID(item_id)
             
-            # Get episode details
-            print(f"Querying episode details for ID: {episode_id}")
-            episode = self.db.query(Episode).filter(Episode.id == episode_id).first()
-            if not episode:
-                print("Episode not found")
-                return
-            
-            # Clear steps tree
+            # Clear steps and step details
             for item in self.steps_tree.get_children():
                 self.steps_tree.delete(item)
+                
+            self.step_details_text.config(state=tk.NORMAL)
+            self.step_details_text.delete(1.0, tk.END)
+            self.step_details_text.config(state=tk.DISABLED)
             
-            # Clear step details and conversation
-            self.step_text.delete(1.0, tk.END)
-            self.conversation_display.display_messages([])
+            self.chat_display.display_messages([])
             
-            # Get steps for this episode
-            print(f"Getting steps for episode: {episode_id}")
-            steps = self.db.query(Step).filter(
-                Step.episode_id == episode_id
-            ).order_by(Step.created_at).all()
-            print(f"Found {len(steps)} steps")
+            # Load steps for this episode
+            steps = self.db.query(Step).filter(Step.episode_id == episode_id).order_by(Step.created_at).all()
             
             # Add steps to tree
             for step in steps:
-                state_name = step.state.name if step.state else "Unknown"
-                user_name = step.user.username if step.user else "Unknown"
-                print(f"Adding step: {step.id}, state: {state_name}, user: {user_name}")
+                description = f"{step.action}" if step.action else "No action"
+                self.steps_tree.insert("", "end", str(step.id), 
+                                      values=(step.id, description, step.created_at))
                 
-                self.steps_tree.insert("", tk.END, iid=str(step.id),
-                                    values=(state_name, user_name, step.action, step.created_at))
-            
         except Exception as e:
             print(f"Exception in on_episode_selected: {str(e)}")
             import traceback
             traceback.print_exc()
-            messagebox.showerror("Error", f"Failed to load episode details: {str(e)}")
+            messagebox.showerror("Error", f"Failed to load steps: {str(e)}")
             
             # Try to reconnect if there's a database error
             self.reconnect_db()
 
     def on_step_selected(self, event):
+        """Handle step selection."""
         item_id = self.steps_tree.focus()
         if not item_id or self.db is None:
             return
             
         try:
-            print(f"Step selected: {item_id}")
+            # Get the step from the database
             step_id = uuid.UUID(item_id)
-            
-            # Get step details
-            print(f"Querying step details for ID: {step_id}")
             step = self.db.query(Step).filter(Step.id == step_id).first()
+            
             if not step:
-                print("Step not found")
                 return
-            
-            # Clear existing text
-            self.step_text.delete(1.0, tk.END)
-            
-            # Add step details
-            self.step_text.insert(tk.END, f"State: {step.state.name if step.state else 'Unknown'}\n\n")
-            self.step_text.insert(tk.END, f"Action: {step.action}\n\n")
-            self.step_text.insert(tk.END, f"User: {step.user.username if step.user else 'Unknown'}\n\n")
-            self.step_text.insert(tk.END, f"Created At: {step.created_at}\n\n")
-            
-            # Add generated text if available
-            if step.generated_text:
-                self.step_text.insert(tk.END, "Generated Text:\n\n")
-                self.step_text.insert(tk.END, step.generated_text)
-            
-            # Load related conversations
-            print(f"Getting conversations for step: {step_id}")
-            conversations = get_conversations_for_step(self.db, step_id)
-            print(f"Found {len(conversations)} conversations")
-            
-            # If there are conversations, display the first one
-            if conversations:
-                conversation = conversations[0]  # Display first conversation
-                print(f"Displaying conversation: {conversation.id} - {conversation.title}")
                 
-                # Get and display messages
-                messages = get_messages_for_conversation(self.db, conversation.id)
-                if messages:
-                    formatted_messages = format_messages(messages)
-                    # Display using our enhanced chat display
-                    self.conversation_display.display_messages(formatted_messages)
-                else:
-                    # No messages
-                    self.conversation_display.display_messages([])
-            else:
-                # No conversations
-                self.conversation_display.display_messages([])
+            # Display step details
+            self.step_details_text.config(state=tk.NORMAL)
+            self.step_details_text.delete(1.0, tk.END)
             
+            self.step_details_text.insert(tk.END, f"Step ID: {step.id}\n\n")
+            self.step_details_text.insert(tk.END, f"Episode ID: {step.episode_id}\n\n")
+            
+            if step.state:
+                self.step_details_text.insert(tk.END, f"State: {step.state.name}\n")
+                self.step_details_text.insert(tk.END, f"State Description: {step.state.description}\n\n")
+            
+            if step.user:
+                self.step_details_text.insert(tk.END, f"User: {step.user.username}\n\n")
+                
+            self.step_details_text.insert(tk.END, f"Action: {step.action}\n\n")
+            self.step_details_text.insert(tk.END, f"Created At: {step.created_at}\n\n")
+            
+            if step.generated_text:
+                self.step_details_text.insert(tk.END, "Generated Text:\n")
+                self.step_details_text.insert(tk.END, f"{step.generated_text}\n\n")
+                
+            self.step_details_text.config(state=tk.DISABLED)
+            
+            # Load conversations for this step
+            conversations = get_conversations_for_step(self.db, step.id)
+            
+            if conversations:
+                # If multiple conversations, use the first one for now
+                # In a real app, we might want to have tabs for each conversation
+                conversation = conversations[0]
+                
+                # Get messages for this conversation
+                messages = get_messages_for_conversation(self.db, conversation.id)
+                
+                if messages:
+                    # Format messages for display
+                    formatted_messages = format_messages(messages)
+                    # Display messages
+                    self.chat_display.display_messages(formatted_messages)
+                else:
+                    self.chat_display.display_messages([])
+            else:
+                self.chat_display.display_messages([])
+                
         except Exception as e:
             print(f"Exception in on_step_selected: {str(e)}")
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to load step details: {str(e)}")
+            
+            # Try to reconnect if there's a database error
+            self.reconnect_db()
+
+    def on_user_selected(self, event):
+        item_id = self.users_tree.focus()
+        if not item_id or self.db is None:
+            return
+            
+        try:
+            print(f"User selected: {item_id}")
+            user_id = uuid.UUID(item_id)
+            
+            # Load user profile
+            self.user_profile.load_profile(user_id)
+            
+            # Load user memories
+            self.memories_display.load_memories(user_id)
+            
+            # Set chat session
+            self.user_chat_frame.set_chat_session(user_id)
+            
+        except Exception as e:
+            print(f"Exception in on_user_selected: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messagebox.showerror("Error", f"Failed to load user details: {str(e)}")
             
             # Try to reconnect if there's a database error
             self.reconnect_db()
