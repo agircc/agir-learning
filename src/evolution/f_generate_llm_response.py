@@ -71,14 +71,22 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       # Log the actual prompt being used
       logger.info(f"Using prompt (first 100 chars): {system_prompt[:100]}...")
       
-      # Special handling for "User Post Submission" state - use zero-shot generation without conversation history
-      is_post_submission = state.name == "User Post Submission"
+      # Determine if we should include previous conversation history
+      # This makes the code independent of hardcoded state names
+      # Instead, the behavior is determined by the existence of custom prompts
+      include_history = True
       
-      # Convert previous steps to LangChain message format, but only if not a post submission
+      # Check if this state has custom prompts that are meant to be used in a zero-shot way
+      # States with custom prompts may need to generate content from scratch without conversation history
+      if custom_prompt and "write" in system_prompt.lower() and "post" in system_prompt.lower():
+          include_history = False
+          logger.info(f"Zero-shot generation mode detected for state {state.name}")
+      
+      # Convert previous steps to LangChain message format
       messages = [SystemMessage(content=system_prompt)]
       
-      # Add previous step data as conversation history only if not a post submission
-      if not is_post_submission:
+      # Add previous step data as conversation history only if include_history is True
+      if include_history:
           for step in previous_steps:
               if step.generated_text:
                   # Determine if this is from the user or AI based on user_id comparison
@@ -87,7 +95,7 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
                   else:
                       messages.append(AIMessage(content=step.generated_text))
       
-          # Add current request only if we're not using a custom prompt and not a post submission
+          # Add current request only if we're not using a custom prompt
           if not custom_prompt:
               current_message = f"Please respond as {user.username} for the current step: {state.name}"
               messages.append(HumanMessage(content=current_message))
