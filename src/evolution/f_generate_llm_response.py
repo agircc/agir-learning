@@ -44,22 +44,29 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       # Get LangChain model (without memory patching)
       llm_model = get_llm_model(model_name)
       
-      # Check if state has prompts
+      # 处理prompts数组，随机选择一个prompt使用
       custom_prompt = None
       if state.prompts:
           try:
-              # Handle different types of prompts data
-              if isinstance(state.prompts, list):
-                  prompts_list = state.prompts
-              else:
-                  prompts_list = json.loads(state.prompts)
+              # 记录prompts的类型和内容，便于调试
+              logger.info(f"State prompts type: {type(state.prompts)}")
+              logger.info(f"State prompts length: {len(state.prompts) if hasattr(state.prompts, '__len__') else 'N/A'}")
               
-              if prompts_list and len(prompts_list) > 0:
-                  # Randomly select a prompt if multiple are available
-                  custom_prompt = random.choice(prompts_list)
-                  logger.info(f"Using custom prompt for state {state.name}")
-          except (json.JSONDecodeError, TypeError) as e:
+              # prompts应该是一个字符串列表（PostgreSQL的text[]）
+              if isinstance(state.prompts, list) and len(state.prompts) > 0:
+                  # 随机选择一个prompt
+                  custom_prompt = random.choice(state.prompts)
+                  logger.info(f"Randomly selected prompt from {len(state.prompts)} available prompts")
+              else:
+                  # 如果只有一个prompt或其它情况，直接使用
+                  custom_prompt = state.prompts[0] if isinstance(state.prompts, list) else state.prompts
+              
+              logger.info(f"Using custom prompt for state {state.name}")
+          except Exception as e:
               logger.warning(f"Failed to parse prompts for state {state.name}: {str(e)}")
+              logger.warning(f"Prompt type: {type(state.prompts)}")
+              if hasattr(state.prompts, '__str__'):
+                  logger.warning(f"Prompt value: {str(state.prompts)[:100]}...")
       
       # Prepare system prompt
       if custom_prompt:
@@ -67,28 +74,43 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       else:
           system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {user.username}. Task: {state.description}"
       
-      # Convert previous steps to LangChain message format
+      # Log the actual prompt being used
+      logger.info(f"Using prompt (first 100 chars): {system_prompt[:100]}...")
+      
+      # Special handling for "User Post Submission" state - use zero-shot generation without conversation history
+      is_post_submission = state.name == "User Post Submission"
+      
+      # Convert previous steps to LangChain message format, but only if not a post submission
       messages = [SystemMessage(content=system_prompt)]
       
-      # Add previous step data as conversation history
-      for step in previous_steps:
-          if step.generated_text:
-              # Determine if this is from the user or AI based on user_id comparison
-              # This is a simplification - you might need to adjust based on your data model
-              if step.user_id == user.id:
-                  messages.append(HumanMessage(content=step.generated_text))
-              else:
-                  messages.append(AIMessage(content=step.generated_text))
+      # Add previous step data as conversation history only if not a post submission
+      if not is_post_submission:
+          for step in previous_steps:
+              if step.generated_text:
+                  # Determine if this is from the user or AI based on user_id comparison
+                  if step.user_id == user.id:
+                      messages.append(HumanMessage(content=step.generated_text))
+                  else:
+                      messages.append(AIMessage(content=step.generated_text))
       
-      # Add current request
-      # Only add this message if we're not using a custom prompt
-      if not custom_prompt:
-          current_message = f"Please respond as {user.username} for the current step: {state.name}"
-          messages.append(HumanMessage(content=current_message))
+          # Add current request only if we're not using a custom prompt and not a post submission
+          if not custom_prompt:
+              current_message = f"Please respond as {user.username} for the current step: {state.name}"
+              messages.append(HumanMessage(content=current_message))
+      
+      # For post submission, we force a simple human message if there isn't a custom prompt
+      elif not custom_prompt and is_post_submission:
+          messages.append(HumanMessage(content="Please create a Reddit post as described."))
       
       # Generate response using our simplified memory function
       # Extract a query for memory retrieval from the messages
       query = f"{state.name} {state.description}"
+      
+      # Log the messages being sent to the LLM
+      logger.info(f"Sending {len(messages)} messages to LLM:")
+      for i, msg in enumerate(messages):
+          logger.info(f"Message {i+1} type: {type(msg).__name__}, content: {msg.content[:50]}...")
+      
       response = call_llm_with_memory(llm_model, messages, user_id, query=query)
       
       logger.info(f"Generated LLM response for state {state.name} with user {user.username}")

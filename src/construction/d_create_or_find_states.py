@@ -50,21 +50,34 @@ def create_or_find_states(db: Session, scenario_id: int, states_data: List[Dict[
                 state_ids[name] = state.id
                 continue
             
+            # Debug print
             print("State data: ")
             print(state_data)
             
             # Handle prompts if they exist
             prompts = None
             if hasattr(state_data, 'prompts') and state_data.prompts:
-                prompts = json.dumps(state_data.prompts)
+                # 注意：PostgreSQL的text[]类型需要获取原始的prompt列表
+                # 不需要转换为JSON字符串
+                if isinstance(state_data.prompts, list):
+                    # 直接使用列表，SQLAlchemy会自动处理为PostgreSQL的text[]
+                    prompts = state_data.prompts
+                else:
+                    # 如果不是列表但有值，则包装为单元素列表
+                    prompts = [state_data.prompts]
+                
+                # Debug output for prompts
                 logger.info(f"Added prompts for state: {name}")
+                logger.info(f"Prompts type: {type(prompts)}")
+                logger.info(f"Prompts count: {len(prompts)}")
+                logger.info(f"First prompt (first 100 chars): {prompts[0][:100]}...")
             
             # Create state without role (we'll handle roles separately)
             state = State(
                 scenario_id=scenario_id,
                 name=name,
                 description=state_data.description,
-                prompts=prompts,
+                prompts=prompts,  # 直接传递列表，SQLAlchemy会将其存储为text[]
             )
             
             db.add(state)
