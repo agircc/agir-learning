@@ -9,6 +9,10 @@ import logging
 import argparse
 from typing import List, Optional, Dict, Any
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
 
