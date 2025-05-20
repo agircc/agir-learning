@@ -181,7 +181,7 @@ def process_book_for_user(username: str, book_path: str) -> Optional[List[uuid.U
 You've just read a section of the book "{book_title}".
 
 Here's what you read:
-{chunk[:500]}...
+{chunk}...
 
 Please reflect on this section. What are your thoughts, insights, and questions about what you just read?
 How does this information connect to your existing knowledge or experiences?
