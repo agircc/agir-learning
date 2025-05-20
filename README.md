@@ -1,331 +1,144 @@
 # AGIR Learning: Agent-Guided Intelligent Reflection for Skill Development
 
-A system designed to improve learner skills through simulated experiences and guided interactions with AI agents in virtual scenarios.
+<div align="center">
 
-## Overview
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+[![Conda](https://img.shields.io/badge/conda-environment-green.svg)](environment.yml)
 
-AGIR Learning is a platform that helps learners develop specific skills through structured interactions with AI agents in simulated environments. The system creates virtual scenarios where learners can practice skills, receive feedback, and reflect on their performance—all with the guidance of specialized AI agents.
+</div>
 
-The core purpose of AGIR Learning is to **accelerate skill development through simulated practice in a safe environment**. Whether learning medical diagnosis, negotiation tactics, or programming techniques, the system provides:
+AGIR Learning is a platform designed to accelerate skill development through structured interactions with AI agents in simulated environments. It creates safe, repeatable scenarios for practice, feedback, and reflection.
 
-1. **Structured learning environments** defined as scenarios in YAML
-2. **Role-based AI agents** that simulate different participants in the learning scenario
-3. **Guided reflection** to help learners understand their strengths and areas for improvement
-4. **Iterative skill development** through repeated practice with increasing complexity
+## 🚀 Key Features
 
-### Key Concepts
+- **Structured Learning Environments**: Define learning scenarios with YAML configuration
+- **Role-Based AI Agents**: Simulate different participants with customizable LLM backends
+- **Guided Reflection**: Help learners identify strengths and areas for improvement
+- **Iterative Development**: Progress through increasingly complex scenarios
+- **Multi-LLM Architecture**: Use different models for different roles (efficiency & cost control)
+- **Memory System**: Store and retrieve learning insights across episodes
 
-- **Learner**: The primary user whose skills are being developed through the scenario. In the database, a learner is a record in the user table.
-- **Scenario**: A structured sequence of interactions designed as a learning experience for specific skills.
-- **Agents**: AI participants in the scenario represented by different roles (stored as users in the database).
-- **Evolution**: The mechanism by which the learner's skills improve through experiences, feedback, and guided reflection.
+## 📋 Quick Start
 
-## Installation
+### Prerequisites
+
+- Python 3.12+
+- Conda package manager
+- PostgreSQL database
+- API keys for LLM providers (OpenAI, Anthropic, etc.)
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/your-org/agir-learning.git
+cd agir-learning
+
 # Create and activate conda environment
 conda env create -f environment.yml
 conda activate agir-learning
 
-# If the environment already exists, update it instead:
-conda env update -f environment.yml --prune
-conda activate agir-learning
-
-# Alternatively, if you prefer to install dependencies manually:
-conda create -n agir-learning python=3.12
-conda activate agir-learning
-conda install -c conda-forge faiss-cpu
-pip install -r requirements.txt
+# Configure your environment
+cp .env.example .env
+# Edit .env with your database URL and API keys
 ```
 
-### Conda Environment
-
-The project uses a conda environment for dependency management, especially for packages with complex dependencies like FAISS. The `environment.yml` file contains all necessary dependencies:
-
-```yaml
-name: agir-learning
-channels:
-  - conda-forge
-  - defaults
-dependencies:
-  - python=3.12
-  - pip
-  - conda-forge::faiss-cpu  # Required for vector search
-  - numpy>=1.24.0
-  - pip:
-    - agir-db @ git+https://github.com/agircc/agir-db.git
-    - python-dotenv==1.0.0  # Required for loading .env files
-    - openai>=1.78.1
-    - anthropic>=0.51.0
-    - PyYAML>=6.0.1
-    - langchain>=0.3.25
-    - langchain-community>=0.3.24
-    - langchain-openai>=0.3.17
-    - langchain-anthropic>=0.3.13
-    - fastapi>=0.104.1,<0.114.0
-    - uvicorn==0.23.2
-    - pydantic>=2.7.4,<3.0.0
-    - python-multipart==0.0.6
-    - requests>=2.30.0 
-    - email-validator==2.1.0.post1
-    - tk==0.1.0
-    - langchain-ollama==0.3.3
-    - sentence-transformers>=2.2.2
-```
-
-To update the environment after changing dependencies:
+### Basic Usage
 
 ```bash
-# Update conda environment from environment.yml
-conda env update -f environment.yml --prune
+# Ensure database is migrated
+make migrate
+
+# Run a sample scenario
+make learning SCENARIO=scenarios/hello.yml
+
+# Visualize results
+make visualizer
 ```
 
-### Troubleshooting
+## 📖 Documentation
 
-If you encounter any issues with dependencies:
+### Core Concepts
+
+- **Learner**: The primary user whose skills are being developed.
+- **Scenario**: A structured sequence of interactions designed to teach specific skills.
+- **Agents**: AI participants with different roles in the scenario.
+- **Evolution**: The mechanism by which the learner's skills improve through guided practice.
+
+### Detailed Documentation
+
+- [Creating Scenarios](doc/create_scenario.md): How to define and configure learning scenarios
+- [Scenario Construction Process](doc/construction.md): How scenarios are built in the system
+- [Evolution Process](doc/evolution.md): How scenarios are executed and learning occurs
+- [Installation Guide](doc/installation.md): Detailed installation instructions
+- [Architecture Overview](doc/architecture.md): System design and components
+
+## 🧩 Project Structure
+
+```
+├── commands/              # CLI utility commands
+├── doc/                   # Documentation files
+├── scenarios/             # Example scenario YAML files
+├── src/                   # Source code
+│   ├── chat/              # Chat functionality
+│   ├── common/            # Shared utilities
+│   ├── construction/      # Scenario construction
+│   ├── evolution/         # Scenario execution/evolution
+│   ├── llm/               # LLM provider integrations
+│   └── visualization/     # Result visualization
+├── tests/                 # Test suite
+├── vector_stores/         # Vector databases for memory
+├── Makefile               # Common commands
+├── environment.yml        # Conda environment specification
+└── run.py                 # Main execution script
+```
+
+## 🛠️ Development Tools
+
+The project includes several useful Makefile commands to simplify common operations:
 
 ```bash
-# If missing a package (e.g., dotenv)
-conda activate agir-learning
-pip install python-dotenv
+# Run database migrations
+make migrate
 
-# To check if a package is installed
-pip show python-dotenv
+# Launch the visualization interface
+make visualizer
 
-# If you need to remove the environment and start over
-conda deactivate
-conda remove -n agir-learning --all
-conda env create -f environment.yml
+# Clear database tables
+make clear_db
+
+# Run a scenario
+make learning SCENARIO=path/to/scenario.yml EPISODES=3
+
+# Chat with an agent
+make chat AGENT=agent_username
+
+# Export learner memories
+make export_memories LEARNER_ID=123
 ```
 
-## Usage
+See the [full command reference](doc/commands.md) for more details.
 
-### Running Evolution Process
+## 🧪 Example Scenarios
 
-```bash
-# Initialize scenario only
-python run.py path/to/scenario.yml --mode init
+The repository includes several example scenarios:
 
-# Run existing scenario
-python run.py path/to/scenario.yml --mode run --scenario-id 123
+- `scenarios/hello.yml`: A simple introduction scenario
+- `scenarios/medical_diagnosis.yml`: Medical diagnosis training
+- `scenarios/programming_mentor.yml`: Code review and mentoring
 
-# Initialize scenario and run (default behavior)
-python run.py path/to/scenario.yml
+Read the [scenario examples guide](doc/scenario_examples.md) to learn more about these examples.
 
-# Or explicitly specify
-python run.py path/to/scenario.yml --mode all
-```
+## 🤝 Contributing
 
-### Clearing Database Tables
+Contributions are welcome! See our [Contributing Guide](doc/contributing.md) for more details on how to get involved.
 
-The system provides a standalone command to clear all data from the database tables. This is useful for resetting the system to a clean state.
+## 📄 License
 
-```bash
-# Clear database tables with confirmation prompt
-python clear_db.py
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-# Clear database tables without confirmation prompt
-python clear_db.py --confirm
+## 🙏 Acknowledgments
 
-# Enable verbose logging
-python clear_db.py --verbose
-```
-
-This command will delete all data from the following tables in the correct order to respect foreign key constraints:
-- chat_messages
-- chat_participants
-- chat_conversations
-- steps
-- episodes
-- state_roles
-- state_transitions
-- agent_assignments
-- states
-- scenarios
-- users
-
-### Running Visualization
-```bash
-python -m src.visualization.run_visualizer
-```
-
-### Environment Variables
-
-Set the following environment variables in a `.env` file:
-
-```
-DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
-```
-
-## Scenario YAML Format
-
-Scenario YAML files define the evolution experience:
-
-```yaml
-scenario:
-  name: "Scenario Name"
-  description: "Scenario Description"
-
-  # The learner is the central user whose skills are being developed
-  learner:
-    username: "username"  # Username in the database
-    first_name: "First Name"
-    last_name: "Last Name"
-    model: "gpt-4"  # LLM model to use for this learner
-    # Other user attributes
-    evolution_objective: "Description of what the learner should learn"
-
-  # Roles represent different agents in the scenario
-  roles:
-    - name: "patient"
-      model: "phi"  # Each role can use a different LLM model
-      description: "Patient agent with medical history, symptoms."
-    - name: "nurse"
-      model: "phi"
-      description: "Nurse agent for triage, registration, and examinations."
-
-  # States are the steps in the scenario
-  states:
-    - name: "State Name"
-      role: "role_name"  # Role this state belongs to
-      description: "State Description"
-      # If role is "learner", this state represents actions by the learner
-
-  # Transitions define the flow between states
-  transitions:
-    - from: "First State Name"
-      to: "Second State Name"
-    # More transitions
-
-  # Evolution defines how the learner improves
-  evolution:
-    method: "Evolution Method Name"
-    description: "Description of how evolution works"
-    knowledge_sources:
-      - "Source 1"
-      - "Source 2"
-```
-
-## Learner-Centric Architecture
-
-This system is designed around the central concept of a **learner** - a user whose skills and knowledge evolve through simulated scenarios. Here's how it works:
-
-1. **Learner Identification**: 
-   - The system identifies the learner based on the YAML configuration
-   - The learner is always a real user in the database
-   - All interactions are designed to benefit this user's development
-
-2. **Multi-Provider LLM Architecture**:
-   - Each role in the scenario can be assigned a different LLM model
-   - The learner can have their own designated model
-   - This allows for efficient resource allocation (powerful models for complex tasks, simpler models for basic interactions)
-
-3. **User Database Integration**:
-   - All agents in the system, including the learner, are stored in the user table
-   - This unified approach ensures consistent user handling and evolution tracking
-
-## Scenario Creation Flow
-
-The system follows these steps when creating a scenario:
-
-1. **Database Validation**
-   - Check if required database tables exist
-   - If tables don't exist, prompt user to run database migrations
-
-2. **Learner Creation**
-   - Read the YAML file and extract learner information
-   - Check if the learner exists in the user table based on username
-   - If not found, create a new user record
-
-3. **Scenario Creation**
-   - Check if a scenario with the given name and creator already exists
-   - If not found, create a new scenario record
-
-4. **Agent Roles Creation**
-   - For each role defined in the YAML, create an agent role record
-   - Special handling for the "learner" role which references the main user
-
-5. **States Creation**
-   - For each state defined in the YAML, create a state record
-   - Special handling for states with role="learner" - these represent learner actions
-
-6. **State Transitions Creation**
-   - For each transition defined in the YAML, create a state transition record
-   - Transitions define the flow of the learning experience
-
-## Episode Execution Flow
-
-When executing a scenario, the system follows these steps:
-
-1. **Episode Creation**
-   - Create an episode record linked to the scenario and learner
-   - Set initial status to RUNNING
-
-2. **Episode Steps**
-   - Start with the first state in the scenario
-   - For each state:
-     - Create a step record
-     - Use the appropriate LLM model based on role or learner configuration
-     - Generate responses and advance through the scenario
-
-3. **Evolution Generation**
-   - After completing all states
-   - Generate evolution insights based on the episode history
-   - Update the learner with new knowledge/skills
-   - Store evolution data in the database for future reference
-
-## Project Structure
-
-```
-Project Root/
-├── run_evolution.py        # Main entry script
-├── requirements.txt        # Project dependencies
-├── .env                    # Environment variables (create this)
-├── examples/               # Example YAML files directory
-│   └── doctor.yml          # Doctor example
-└── src/                    # Source code directory
-    ├── __init__.py         # Module initialization
-    ├── cli.py              # Command line interface and LLM provider management
-    ├── evolution.py        # Main evolution engine
-    ├── db/                 # Database utilities
-    │   └── __init__.py     # Database initialization
-    ├── llms/               # LLM providers
-    │   ├── __init__.py     # LLM module initialization
-    │   ├── base.py         # Base LLM provider interface
-    │   ├── openai.py       # OpenAI implementation
-    │   ├── anthropic.py    # Anthropic implementation
-    │   └── ollama.py       # Ollama implementation
-    ├── models/             # Data models
-    │   ├── __init__.py     # Models initialization
-    │   ├── agent.py        # Agent model
-    │   ├── scenario.py     # Scenario model
-    │   └── role.py         # Role model
-    ├── episode_manager.py  # Episode management and execution
-    └── utils/              # Utility functions
-        ├── __init__.py     # Utils initialization
-        ├── database.py     # Database utility functions
-        └── yaml_loader.py  # YAML loading utilities
-```
-
-## Extension
-
-### Adding New LLM Providers
-
-1. Create a new provider in `src/llms/`
-2. Implement the `BaseLLMProvider` interface
-3. Add the provider to `src/llms/__init__.py`
-4. Update the `LLMProviderManager` in `src/cli.py` to support the new provider
-
-### Creating Custom Scenarios
-
-1. Create a new YAML file based on the examples
-2. Define the learner, states, transitions, roles, and evolution method
-3. Run the scenario using the CLI
-
-## Development Notes
-
-- This project uses the latest version of agir_db package
-- All database operations are performed using agir_db models, not raw SQL
-- All code comments are in English
+- This project uses [LangChain](https://github.com/langchain-ai/langchain) for LLM orchestration
+- Vector storage powered by [FAISS](https://github.com/facebookresearch/faiss)
