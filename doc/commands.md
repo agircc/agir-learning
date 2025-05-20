@@ -15,6 +15,7 @@ AGIR Learning provides a set of Makefile commands to simplify common operations.
 | `make migrate` | Run database migrations | `make migrate` |
 | `make clear_db` | Clear database tables (with confirmation) | `make clear_db` |
 | `make chat` | Chat with an agent | `make chat AGENT=agent_username` |
+| `make read_book` | Process a book and create memories for a user | `make read_book USERNAME=alice_007 BOOK_PATH="scenarios/books/BOOK_TITLE.txt"` |
 
 ### Advanced Commands
 
@@ -116,6 +117,28 @@ To launch the visualization interface:
 python -m src.visualization.run_visualizer
 ```
 
+### Book Reading
+
+To read a book and create memories for a user:
+
+```bash
+# Using Makefile (recommended)
+make read_book USERNAME=alice_007 BOOK_PATH="scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"
+
+# Using Python script directly
+python commands/read_book.py alice_007 "scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"
+```
+
+The book reading process:
+1. Divides the book into manageable chunks
+2. Processes each chunk to extract knowledge using the user's LLM model
+3. Creates a reflection for each chunk of the book
+4. Generates a final reflection on the entire book
+5. Creates a memory record indicating the user has read this specific book
+6. All memories are associated with the user's ID and can be retrieved through the normal memory retrieval mechanisms
+
+This feature is helpful for building an agent's knowledge base from text sources.
+
 ## Environment Variables
 
 The following environment variables can be set in the `.env` file to configure the system:
@@ -157,6 +180,22 @@ make run_init SCENARIO=scenarios/test_scenario.yml
 
 # 2. Run with verbose output and skip validations
 make run_advanced SCENARIO=scenarios/test_scenario.yml OPTS="--verbose --skip-yaml-validation"
+```
+
+### Book Reading Workflow Example
+
+```bash
+# 1. Ensure database is migrated
+make migrate
+
+# 2. Create a user (or use existing one)
+# A user must exist with a valid LLM model configured
+
+# 3. Process a book to create memories
+make read_book USERNAME=alice_007 BOOK_PATH="scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"
+
+# 4. Chat with the user to see their knowledge of the book
+make chat AGENT=alice_007
 ```
 
 ## Troubleshooting Commands

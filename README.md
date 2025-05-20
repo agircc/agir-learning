@@ -73,6 +73,7 @@ make visualizer
 - [Evolution Process](doc/evolution.md): How scenarios are executed and learning occurs
 - [Installation Guide](doc/installation.md): Detailed installation instructions
 - [Architecture Overview](doc/architecture.md): System design and components
+- [Book Reading Feature](doc/book_reading.md): Using agents to read and learn from books
 
 ## 🧩 Project Structure
 
@@ -113,6 +114,9 @@ make learning SCENARIO=path/to/scenario.yml EPISODES=3
 
 # Chat with an agent
 make chat AGENT=agent_username
+
+# Process a book and create memories for a user
+make read_book USERNAME=alice_007 BOOK_PATH="scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"
 
 # Export learner memories
 make export_memories LEARNER_ID=123
