@@ -4,7 +4,7 @@ scenario:
   learner_role: "alice"
 
   learner:
-    username: alice_002
+    username: alice_007
     model: "gpt-4.1-nano"
 
   roles:
