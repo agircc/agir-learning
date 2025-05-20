@@ -12,7 +12,7 @@ clear_db:
 	PYTHONPATH=$(shell pwd) python commands/clear_db.py
 
 learning:
-	python run.py $(SCENARIO) --episodes=$(EPISODES)
+	PYTHONPATH=$(shell pwd) python commands/run.py $(SCENARIO) --episodes=$(EPISODES)
 
 chat:
 	@if [ -z "$(AGENT)" ]; then \

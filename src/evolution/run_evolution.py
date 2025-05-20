@@ -5,6 +5,7 @@ import logging
 import uuid
 import sys
 import time
+import concurrent.futures
 from typing import Optional, Union, List, Dict, Any
 
 from agir_db.db.session import get_db
@@ -170,13 +171,14 @@ def start_episode(scenario_id: int) -> Optional[int]:
         logger.error(f"Failed to execute scenario: {str(e)}")
         return None
 
-def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1) -> bool:
+def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1, max_concurrent: int = 1) -> bool:
     """
     Run a previously defined scenario.
     
     Args:
         scenario_id: ID of the scenario to run
         num_episodes: Number of episodes to run (default: 1)
+        max_concurrent: Maximum number of episodes to run concurrently (default: 1)
         
     Returns:
         bool: True if successful, False otherwise
@@ -196,25 +198,41 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
         
         logger.info(f"Found scenario: {scenario.name}")
         
-        logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name}")
+        # Ensure max_concurrent is at least 1 and not more than num_episodes
+        max_concurrent = max(1, min(max_concurrent, num_episodes))
         
-        for i in range(num_episodes):
-            logger.info(f"Starting episode {i+1} of {num_episodes}")
-            
-            result = start_episode(scenario_id)
-            
-            if not result:
-                logger.error(f"Failed to execute episode {i+1}")
-                success = False
-            else:
-                   
-                logger.info(f"Successfully completed episode {i+1}")
+        logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name} with max {max_concurrent} concurrent episodes")
         
+        # Close the DB connection used for scenario validation since we'll create new ones in the threads
+        db.close()
+        
+        # Run episodes concurrently using ThreadPoolExecutor
+        results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent) as executor:
+            # Submit all episode tasks
+            future_to_episode = {executor.submit(start_episode, scenario_id): i for i in range(num_episodes)}
+            
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_episode):
+                episode_num = future_to_episode[future] + 1
+                try:
+                    episode_id = future.result()
+                    if not episode_id:
+                        logger.error(f"Failed to execute episode {episode_num}")
+                        success = False
+                    else:
+                        logger.info(f"Successfully completed episode {episode_num} with ID {episode_id}")
+                    results.append(episode_id)
+                except Exception as exc:
+                    logger.error(f"Episode {episode_num} generated an exception: {exc}")
+                    success = False
+        
+        logger.info(f"Completed all {num_episodes} episodes: {len([r for r in results if r])} successful, {len([r for r in results if not r])} failed")
         return success
         
     except Exception as e:
         logger.exception(f"Error running evolution: {str(e)}")
         return False
     finally:
-        if db:
+        if db and not db.closed:
             db.close()
