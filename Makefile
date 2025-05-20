@@ -21,6 +21,18 @@ chat:
 	fi
 	python -m commands.chat_learner_cli $(AGENT)
 
+# Read a book and create memories for a user
+read_book:
+	@if [ -z "$(USERNAME)" ]; then \
+		echo "❌ Error: You must provide USERNAME. Usage: make read_book USERNAME=alice_007 BOOK_PATH=scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"; \
+		exit 1; \
+	fi
+	@if [ -z "$(BOOK_PATH)" ]; then \
+		echo "❌ Error: You must provide BOOK_PATH. Usage: make read_book USERNAME=alice_007 BOOK_PATH=scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"; \
+		exit 1; \
+	fi
+	PYTHONPATH=$(shell pwd) python commands/read_book.py $(USERNAME) "$(BOOK_PATH)"
+
 # Run scenario initialization only
 run_init:
 	python run.py $(SCENARIO) --mode init
