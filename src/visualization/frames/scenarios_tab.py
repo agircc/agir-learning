@@ -207,7 +207,7 @@ class ScenariosTab(ttk.Frame):
             # Add episodes to tree
             for episode in episodes:
                 self.episodes_tree.insert("", "end", str(episode.id), 
-                                         values=(episode.id, episode.name, episode.status))
+                                         values=(episode.id, f"Episode {episode.id}", episode.status))
                 
         except Exception as e:
             print(f"Exception in on_scenario_selected: {str(e)}")
