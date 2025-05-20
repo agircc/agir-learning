@@ -8,6 +8,7 @@ import logging
 import uuid
 from typing import Dict, Any, List, Optional, Union
 import json
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
@@ -134,11 +135,44 @@ def process_book_for_user(username: str, book_path: str) -> Optional[List[uuid.U
         book_title = os.path.basename(book_path)
         book_title = os.path.splitext(book_title)[0]
         
+        # First, create a memory recording that the user has read this book
+        read_date = datetime.now().strftime("%Y-%m-%d")
+        book_record_content = f"I read the book '{book_title}' on {read_date}. This book was located at {book_path}."
+        
+        book_record_context_info = {
+            "state_name": f"Reading Record",
+            "task": f"Recording that I've read '{book_title}'",
+            "content_type": "Book Reading Record"
+        }
+        
+        book_record_metadata = {
+            "memory_type": "book_reading_record",
+            "book_title": book_title,
+            "read_date": read_date,
+            "source_path": book_path,
+            "importance_score": 0.95  # Very high importance for remembering what books were read
+        }
+        
+        book_record_id = create_user_memory(
+            db=db,
+            user_id=user.id,
+            context_info=book_record_context_info,
+            original_content=book_record_content,
+            model_name=model_name,
+            metadata=book_record_metadata,
+            source="book_reading_record",
+            importance=0.95
+        )
+        
+        memory_ids = []
+        if book_record_id:
+            memory_ids.append(book_record_id)
+            logger.info(f"Created book reading record for '{book_title}' for user {username}")
+        
         # Process content in chunks
         chunks = chunk_book_content(content)
         logger.info(f"Processing book '{book_title}' with {len(chunks)} chunks")
         
-        memory_ids = []
         llm = get_llm_model(model_name)
         
         # Process each chunk
@@ -181,7 +215,7 @@ def process_book_for_user(username: str, book_path: str) -> Optional[List[uuid.U
 You've just read a section of the book "{book_title}".
 
 Here's what you read:
-{chunk}...
+{chunk}
 
 Please reflect on this section. What are your thoughts, insights, and questions about what you just read?
 How does this information connect to your existing knowledge or experiences?
