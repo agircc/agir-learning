@@ -204,7 +204,8 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
         logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name} with max {max_concurrent} concurrent episodes")
         
         # Close the DB connection used for scenario validation since we'll create new ones in the threads
-        db.close()
+        if db:
+            db.close()
         
         # Run episodes concurrently using ThreadPoolExecutor
         results = []
@@ -234,5 +235,8 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
         logger.exception(f"Error running evolution: {str(e)}")
         return False
     finally:
-        if db and not db.closed:
-            db.close()
+        try:
+            if db is not None:
+                db.close()
+        except:
+            pass
