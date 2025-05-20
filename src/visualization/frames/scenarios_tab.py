@@ -105,14 +105,16 @@ class ScenariosTab(ttk.Frame):
         self.right_paned.add(self.steps_frame, weight=1)
         
         # Create steps treeview
-        self.steps_tree = ttk.Treeview(self.steps_frame, columns=("id", "description", "created_at"))
+        self.steps_tree = ttk.Treeview(self.steps_frame, columns=("id", "description", "state", "created_at"))
         self.steps_tree.heading("#0", text="")
         self.steps_tree.heading("id", text="ID")
         self.steps_tree.heading("description", text="Description")
+        self.steps_tree.heading("state", text="State")
         self.steps_tree.heading("created_at", text="Created At")
         self.steps_tree.column("#0", width=0, stretch=tk.NO)
         self.steps_tree.column("id", width=80, stretch=tk.NO)
         self.steps_tree.column("description", width=200)
+        self.steps_tree.column("state", width=150)
         self.steps_tree.column("created_at", width=150)
         
         # Add scrollbar to steps treeview
@@ -241,8 +243,9 @@ class ScenariosTab(ttk.Frame):
             # Add steps to tree
             for step in steps:
                 description = f"{step.action}" if step.action else "No action"
+                state_name = step.state.name if step.state else "N/A"
                 self.steps_tree.insert("", "end", str(step.id), 
-                                      values=(step.id, description, step.created_at))
+                                      values=(step.id, description, state_name, step.created_at))
                 
         except Exception as e:
             print(f"Exception in on_episode_selected: {str(e)}")
