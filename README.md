@@ -1,4 +1,4 @@
-# AGIR Learning: Agent-Guided Intelligent Reflection for Skill Development
+# AGIR Learning: Scenario-Based Evolutionary Agent Training for Accelerated Skill Development
 
 <div align="center">
 
