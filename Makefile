@@ -1,6 +1,7 @@
 EPISODES ?= 1
 SCENARIO ?= scenarios/hello.yml
 OPTS ?=
+MAX_CONCURRENT ?= 1
 
 migrate:
 	@python -m alembic -c "$$(python -c 'import agir_db; import os; print(os.path.join(agir_db.__path__[0], "alembic.ini"))')" upgrade head
@@ -12,7 +13,7 @@ clear_db:
 	PYTHONPATH=$(shell pwd) python commands/clear_db.py
 
 learning:
-	PYTHONPATH=$(shell pwd) python commands/run.py $(SCENARIO) --episodes=$(EPISODES)
+	PYTHONPATH=$(shell pwd) python commands/run.py $(SCENARIO) --episodes=$(EPISODES) --max-concurrent=$(MAX_CONCURRENT)
 
 chat:
 	@if [ -z "$(AGENT)" ]; then \

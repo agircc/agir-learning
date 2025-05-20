@@ -79,6 +79,13 @@ def parse_args():
     )
     
     parser.add_argument(
+        '--max-concurrent', '-m',
+        type=int,
+        default=1,
+        help='Maximum number of episodes to run concurrently (default: 1)'
+    )
+    
+    parser.add_argument(
         '--no-color',
         action='store_true',
         help='Disable colorized logging output'
@@ -156,8 +163,8 @@ def main():
     
     try:        
         # Run evolution scenario, now using the ID rather than loading from file again
-        logger.info(f"Running evolution scenario with ID: {scenario_id}, episodes: {args.episodes}")
-        success = run_evolution(scenario_id, num_episodes=args.episodes)
+        logger.info(f"Running evolution scenario with ID: {scenario_id}, episodes: {args.episodes}, max concurrent: {args.max_concurrent}")
+        success = run_evolution(scenario_id, num_episodes=args.episodes, max_concurrent=args.max_concurrent)
         
         if success:
             logger.info("Evolution scenario completed successfully")
