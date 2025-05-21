@@ -32,7 +32,7 @@ AGIR Learning is a platform designed to accelerate skill development through str
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/agir-learning.git
+git clone https://github.com/agircc/agir-learning.git
 cd agir-learning
 
 # Create and activate conda environment
