@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { authAPI } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,7 @@ import { Loader2, Mail } from "lucide-react"
 
 export default function LoginPage() {
   const router = useRouter()
+  const { login } = useAuth()
   const [email, setEmail] = useState("")
   const [code, setCode] = useState("")
   const [step, setStep] = useState<"email" | "code">("email")
@@ -49,8 +51,8 @@ export default function LoginPage() {
       setError(null)
       const userData = await authAPI.verifyCode(email, code)
 
-      // Store user data in localStorage
-      localStorage.setItem("user", JSON.stringify(userData))
+      // Use the authentication context to store user data
+      login(userData)
 
       // Redirect to home page
       router.push("/")

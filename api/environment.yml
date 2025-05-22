@@ -1,0 +1,14 @@
+name: agir-api
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.12
+  - fastapi=0.104.0
+  - uvicorn=0.23.2
+  - pip
+  - pip:
+    - redis==5.0.1
+    - pyjwt==2.8.0
+    - azure-communication-email==1.0.0
+    - python-multipart==0.0.6 

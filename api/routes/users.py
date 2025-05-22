@@ -5,11 +5,15 @@ import uuid
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User
+from api.middleware.auth import get_current_user
 
 router = APIRouter()
 
 @router.get("/")
-async def get_users(db: Session = Depends(get_db)):
+async def get_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get all users"""
     users = db.query(User).all()
     
@@ -17,21 +21,25 @@ async def get_users(db: Session = Depends(get_db)):
     result = []
     for user in users:
         full_name = f"{user.first_name} {user.last_name}" if user.first_name and user.last_name else ""
-        result.append({
+        user_data = {
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "first_name": user.first_name,
             "last_name": user.last_name,
             "full_name": full_name,
-            "role": user.role if hasattr(user, "role") else None,
             "created_at": user.created_at
-        })
+        }
+        result.append(user_data)
     
     return result
 
 @router.get("/{user_id}")
-async def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
+async def get_user(
+    user_id: uuid.UUID, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get a user by ID"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -46,19 +54,23 @@ async def get_user(user_id: uuid.UUID, db: Session = Depends(get_db)):
         "first_name": user.first_name,
         "last_name": user.last_name,
         "full_name": full_name,
-        "role": user.role if hasattr(user, "role") else None,
         "created_at": user.created_at,
-        "updated_at": user.updated_at
+        "updated_at": user.last_login_at  # Using last_login_at as updated_at
     }
     
     # Add any additional profile data if available
-    if hasattr(user, "profile") and user.profile:
-        result["profile"] = user.profile
+    for attr in ["avatar", "description", "interests", "skills"]:
+        if hasattr(user, attr) and getattr(user, attr):
+            result[attr] = getattr(user, attr)
     
     return result
 
 @router.get("/{user_id}/profile")
-async def get_user_profile(user_id: uuid.UUID, db: Session = Depends(get_db)):
+async def get_user_profile(
+    user_id: uuid.UUID, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get detailed user profile information"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -72,14 +84,14 @@ async def get_user_profile(user_id: uuid.UUID, db: Session = Depends(get_db)):
         "first_name": user.first_name,
         "last_name": user.last_name,
         "full_name": f"{user.first_name} {user.last_name}" if user.first_name and user.last_name else "",
-        "role": user.role if hasattr(user, "role") else None,
         "created_at": user.created_at,
-        "updated_at": user.updated_at
+        "last_login_at": user.last_login_at,
     }
     
     # Add additional profile attributes if they exist
-    for attr in ["bio", "avatar", "preferences", "metadata"]:
-        if hasattr(user, attr):
+    for attr in ["avatar", "description", "birth_date", "gender", "profession", 
+                "personality_traits", "background", "interests", "skills"]:
+        if hasattr(user, attr) and getattr(user, attr):
             profile[attr] = getattr(user, attr)
     
     return profile 
