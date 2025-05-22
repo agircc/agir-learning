@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 import uuid
 
@@ -33,14 +33,19 @@ async def get_scenario(scenario_id: uuid.UUID, db: Session = Depends(get_db)):
     transitions = []
     
     if state_ids:
-        transitions = db.query(StateTransition).filter(
+        transitions = db.query(StateTransition).options(
+            joinedload(StateTransition.from_state),
+            joinedload(StateTransition.to_state)
+        ).filter(
             StateTransition.from_state_id.in_(state_ids)
         ).all()
     
     # Get state roles
     state_roles = []
     if state_ids:
-        state_roles = db.query(StateRole).filter(
+        state_roles = db.query(StateRole).options(
+            joinedload(StateRole.role)
+        ).filter(
             StateRole.state_id.in_(state_ids)
         ).all()
     
@@ -58,25 +63,25 @@ async def get_scenario(scenario_id: uuid.UUID, db: Session = Depends(get_db)):
             "data": state.data if hasattr(state, "data") else {},
             "roles": [
                 {
-                    "id": role.id,
-                    "name": role.name,
-                    "agent_role": role.agent_role
-                } for role in state_role_list
+                    "id": role.agent_role_id,
+                    "name": role.role.name if role.role else "Unknown Role",
+                    "agent_role": role.role.model if role.role else "Unknown Model"
+                } for role in state_role_list if role
             ],
             "transitions_from": [
                 {
                     "id": trans.id,
-                    "name": trans.name,
+                    "description": trans.condition if trans.condition else f"Transition to {trans.to_state.name if trans.to_state else 'unknown state'}",
                     "to_state_id": trans.to_state_id,
-                    "to_state_name": next((s.name for s in states if s.id == trans.to_state_id), None)
+                    "to_state_name": trans.to_state.name if trans.to_state else "Unknown"
                 } for trans in state_transition_from
             ],
             "transitions_to": [
                 {
                     "id": trans.id,
-                    "name": trans.name,
+                    "description": trans.condition if trans.condition else f"Transition from {trans.from_state.name if trans.from_state else 'unknown state'}",
                     "from_state_id": trans.from_state_id,
-                    "from_state_name": next((s.name for s in states if s.id == trans.from_state_id), None)
+                    "from_state_name": trans.from_state.name if trans.from_state else "Unknown"
                 } for trans in state_transition_to
             ]
         })

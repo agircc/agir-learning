@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Any
 import uuid
 
@@ -19,7 +19,9 @@ async def get_steps(db: Session = Depends(get_db)):
 @router.get("/{step_id}")
 async def get_step(step_id: uuid.UUID, db: Session = Depends(get_db)):
     """Get a step by ID"""
-    step = db.query(Step).filter(Step.id == step_id).first()
+    step = db.query(Step).options(
+        joinedload(Step.state)
+    ).filter(Step.id == step_id).first()
     if not step:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step not found")
     return step
@@ -27,7 +29,9 @@ async def get_step(step_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.get("/{step_id}/details")
 async def get_step_details(step_id: uuid.UUID, db: Session = Depends(get_db)):
     """Get detailed information for a step"""
-    step = db.query(Step).filter(Step.id == step_id).first()
+    step = db.query(Step).options(
+        joinedload(Step.state)
+    ).filter(Step.id == step_id).first()
     if not step:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step not found")
     
@@ -37,7 +41,7 @@ async def get_step_details(step_id: uuid.UUID, db: Session = Depends(get_db)):
         state_data = {
             "id": step.state.id,
             "name": step.state.name,
-            "data": step.state.data if hasattr(step.state, "data") else {}
+            "description": step.state.description or ""
         }
     
     response = {
@@ -60,20 +64,18 @@ async def get_step_conversations(step_id: uuid.UUID, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step not found")
     
     # Get conversations related to this step
-    conversations = db.query(ChatConversation).filter(
+    conversations = db.query(ChatConversation).options(
+        joinedload(ChatConversation.messages).joinedload(ChatMessage.sender)
+    ).filter(
         ChatConversation.related_id == step_id,
         ChatConversation.related_type == 'step'
     ).all()
     
     result = []
     for conv in conversations:
-        # Get messages for this conversation
-        messages = db.query(ChatMessage).filter(
-            ChatMessage.conversation_id == conv.id
-        ).order_by(ChatMessage.created_at).all()
-        
+        # Format messages for this conversation
         formatted_messages = []
-        for msg in messages:
+        for msg in conv.messages:
             sender_name = "Unknown"
             if msg.sender:
                 if msg.sender.first_name and msg.sender.last_name:

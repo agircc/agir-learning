@@ -14,10 +14,10 @@ interface ScenarioState {
   id: string
   name: string
   description: string
-  data: any
+  data: Record<string, unknown>
   roles: { id: string; name: string; agent_role: string }[]
-  transitions_from: { id: string; name: string; to_state_id: string; to_state_name: string }[]
-  transitions_to: { id: string; name: string; from_state_id: string; from_state_name: string }[]
+  transitions_from: { id: string; description: string; to_state_id: string; to_state_name: string }[]
+  transitions_to: { id: string; description: string; from_state_id: string; from_state_name: string }[]
 }
 
 interface Scenario {
@@ -158,7 +158,7 @@ export default function ScenarioDetailsPage({ params }: { params: { id: string }
                               <ul className="text-sm list-disc pl-5">
                                 {state.transitions_from.map((transition) => (
                                   <li key={transition.id}>
-                                    {transition.name} → {transition.to_state_name}
+                                    {transition.description} → {transition.to_state_name}
                                   </li>
                                 ))}
                               </ul>
