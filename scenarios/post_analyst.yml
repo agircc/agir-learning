@@ -4,7 +4,7 @@ scenario:
   learner_role: "analyst"
 
   learner:
-    username: analyst_002
+    username: emotion_master
     model: "gpt-4.1-nano"
 
   roles:
