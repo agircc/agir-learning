@@ -1,12 +1,18 @@
 import logging
 import os
 from typing import List, Optional, Dict, Any, Union, Callable
+import uuid
 
 from langchain.schema import Document
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
+
+from sqlalchemy.orm import Session
+from agir_db.db.session import get_db
+from agir_db.models.memory import UserMemory
+from src.common.utils.memory_utils import get_user_memories, search_user_memories_vector
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +31,8 @@ class UserMemoryManager:
         self.embedding_model = embedding_model or OpenAIEmbeddings()
         self.memory_key = "relevant_memories"
         self._initialize_vector_store()
+        # Load existing memories from database
+        self._load_memories_from_db()
     
     def _initialize_vector_store(self):
         """Initialize the vector store for the user."""
@@ -54,6 +62,43 @@ class UserMemoryManager:
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {str(e)}")
             raise
+    
+    def _load_memories_from_db(self, limit: int = 100):
+        """
+        Load memories from database into the vector store.
+        
+        Args:
+            limit: Maximum number of memories to load
+        """
+        try:
+            # Get memories from database
+            memories = get_user_memories(self.user_id, limit=limit)
+            logger.info(f"Loaded {len(memories)} memories from database for user {self.user_id}")
+            
+            if not memories:
+                logger.warning(f"No memories found in database for user {self.user_id}")
+                return
+            
+            # Convert memories to documents and add to vector store
+            documents = []
+            for memory in memories:
+                doc = Document(
+                    page_content=memory['content'],
+                    metadata={
+                        "user_id": self.user_id,
+                        "memory_id": memory.get('id', str(uuid.uuid4())),
+                        "source": memory.get('source', 'database'),
+                        "importance": memory.get('importance', 1.0)
+                    }
+                )
+                documents.append(doc)
+            
+            # Add documents to vector store if there are any
+            if documents:
+                self.vector_store.add_documents(documents)
+                logger.info(f"Added {len(documents)} documents to vector store from database")
+        except Exception as e:
+            logger.error(f"Failed to load memories from database: {str(e)}")
     
     def add_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None):
         """
@@ -93,6 +138,7 @@ class UserMemoryManager:
     def retrieve_relevant_memories(self, query: str, k: int = 5) -> List[Document]:
         """
         Retrieve relevant memories based on a query.
+        Uses both vector store and database search to ensure comprehensive results.
         
         Args:
             query: The query to search for
@@ -107,24 +153,57 @@ class UserMemoryManager:
                 return []
             
             logger.info(f"Retrieving memories for query: '{query}'")
-                
+            
+            # First, try to use the vector store
+            vector_docs = []
             try:
-                # Use invoke() instead of get_relevant_documents()
-                docs = self.retriever.invoke(query)
-                logger.info(f"Retrieved {len(docs)} raw documents")
-                
+                vector_docs = self.retriever.invoke(query)
                 # Filter out initialization documents
-                filtered_docs = [doc for doc in docs if not doc.metadata.get("is_dummy", False)]
-                logger.info(f"After filtering, {len(filtered_docs)} documents remain")
-                
-                # Log document contents for debugging
-                for i, doc in enumerate(filtered_docs):
-                    logger.info(f"Document {i+1}: {doc.page_content} (Metadata: {doc.metadata})")
-                
-                return filtered_docs
-            except IndexError:
-                logger.warning(f"No relevant documents found for query: {query}")
-                return []
+                vector_docs = [doc for doc in vector_docs if not doc.metadata.get("is_dummy", False)]
+                logger.info(f"Retrieved {len(vector_docs)} documents from vector store")
+            except Exception as ve:
+                logger.warning(f"Vector search failed: {str(ve)}")
+            
+            # If vector search returns few results, supplement with database search
+            if len(vector_docs) < k:
+                try:
+                    # Use the utility function from memory_utils to search
+                    db_memories = search_user_memories_vector(self.user_id, query, limit=k)
+                    logger.info(f"Retrieved {len(db_memories)} memories from database")
+                    
+                    # Convert to Document objects
+                    db_docs = []
+                    for memory in db_memories:
+                        doc = Document(
+                            page_content=memory['content'],
+                            metadata={
+                                "user_id": self.user_id,
+                                "memory_id": memory.get('id', str(uuid.uuid4())),
+                                "source": memory.get('source', 'database'),
+                                "importance": memory.get('importance', 1.0)
+                            }
+                        )
+                        db_docs.append(doc)
+                    
+                    # Merge results, prioritizing vector store results
+                    memory_ids = {doc.metadata.get("memory_id") for doc in vector_docs if "memory_id" in doc.metadata}
+                    unique_db_docs = [doc for doc in db_docs if doc.metadata.get("memory_id") not in memory_ids]
+                    
+                    # Combine and limit to k results
+                    combined_docs = vector_docs + unique_db_docs
+                    if len(combined_docs) > k:
+                        combined_docs = combined_docs[:k]
+                    
+                    logger.info(f"Combined {len(vector_docs)} vector docs and {len(unique_db_docs)} unique DB docs")
+                    return combined_docs
+                except Exception as dbe:
+                    logger.warning(f"Database search failed: {str(dbe)}")
+                    # Return vector docs if they exist
+                    if vector_docs:
+                        return vector_docs
+                    return []
+            
+            return vector_docs
         except Exception as e:
             logger.error(f"Failed to retrieve memories: {str(e)}")
             return []
@@ -141,21 +220,28 @@ class UserMemoryManager:
         """
         try:
             if not query:
+                logger.warning("Empty query provided to get_memory_variables")
                 return {self.memory_key: ""}
                 
-            # Retrieve relevant documents directly using the retriever
-            try:
-                docs = self.retrieve_relevant_memories(query)
+            # Retrieve relevant documents
+            docs = self.retrieve_relevant_memories(query)
+            
+            # Format documents into a string with better structure
+            if docs:
+                memories_formatted = []
+                for i, doc in enumerate(docs):
+                    # Extract importance if available
+                    importance = doc.metadata.get("importance", 1.0)
+                    importance_str = f" (Importance: {importance:.1f})" if importance != 1.0 else ""
+                    
+                    # Add formatted memory
+                    memories_formatted.append(f"Memory {i+1}{importance_str}: {doc.page_content}")
                 
-                # Format documents into a string
-                if docs:
-                    memories_string = "\n\n".join([doc.page_content for doc in docs])
-                    return {self.memory_key: memories_string}
-                else:
-                    return {self.memory_key: ""}
-            except IndexError:
-                # Handle the case where no documents are retrieved
-                logger.warning(f"No documents retrieved for query: {query}")
+                memories_string = "\n\n".join(memories_formatted)
+                logger.info(f"Returning {len(docs)} formatted memories for context")
+                return {self.memory_key: memories_string}
+            else:
+                logger.info("No relevant memories found for query")
                 return {self.memory_key: ""}
         except Exception as e:
             logger.error(f"Failed to load memory variables: {str(e)}")
@@ -204,28 +290,44 @@ def enhance_messages_with_memories(
         relevant_memories = memory_vars.get(memory_manager.memory_key, "")
         
         # Debug log to verify we're getting memories
-        logger.info(f"Retrieved memories: {relevant_memories}")
-        
         if relevant_memories:
-            # Make a copy of the messages list to avoid modifying the original
-            enhanced_messages = messages.copy()
-            
-            # Insert memory context after system message if present
-            for i, msg in enumerate(enhanced_messages):
-                if isinstance(msg, SystemMessage):
-                    # Append memory to system message
-                    updated_content = f"{msg.content}\n\nRelevant context from user memories:\n{relevant_memories}"
-                    enhanced_messages[i] = SystemMessage(content=updated_content)
-                    logger.info(f"Enhanced system message with memories")
-                    return enhanced_messages
-            
-            # No system message found, add a new one at the beginning
-            memory_msg = SystemMessage(content=f"Relevant context from user memories:\n{relevant_memories}")
-            enhanced_messages.insert(0, memory_msg)
-            logger.info(f"Added new system message with memories")
-            return enhanced_messages
+            logger.info(f"Retrieved memories for integration: {relevant_memories[:100]}...")
+        else:
+            logger.info("No relevant memories found to enhance messages")
+            return messages  # Return original messages if no memories
         
-        return messages  # No relevant memories found
+        # Make a copy of the messages list to avoid modifying the original
+        enhanced_messages = messages.copy()
+        
+        # Find system message if present
+        system_msg_index = None
+        for i, msg in enumerate(enhanced_messages):
+            if isinstance(msg, SystemMessage):
+                system_msg_index = i
+                break
+        
+        # Format the memory context with clear separation
+        memory_content = f"""
+
+RELEVANT USER MEMORIES:
+{relevant_memories}
+
+"""
+        
+        # Integrate memories into messages
+        if system_msg_index is not None:
+            # Update existing system message
+            current_content = enhanced_messages[system_msg_index].content
+            enhanced_content = current_content + memory_content
+            enhanced_messages[system_msg_index] = SystemMessage(content=enhanced_content)
+            logger.info("Enhanced existing system message with memories")
+        else:
+            # Create a new system message with memories at the beginning
+            memory_msg = SystemMessage(content=f"Use the following user memories as context for your response:{memory_content}")
+            enhanced_messages.insert(0, memory_msg)
+            logger.info("Added new system message with memories")
+        
+        return enhanced_messages
     
     except Exception as e:
         logger.error(f"Failed to enhance messages with memories: {str(e)}")
