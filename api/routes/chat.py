@@ -9,6 +9,7 @@ from agir_db.models.user import User
 from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.chat_message import ChatMessage
 from api.middleware.auth import get_current_user
+from src.chat.chat_with_learner import LearnerChatSession
 
 router = APIRouter()
 
@@ -123,10 +124,49 @@ async def send_message_to_user(
     db.commit()
     db.refresh(message)
     
-    return {
-        "id": message.id,
-        "conversation_id": conversation.id,
-        "sender_id": message.sender_id,
-        "content": message.content,
-        "created_at": message.created_at
-    } 
+    # Generate AI response using LearnerChatSession
+    try:
+        # Initialize chat session with the target user
+        chat_session = LearnerChatSession(user_id=str(user_id))
+        
+        # Get response from the AI user
+        ai_response = chat_session.chat(content)
+        
+        # Create message for AI response
+        ai_message = ChatMessage(
+            conversation_id=conversation.id,
+            sender_id=user_id,
+            content=ai_response,
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(ai_message)
+        db.commit()
+        db.refresh(ai_message)
+        
+        # Include AI response in the result
+        return {
+            "id": message.id,
+            "conversation_id": conversation.id,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "created_at": message.created_at,
+            "ai_response": {
+                "id": ai_message.id,
+                "sender_id": str(user_id),
+                "content": ai_response,
+                "created_at": ai_message.created_at
+            }
+        }
+    except Exception as e:
+        # Log the error but continue without AI response
+        print(f"Error generating AI response: {str(e)}")
+        
+        # Return the original message without AI response
+        return {
+            "id": message.id,
+            "conversation_id": conversation.id,
+            "sender_id": message.sender_id,
+            "content": message.content,
+            "created_at": message.created_at
+        } 
