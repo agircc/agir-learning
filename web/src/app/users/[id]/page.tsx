@@ -8,7 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Loader2, ArrowLeft, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
-import { Pagination } from "@/components/ui/pagination"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious
+} from "@/components/ui/pagination"
 
 interface User {
   id: string
@@ -29,6 +36,19 @@ interface Memory {
   memory_type: string
   importance: number
   created_at: string
+  source?: string
+  meta_data?: {
+    // Episode-related metadata
+    episode_id?: string
+    scenario_id?: string
+    scenario_name?: string
+
+    // Book reading metadata
+    book_title?: string
+    importance_score?: number
+    memory_type?: string
+    read_date?: string
+  }
 }
 
 export default function UserDetailsPage() {
@@ -191,16 +211,104 @@ export default function UserDetailsPage() {
                       </CardHeader>
                       <CardContent>
                         <p>{memory.content}</p>
+
+                        {memory.source && (
+                          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+                            <div className="font-semibold mb-1">Source: {memory.source}</div>
+
+                            {memory.source === "episode" && memory.meta_data && (
+                              <div className="space-y-1">
+                                {memory.meta_data.scenario_name && (
+                                  <div>Scenario: {memory.meta_data.scenario_name}</div>
+                                )}
+                                {memory.meta_data.scenario_id && (
+                                  <div>
+                                    Scenario ID:
+                                    <Link
+                                      href={`/scenarios/${memory.meta_data.scenario_id}`}
+                                      className="ml-1 text-primary hover:underline"
+                                    >
+                                      {memory.meta_data.scenario_id}
+                                    </Link>
+                                  </div>
+                                )}
+                                {memory.meta_data.episode_id && (
+                                  <div>
+                                    Episode ID:
+                                    <Link
+                                      href={`/scenarios/${memory.meta_data.scenario_id}/episodes/${memory.meta_data.episode_id}`}
+                                      className="ml-1 text-primary hover:underline"
+                                    >
+                                      {memory.meta_data.episode_id}
+                                    </Link>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {memory.source === "book_reading_record" && memory.meta_data && (
+                              <div className="space-y-1">
+                                {memory.meta_data.book_title && (
+                                  <div>Book: {memory.meta_data.book_title}</div>
+                                )}
+                                {memory.meta_data.memory_type && (
+                                  <div>Type: {memory.meta_data.memory_type}</div>
+                                )}
+                                {memory.meta_data.importance_score !== undefined && (
+                                  <div>Importance Score: {memory.meta_data.importance_score}</div>
+                                )}
+                                {memory.meta_data.read_date && (
+                                  <div>Read Date: {new Date(memory.meta_data.read_date).toLocaleDateString()}</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))}
 
                   {memoriesPageCount > 1 && (
-                    <Pagination
-                      currentPage={memoriesPage}
-                      totalPages={memoriesPageCount}
-                      onPageChange={handlePageChange}
-                    />
+                    <Pagination className="mt-6">
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              if (memoriesPage > 1) handlePageChange(memoriesPage - 1)
+                            }}
+                            className={memoriesPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+
+                        {[...Array(memoriesPageCount)].map((_, i) => (
+                          <PaginationItem key={i}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handlePageChange(i + 1)
+                              }}
+                              isActive={memoriesPage === i + 1}
+                            >
+                              {i + 1}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ))}
+
+                        <PaginationItem>
+                          <PaginationNext
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              if (memoriesPage < memoriesPageCount) handlePageChange(memoriesPage + 1)
+                            }}
+                            className={memoriesPage >= memoriesPageCount ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
                   )}
                 </div>
               )}
