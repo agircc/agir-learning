@@ -8,11 +8,15 @@ from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.chat_message import ChatMessage
+from api.middleware.auth import get_current_user
 
 router = APIRouter()
 
 @router.get("/conversations")
-async def get_conversations(db: Session = Depends(get_db)):
+async def get_conversations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get all chat conversations"""
     conversations = db.query(ChatConversation).all()
     
@@ -22,7 +26,7 @@ async def get_conversations(db: Session = Depends(get_db)):
         
         result.append({
             "id": conv.id,
-            "name": conv.name if conv.name else f"Conversation {conv.id}",
+            "name": conv.title if conv.title else f"Conversation {conv.id}",
             "created_at": conv.created_at,
             "related_type": conv.related_type,
             "related_id": conv.related_id,
@@ -32,7 +36,11 @@ async def get_conversations(db: Session = Depends(get_db)):
     return result
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: uuid.UUID, db: Session = Depends(get_db)):
+async def get_conversation(
+    conversation_id: uuid.UUID, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """Get a conversation by ID with its messages"""
     conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
     if not conversation:
@@ -62,7 +70,7 @@ async def get_conversation(conversation_id: uuid.UUID, db: Session = Depends(get
     
     result = {
         "id": conversation.id,
-        "name": conversation.name if conversation.name else f"Conversation {conversation.id}",
+        "name": conversation.title if conversation.title else f"Conversation {conversation.id}",
         "created_at": conversation.created_at,
         "related_type": conversation.related_type,
         "related_id": conversation.related_id,
@@ -76,7 +84,8 @@ async def send_message_to_user(
     user_id: uuid.UUID,
     content: str = Body(..., embed=True),
     conversation_id: Optional[uuid.UUID] = Body(None, embed=True),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Send a message to a user, creating a new conversation if needed"""
     # Check if user exists
@@ -91,9 +100,10 @@ async def send_message_to_user(
         if not conversation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     else:
-        # Create new conversation
+        # Create new conversation using the authenticated user
         conversation = ChatConversation(
-            name=f"Chat with {user.username}",
+            title=f"Chat with {user.username}",
+            created_by=current_user.id,
             related_type="user",
             related_id=user_id
         )
@@ -101,26 +111,10 @@ async def send_message_to_user(
         db.commit()
         db.refresh(conversation)
     
-    # Create system message from admin to user
-    # Note: In a real implementation, you'd use the authenticated user as sender
-    admin_user = db.query(User).filter(User.role == "admin").first()
-    if not admin_user:
-        # Create a system user if no admin exists
-        admin_user = User(
-            username="system",
-            first_name="System",
-            last_name="Admin",
-            role="admin"
-        )
-        db.add(admin_user)
-        db.commit()
-        db.refresh(admin_user)
-    
-    # Create the message
+    # Create the message from the authenticated user
     message = ChatMessage(
         conversation_id=conversation.id,
-        sender_id=admin_user.id,
-        recipient_id=user_id,
+        sender_id=current_user.id,
         content=content,
         created_at=datetime.utcnow()
     )
@@ -133,7 +127,6 @@ async def send_message_to_user(
         "id": message.id,
         "conversation_id": conversation.id,
         "sender_id": message.sender_id,
-        "recipient_id": message.recipient_id,
         "content": message.content,
         "created_at": message.created_at
     } 
