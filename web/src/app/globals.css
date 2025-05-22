@@ -119,4 +119,18 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Add cursor pointer to interactive elements */
+  button,
+  [role="button"],
+  [data-slot="button"],
+  [data-slot="select-trigger"],
+  [data-slot="tabs-trigger"],
+  [type="button"],
+  [type="reset"],
+  [type="submit"],
+  select,
+  option {
+    @apply cursor-pointer;
+  }
 }
