@@ -4,7 +4,6 @@ from typing import List, Optional, Dict, Any, Union, Callable
 import uuid
 
 from langchain.schema import Document
-from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -12,12 +11,12 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
 from agir_db.models.memory import UserMemory
-from src.common.utils.memory_utils import get_user_memories, search_user_memories_vector
+from src.common.utils.memory_utils import get_user_memories, search_user_memories_vector, add_user_memory
 
 logger = logging.getLogger(__name__)
 
 class UserMemoryManager:
-    """Manages user memories with vector store for semantic search and retrieval."""
+    """Manages user memories with database vector search for semantic retrieval."""
     
     def __init__(self, user_id: str, embedding_model: Optional[Any] = None):
         """
@@ -25,127 +24,22 @@ class UserMemoryManager:
         
         Args:
             user_id: Unique identifier for the user
-            embedding_model: Model to use for embeddings, defaults to OpenAIEmbeddings
+            embedding_model: Model to use for embeddings (not used in DB search mode)
         """
         self.user_id = user_id
-        self.embedding_model = embedding_model or OpenAIEmbeddings()
         self.memory_key = "relevant_memories"
-        self._initialize_vector_store()
-        # Load existing memories from database
-        self._load_memories_from_db()
+        logger.info(f"Initialized memory manager for user {self.user_id}")
     
-    def _initialize_vector_store(self):
-        """Initialize the vector store for the user."""
-        try:
-            # Create a directory for vector stores if it doesn't exist
-            os.makedirs(f"./vector_stores/{self.user_id}", exist_ok=True)
-            
-            # Create a dummy document to initialize FAISS
-            # This avoids the list index out of range error when starting with empty docs
-            dummy_doc = Document(
-                page_content="Initialization document - can be ignored",
-                metadata={"user_id": self.user_id, "is_dummy": True}
-            )
-            
-            # Initialize FAISS vector store for the user with dummy document
-            self.vector_store = FAISS.from_documents(
-                documents=[dummy_doc],  # Use dummy doc instead of empty list
-                embedding=self.embedding_model
-            )
-            
-            # Create retriever from vector store
-            self.retriever = self.vector_store.as_retriever(
-                search_kwargs={"k": 5}  # Return top 5 most relevant memories
-            )
-            
-            logger.info(f"Initialized vector store for user {self.user_id}")
-        except Exception as e:
-            logger.error(f"Failed to initialize vector store: {str(e)}")
-            raise
-    
-    def _load_memories_from_db(self, limit: int = 100):
+    def retrieve_relevant_memories(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """
-        Load memories from database into the vector store.
-        
-        Args:
-            limit: Maximum number of memories to load
-        """
-        try:
-            # Get memories from database
-            memories = get_user_memories(self.user_id, limit=limit)
-            logger.info(f"Loaded {len(memories)} memories from database for user {self.user_id}")
-            
-            if not memories:
-                logger.warning(f"No memories found in database for user {self.user_id}")
-                return
-            
-            # Convert memories to documents and add to vector store
-            documents = []
-            for memory in memories:
-                doc = Document(
-                    page_content=memory['content'],
-                    metadata={
-                        "user_id": self.user_id,
-                        "memory_id": memory.get('id', str(uuid.uuid4())),
-                        "source": memory.get('source', 'database'),
-                        "importance": memory.get('importance', 1.0)
-                    }
-                )
-                documents.append(doc)
-            
-            # Add documents to vector store if there are any
-            if documents:
-                self.vector_store.add_documents(documents)
-                logger.info(f"Added {len(documents)} documents to vector store from database")
-        except Exception as e:
-            logger.error(f"Failed to load memories from database: {str(e)}")
-    
-    def add_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None):
-        """
-        Add a memory to the vector store.
-        
-        Args:
-            text: The text content of the memory
-            metadata: Optional metadata associated with the memory
-        """
-        try:
-            metadata = metadata or {}
-            metadata["user_id"] = self.user_id
-            
-            # Create document and add to vector store
-            doc = Document(page_content=text, metadata=metadata)
-            self.vector_store.add_documents([doc])
-            
-            logger.info(f"Added memory for user {self.user_id}")
-        except Exception as e:
-            logger.error(f"Failed to add memory: {str(e)}")
-    
-    def add_conversation_memory(self, message: BaseMessage, metadata: Optional[Dict[str, Any]] = None):
-        """
-        Add a conversation message as memory.
-        
-        Args:
-            message: The message to add as memory
-            metadata: Optional metadata associated with the memory
-        """
-        try:
-            metadata = metadata or {}
-            metadata["type"] = message.__class__.__name__
-            self.add_memory(message.content, metadata)
-        except Exception as e:
-            logger.error(f"Failed to add conversation memory: {str(e)}")
-    
-    def retrieve_relevant_memories(self, query: str, k: int = 5) -> List[Document]:
-        """
-        Retrieve relevant memories based on a query.
-        Uses both vector store and database search to ensure comprehensive results.
+        Retrieve relevant memories based on a query directly from database.
         
         Args:
             query: The query to search for
-            k: Number of relevant documents to retrieve
+            k: Number of relevant memories to retrieve
             
         Returns:
-            List of relevant documents
+            List of relevant memories as dictionaries
         """
         try:
             if not query:
@@ -154,56 +48,16 @@ class UserMemoryManager:
             
             logger.info(f"Retrieving memories for query: '{query}'")
             
-            # First, try to use the vector store
-            vector_docs = []
-            try:
-                vector_docs = self.retriever.invoke(query)
-                # Filter out initialization documents
-                vector_docs = [doc for doc in vector_docs if not doc.metadata.get("is_dummy", False)]
-                logger.info(f"Retrieved {len(vector_docs)} documents from vector store")
-            except Exception as ve:
-                logger.warning(f"Vector search failed: {str(ve)}")
+            # Directly use database vector search
+            memories = search_user_memories_vector(self.user_id, query, limit=k)
             
-            # If vector search returns few results, supplement with database search
-            if len(vector_docs) < k:
-                try:
-                    # Use the utility function from memory_utils to search
-                    db_memories = search_user_memories_vector(self.user_id, query, limit=k)
-                    logger.info(f"Retrieved {len(db_memories)} memories from database")
-                    
-                    # Convert to Document objects
-                    db_docs = []
-                    for memory in db_memories:
-                        doc = Document(
-                            page_content=memory['content'],
-                            metadata={
-                                "user_id": self.user_id,
-                                "memory_id": memory.get('id', str(uuid.uuid4())),
-                                "source": memory.get('source', 'database'),
-                                "importance": memory.get('importance', 1.0)
-                            }
-                        )
-                        db_docs.append(doc)
-                    
-                    # Merge results, prioritizing vector store results
-                    memory_ids = {doc.metadata.get("memory_id") for doc in vector_docs if "memory_id" in doc.metadata}
-                    unique_db_docs = [doc for doc in db_docs if doc.metadata.get("memory_id") not in memory_ids]
-                    
-                    # Combine and limit to k results
-                    combined_docs = vector_docs + unique_db_docs
-                    if len(combined_docs) > k:
-                        combined_docs = combined_docs[:k]
-                    
-                    logger.info(f"Combined {len(vector_docs)} vector docs and {len(unique_db_docs)} unique DB docs")
-                    return combined_docs
-                except Exception as dbe:
-                    logger.warning(f"Database search failed: {str(dbe)}")
-                    # Return vector docs if they exist
-                    if vector_docs:
-                        return vector_docs
-                    return []
+            if memories:
+                logger.info(f"Retrieved {len(memories)} memories from database for query")
+            else:
+                logger.info(f"No memories found in database for query")
             
-            return vector_docs
+            return memories
+            
         except Exception as e:
             logger.error(f"Failed to retrieve memories: {str(e)}")
             return []
@@ -223,29 +77,76 @@ class UserMemoryManager:
                 logger.warning("Empty query provided to get_memory_variables")
                 return {self.memory_key: ""}
                 
-            # Retrieve relevant documents
-            docs = self.retrieve_relevant_memories(query)
+            # Retrieve relevant memories directly from database
+            memories = self.retrieve_relevant_memories(query)
             
-            # Format documents into a string with better structure
-            if docs:
+            # Format memories into a string with better structure
+            if memories:
                 memories_formatted = []
-                for i, doc in enumerate(docs):
+                for i, memory in enumerate(memories):
                     # Extract importance if available
-                    importance = doc.metadata.get("importance", 1.0)
+                    importance = memory.get("importance", 1.0)
                     importance_str = f" (Importance: {importance:.1f})" if importance != 1.0 else ""
                     
                     # Add formatted memory
-                    memories_formatted.append(f"Memory {i+1}{importance_str}: {doc.page_content}")
+                    memories_formatted.append(f"Memory {i+1}{importance_str}: {memory.get('content', '')}")
                 
                 memories_string = "\n\n".join(memories_formatted)
-                logger.info(f"Returning {len(docs)} formatted memories for context")
+                logger.info(f"Returning {len(memories)} formatted memories for context")
                 return {self.memory_key: memories_string}
             else:
                 logger.info("No relevant memories found for query")
                 return {self.memory_key: ""}
+                
         except Exception as e:
             logger.error(f"Failed to load memory variables: {str(e)}")
             return {self.memory_key: ""}
+    
+    def add_memory(self, text: str, metadata: Optional[Dict[str, Any]] = None):
+        """
+        Add a memory using the common utility function.
+        
+        Args:
+            text: The text content of the memory
+            metadata: Optional metadata associated with the memory
+        """
+        try:
+            # Ensure metadata includes user_id
+            if metadata is None:
+                metadata = {}
+            metadata["user_id"] = self.user_id
+            
+            # Add memory using common utility
+            memory_id = add_user_memory(
+                self.user_id,
+                text,
+                meta_data=metadata,
+                importance=metadata.get("importance", 1.0),
+                source=metadata.get("source", "memory_manager")
+            )
+            
+            if memory_id:
+                logger.info(f"Added memory for user {self.user_id}")
+            else:
+                logger.warning(f"Failed to add memory for user {self.user_id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to add memory: {str(e)}")
+    
+    def add_conversation_memory(self, message: BaseMessage, metadata: Optional[Dict[str, Any]] = None):
+        """
+        Add a conversation message as memory.
+        
+        Args:
+            message: The message to add as memory
+            metadata: Optional metadata associated with the memory
+        """
+        try:
+            metadata = metadata or {}
+            metadata["type"] = message.__class__.__name__
+            self.add_memory(message.content, metadata)
+        except Exception as e:
+            logger.error(f"Failed to add conversation memory: {str(e)}")
 
 
 def enhance_messages_with_memories(
@@ -366,30 +267,33 @@ def invoke_llm_with_memory(
     Centralized function to invoke LLM with memory integration.
     
     This wrapper function handles:
-    1. Enhancing messages with user memories
+    1. Enhancing messages with user memories from database
     2. Invoking the LLM
-    3. Storing the conversation as memory
+    3. Optionally storing the conversation as memory
     
     Args:
         llm_model: The LangChain LLM model
         messages: List of messages for context
         user_id: User ID for memory lookup
-        query: Optional query for memory retrieval
+        query: Optional query string for memory retrieval
         store_result: Whether to store the result in memory
         
     Returns:
         The LLM response
     """
     try:
-        # Enhance messages with memories
+        # Enhance messages with memories from database
         enhanced_messages = enhance_messages_with_memories(messages, user_id, query)
         
         # Check which method the model implements
         if hasattr(llm_model, 'invoke') and callable(llm_model.invoke):
+            logger.info(f"Attempting to call LLM using invoke() method")
             response = llm_model.invoke(enhanced_messages)
         elif hasattr(llm_model, '__call__') and callable(llm_model.__call__):
+            logger.info(f"Attempting to call LLM using __call__() method")
             response = llm_model(enhanced_messages)
         elif hasattr(llm_model, 'generate') and callable(llm_model.generate):
+            logger.info(f"Attempting to call LLM using generate() method")
             response = llm_model.generate(enhanced_messages)
         else:
             logger.error("The LLM model doesn't have expected methods: invoke, __call__, or generate")
@@ -397,7 +301,7 @@ def invoke_llm_with_memory(
             response = llm_model._call(enhanced_messages)
         
         # Store conversation if needed
-        if store_result:
+        if store_result and response:
             store_conversation_as_memory(user_id, messages + [response])
             
         return response
