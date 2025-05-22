@@ -311,69 +311,92 @@ Respond with ONLY the JSON array, nothing else.
             memories_array = json.loads(memories_text)
             if not isinstance(memories_array, list):
                 logger.error("LLM did not return a list of memories")
-                sys.exit(1)
+                return []
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse memories as JSON: {str(e)}")
             logger.debug(f"LLM response: {memories_text}")
-            sys.exit(1)
+            try:
+                cleaned_text = memories_text.replace(",\n]", "\n]").replace(",]", "]")
+                memories_array = json.loads(cleaned_text)
+                logger.info("Successfully fixed JSON formatting issues")
+            except:
+                logger.error("Could not repair JSON, skipping memory generation")
+                return []
         
         # Create memory entries for each memory in the array
+        successful_memories = 0
         for i, memory_obj in enumerate(memories_array):
-            # Get memory content and metadata
-            memory_content = memory_obj.get("content", "")
-            if not memory_content:
-                logger.error(f"Memory {i+1} is missing content, skipping")
-                continue
+            try:
+                if not isinstance(memory_obj, dict):
+                    logger.error(f"Memory {i+1} is not a valid dictionary object, skipping")
+                    continue
+                    
+                # Get memory content and metadata
+                memory_content = memory_obj.get("content", "")
+                if not memory_content:
+                    logger.error(f"Memory {i+1} is missing content, skipping")
+                    continue
+                    
+                # Validate required memory fields
+                skip_memory = False
+                required_fields = ["title", "age", "life_stage", "importance"]
+                for field in required_fields:
+                    if field not in memory_obj or not memory_obj[field]:
+                        logger.error(f"Memory {i+1} is missing required field: {field}, skipping")
+                        skip_memory = True
+                        break
                 
-            # Validate required memory fields
-            skip_memory = False
-            required_fields = ["title", "age", "life_stage", "importance"]
-            for field in required_fields:
-                if field not in memory_obj or not memory_obj[field]:
-                    logger.error(f"Memory {i+1} is missing required field: {field}, skipping")
-                    skip_memory = True
-                    break
-            
-            if skip_memory:
-                continue
+                if skip_memory:
+                    continue
                 
-            # Context info for memory
-            context_info = {
-                "state_name": f"User {role} Memory",
-                "task": memory_obj.get("title"),
-                "content_type": "Personal Memory"
-            }
+                try:
+                    importance = float(memory_obj.get("importance", 0.8))
+                    if importance < 0.1 or importance > 1.0:
+                        importance = 0.8
+                except (ValueError, TypeError):
+                    importance = 0.8
+                    
+                # Context info for memory
+                context_info = {
+                    "state_name": f"User {role} Memory",
+                    "task": memory_obj.get("title", "Memory"),
+                    "content_type": "Personal Memory"
+                }
+                
+                # Metadata for memory
+                metadata = {
+                    "memory_type": "personal",
+                    "role": role,
+                    "generated": True,
+                    "title": memory_obj.get("title", "Untitled Memory"),
+                    "age": memory_obj.get("age", "Unknown"),
+                    "life_stage": memory_obj.get("life_stage", "adult"),
+                    "emotions": memory_obj.get("emotions", []),
+                    "importance_score": importance,
+                    "category": memory_obj.get("category", "general")
+                }
+                
+                # Create the memory
+                memory_id = create_user_memory(
+                    db=db,
+                    user_id=user_id,
+                    context_info=context_info,
+                    original_content=memory_content,
+                    model_name=model_name,
+                    metadata=metadata,
+                    source="llm_generation",
+                    importance=metadata["importance_score"]
+                )
+                
+                if memory_id:
+                    memory_ids.append(memory_id)
+                    successful_memories += 1
+                    logger.info(f"Created memory {i+1} ({metadata['category']}: {metadata['life_stage']}) for user {user_id}")
+            except Exception as mem_error:
+                logger.error(f"Error processing memory {i+1}: {str(mem_error)}")
+                continue
             
-            # Metadata for memory
-            metadata = {
-                "memory_type": "personal",
-                "role": role,
-                "generated": True,
-                "title": memory_obj.get("title"),
-                "age": memory_obj.get("age"),
-                "life_stage": memory_obj.get("life_stage"),
-                "emotions": memory_obj.get("emotions", []),
-                "importance_score": float(memory_obj.get("importance", random.uniform(0.7, 1.0))),
-                "category": memory_obj.get("category", "general")
-            }
-            
-            # Create the memory
-            memory_id = create_user_memory(
-                db=db,
-                user_id=user_id,
-                context_info=context_info,
-                original_content=memory_content,
-                model_name=model_name,
-                metadata=metadata,
-                source="llm_generation",
-                importance=metadata["importance_score"]
-            )
-            
-            if memory_id:
-                memory_ids.append(memory_id)
-                logger.info(f"Created memory {i+1} ({metadata['category']}: {metadata['life_stage']}) for user {user_id}")
-            
-        logger.info(f"Generated {len(memory_ids)} detailed memories for user {user_id}")
+        logger.info(f"Generated {successful_memories} detailed memories for user {user_id}")
         return memory_ids
         
     except Exception as e:
