@@ -28,7 +28,10 @@ async def get_users(
             "first_name": user.first_name,
             "last_name": user.last_name,
             "full_name": full_name,
-            "created_at": user.created_at
+            "created_at": user.created_at,
+            "avatar": getattr(user, "avatar", None),
+            "profession": getattr(user, "profession", None),
+            "description": getattr(user, "description", None)
         }
         result.append(user_data)
     
