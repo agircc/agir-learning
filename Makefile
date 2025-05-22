@@ -9,17 +9,17 @@ visualizer:
 	python -m src.visualization.run_visualizer
 
 clear_db:
-	PYTHONPATH=$(shell pwd) python commands/clear_db.py
+	PYTHONPATH=$(shell pwd) python scripts/clear_db.py
 
 learning:
-	PYTHONPATH=$(shell pwd) python commands/run.py $(SCENARIO) --episodes=$(EPISODES)
+	PYTHONPATH=$(shell pwd) python scripts/run.py $(SCENARIO) --episodes=$(EPISODES)
 
 chat:
 	@if [ -z "$(AGENT)" ]; then \
 		echo "❌ Error: You must provide AGENT. Usage: make chat_learn AGENT=alice_001"; \
 		exit 1; \
 	fi
-	python -m commands.chat_learner_cli $(AGENT)
+	python -m scripts.chat_learner_cli $(AGENT)
 
 # Read a book and create memories for a user
 read_book:
@@ -31,7 +31,7 @@ read_book:
 		echo "❌ Error: You must provide BOOK_PATH. Usage: make read_book USERNAME=alice_007 BOOK_PATH=scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"; \
 		exit 1; \
 	fi
-	PYTHONPATH=$(shell pwd) python commands/read_book.py $(USERNAME) "$(BOOK_PATH)"
+	PYTHONPATH=$(shell pwd) python scripts/read_book.py $(USERNAME) "$(BOOK_PATH)"
 
 # Run scenario initialization only
 run_init:
@@ -59,8 +59,8 @@ export_memories:
 		echo "❌ Error: You must provide LEARNER_ID. Usage: make export_memories LEARNER_ID=123"; \
 		exit 1; \
 	fi
-	python commands/export_memories.py $(LEARNER_ID)
+	python scripts/export_memories.py $(LEARNER_ID)
 
 # Clear database with confirmation skipped
 clear_db_force:
-	PYTHONPATH=$(shell pwd) python commands/clear_db.py --confirm
+	PYTHONPATH=$(shell pwd) python scripts/clear_db.py --confirm
