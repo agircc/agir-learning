@@ -64,3 +64,16 @@ export_memories:
 # Clear database with confirmation skipped
 clear_db_force:
 	PYTHONPATH=$(shell pwd) python scripts/clear_db.py --confirm
+
+# Start the API server
+api:
+	python -m api.run
+
+# Start the Next.js development server
+web:
+	cd web && npm run dev
+
+# Start both API and web servers (API in background)
+start:
+	python -m api.run & \
+	cd web && npm run dev
