@@ -27,10 +27,11 @@ def j_get_next_state(db: Session, scenario_id: int, current_state_id: int, episo
   Get the next state in a scenario based on conditions.
   
   Args:
-      db: Database session
+      db: Database session (existing session, don't close it)
       scenario_id: ID of the scenario
       current_state_id: ID of the current state
       episode_id: ID of the episode
+      user: User object for LLM model selection
       
   Returns:
       Optional[State]: Next state if found, None otherwise

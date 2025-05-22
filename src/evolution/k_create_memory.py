@@ -3,6 +3,7 @@ import uuid
 import sys
 import time
 from typing import Optional, Union, List, Dict, Any
+from sqlalchemy.orm import Session
 
 from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
@@ -29,12 +30,12 @@ from .i_conduct_multi_turn_conversation import i_conduct_multi_turn_conversation
 
 logger = logging.getLogger(__name__)
 
-def create_episode_memories(db: any, episode_id: uuid.UUID) -> bool:
+def create_episode_memories(db: Session, episode_id: uuid.UUID) -> bool:
     """
     Create memories for an episode after it completes.
     
     Args:
-        db: Database session
+        db: Database session (existing session, don't close it)
         episode_id: ID of the completed episode
         
     Returns:
@@ -158,7 +159,7 @@ def create_episode_memories(db: any, episode_id: uuid.UUID) -> bool:
                 "scenario_name": scenario.name
             }
             
-            # Create the memory
+            # Use the passed db session to create memory, don't create a new connection
             memory_id = create_user_memory(
                 db=db,
                 user_id=learner_user.id,

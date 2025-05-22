@@ -18,6 +18,7 @@ import numpy as np
 import json
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from contextlib import contextmanager
 
 # Import FAISS - exit if not available
 try:
@@ -35,6 +36,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 # Default embedding dimension
 DEFAULT_EMBEDDING_DIM = 1536  # OpenAI embedding dimension
+
+@contextmanager
+def get_db_session():
+    """Get a database session and ensure it's properly closed"""
+    db = next(get_db())
+    try:
+        yield db
+    finally:
+        db.close()
 
 def get_embedding_model(model_name: Optional[str] = None):
     """
@@ -293,40 +303,40 @@ def get_user_memories(user_id: str, limit: int = 10, offset: int = 0) -> List[Di
         List[Dict[str, Any]]: List of memories as dictionaries
     """
     try:
-        db = next(get_db())
-        
-        # Get memories for the user, ordered by importance and creation date
-        memories = db.query(UserMemory).filter(
-            UserMemory.user_id == user_id,
-            UserMemory.is_active == True
-        ).order_by(
-            UserMemory.importance.desc(),
-            UserMemory.created_at.desc()
-        ).offset(offset).limit(limit).all()
-        
-        # Convert to dictionaries
-        result = []
-        for memory in memories:
-            result.append({
-                "id": str(memory.id),
-                "content": memory.content,
-                "meta_data": memory.meta_data,
-                "importance": memory.importance,
-                "source": memory.source,
-                "created_at": memory.created_at.isoformat() if memory.created_at else None,
-                "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
-                "access_count": memory.access_count,
-                "embedding": memory.embedding  # Include embedding in the result
-            })
+        # Use context manager to ensure the session is properly closed
+        with get_db_session() as db:
+            # Get memories for the user, ordered by importance and creation date
+            memories = db.query(UserMemory).filter(
+                UserMemory.user_id == user_id,
+                UserMemory.is_active == True
+            ).order_by(
+                UserMemory.importance.desc(),
+                UserMemory.created_at.desc()
+            ).offset(offset).limit(limit).all()
             
-            # Update access count and last_accessed
-            memory.access_count += 1
-            memory.last_accessed = datetime.datetime.now()
-        
-        db.commit()
-        
-        return result
-        
+            # Convert to dictionaries
+            result = []
+            for memory in memories:
+                result.append({
+                    "id": str(memory.id),
+                    "content": memory.content,
+                    "meta_data": memory.meta_data,
+                    "importance": memory.importance,
+                    "source": memory.source,
+                    "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                    "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
+                    "access_count": memory.access_count,
+                    "embedding": memory.embedding  # Include embedding in the result
+                })
+                
+                # Update access count and last_accessed
+                memory.access_count += 1
+                memory.last_accessed = datetime.datetime.now()
+            
+            db.commit()
+            
+            return result
+            
     except Exception as e:
         logger.error(f"Failed to get user memories: {str(e)}")
         return []
@@ -391,83 +401,83 @@ def search_user_memories_vector(user_id: str, query: str, limit: int = 10) -> Li
         List[Dict[str, Any]]: List of matching memories as dictionaries
     """
     try:
-        db = next(get_db())
-        
-        # Generate query embedding
-        query_embedding = generate_embedding(query)
-        if not query_embedding or len(query_embedding) == 0:
-            logger.error("Failed to generate embedding for query")
-            return []
-        
-        # Retrieve memories with content
-        memories = db.query(UserMemory).filter(
-            UserMemory.user_id == user_id,
-            UserMemory.is_active == True,
-            UserMemory.content != None
-        ).all()
-        
-        if not memories:
-            logger.warning(f"No memories found for user {user_id}")
-            return []
-        
-        # Get embedding model
-        embedding_model = get_embedding_model()
-        
-        # Build FAISS index
-        vectorstore, memory_map = build_langchain_faiss_index(memories, embedding_model)
-        
-        if not vectorstore:
-            logger.warning("Failed to build FAISS index")
-            return []
-                
-        # Search with a larger k and filter later to ensure we get enough results
-        search_k = max(limit * 2, 20)
-        try:
-            # Perform search with vectorstore's similarity_search_with_score method
-            search_results = vectorstore.similarity_search_with_score(query, k=search_k)
-        except Exception as e:
-            logger.error(f"Error during FAISS search: {str(e)}")
-            return []
-        
-        # Process results
-        result = []
-        for doc, score in search_results:
-            # Get memory ID from document metadata
-            memory_id = doc.metadata.get("id")
-            if memory_id in memory_map:
-                memory = memory_map[memory_id]
-                
-                # Update access count and last_accessed
-                memory.access_count += 1
-                memory.last_accessed = datetime.datetime.now()
-                db.add(memory)
-                
-                # Add to results
-                result.append({
-                    "id": str(memory.id),
-                    "content": memory.content,
-                    "meta_data": memory.meta_data,
-                    "importance": memory.importance,
-                    "source": memory.source,
-                    "created_at": memory.created_at.isoformat() if memory.created_at else None,
-                    "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
-                    "access_count": memory.access_count,
-                    "embedding": memory.embedding,
-                    "score": float(score)
-                })
-        
-        db.commit()
-        
-        # Sort by score (FAISS returns distance, convert to similarity by inverting)
-        result.sort(key=lambda x: x["score"], reverse=False)
-        
-        # Limit to requested number
-        result = result[:limit]
-        
-        if result:
-            logger.info(f"Found {len(result)} memories using FAISS vector search")
-        return result
-        
+        # Use context manager to ensure the session is properly closed
+        with get_db_session() as db:
+            # Generate query embedding
+            query_embedding = generate_embedding(query)
+            if not query_embedding or len(query_embedding) == 0:
+                logger.error("Failed to generate embedding for query")
+                return []
+            
+            # Retrieve memories with content
+            memories = db.query(UserMemory).filter(
+                UserMemory.user_id == user_id,
+                UserMemory.is_active == True,
+                UserMemory.content != None
+            ).all()
+            
+            if not memories:
+                logger.warning(f"No memories found for user {user_id}")
+                return []
+            
+            # Get embedding model
+            embedding_model = get_embedding_model()
+            
+            # Build FAISS index
+            vectorstore, memory_map = build_langchain_faiss_index(memories, embedding_model)
+            
+            if not vectorstore:
+                logger.warning("Failed to build FAISS index")
+                return []
+                    
+            # Search with a larger k and filter later to ensure we get enough results
+            search_k = max(limit * 2, 20)
+            try:
+                # Perform search with vectorstore's similarity_search_with_score method
+                search_results = vectorstore.similarity_search_with_score(query, k=search_k)
+            except Exception as e:
+                logger.error(f"Error during FAISS search: {str(e)}")
+                return []
+            
+            # Process results
+            result = []
+            for doc, score in search_results:
+                # Get memory ID from document metadata
+                memory_id = doc.metadata.get("id")
+                if memory_id in memory_map:
+                    memory = memory_map[memory_id]
+                    
+                    # Update access count and last_accessed
+                    memory.access_count += 1
+                    memory.last_accessed = datetime.datetime.now()
+                    db.add(memory)
+                    
+                    # Add to results
+                    result.append({
+                        "id": str(memory.id),
+                        "content": memory.content,
+                        "meta_data": memory.meta_data,
+                        "importance": memory.importance,
+                        "source": memory.source,
+                        "created_at": memory.created_at.isoformat() if memory.created_at else None,
+                        "last_accessed": memory.last_accessed.isoformat() if memory.last_accessed else None,
+                        "access_count": memory.access_count,
+                        "embedding": memory.embedding,
+                        "score": float(score)
+                    })
+            
+            db.commit()
+            
+            # Sort by score (FAISS returns distance, convert to similarity by inverting)
+            result.sort(key=lambda x: x["score"], reverse=False)
+            
+            # Limit to requested number
+            result = result[:limit]
+            
+            if result:
+                logger.info(f"Found {len(result)} memories using FAISS vector search")
+            return result
+            
     except Exception as e:
         logger.error(f"Failed to search user memories with vector: {str(e)}")
         return []
@@ -507,31 +517,40 @@ def add_user_memory(user_id: str, content: str, meta_data: Dict[str, Any] = None
         Optional[str]: ID of the created memory if successful, None otherwise
     """
     try:
-        db = next(get_db())
-        
-        # Generate embedding for the content
-        embedding = generate_embedding(content)
-        
-        # Prepare metadata
-        if meta_data is None:
-            meta_data = {}
-        
-        # Create new memory
-        memory = UserMemory(
-            user_id=user_id,
-            content=content,
-            meta_data=meta_data,
-            importance=importance,
-            source=source,
-            embedding=embedding  # Use the dedicated embedding field
-        )
-        
-        db.add(memory)
-        db.commit()
-        db.refresh(memory)
-        
-        return str(memory.id)
-        
+        # Use context manager to ensure the session is properly closed
+        with get_db_session() as db:
+            # Generate embedding for the content
+            embedding = generate_embedding(content)
+            
+            # Ensure metadata is a dict and values are serializable
+            if meta_data is None:
+                meta_data = {}
+            
+            # Convert any UUID or non-serializable values to strings
+            serializable_metadata = {}
+            for key, value in meta_data.items():
+                if hasattr(value, 'hex') or isinstance(value, (uuid.UUID, int)):
+                    serializable_metadata[key] = str(value)
+                else:
+                    serializable_metadata[key] = value
+            
+            # Create memory
+            memory = UserMemory(
+                user_id=user_id,
+                content=content,
+                meta_data=serializable_metadata,
+                importance=importance,
+                source=source,
+                embedding=embedding
+            )
+            
+            db.add(memory)
+            db.commit()
+            db.refresh(memory)
+            
+            logger.info(f"Created new memory for user {user_id} from {source}")
+            return str(memory.id)
+            
     except Exception as e:
         logger.error(f"Failed to add user memory: {str(e)}")
         return None 
