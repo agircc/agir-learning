@@ -282,20 +282,103 @@ export default function UserDetailsPage() {
                           />
                         </PaginationItem>
 
-                        {[...Array(memoriesPageCount)].map((_, i) => (
-                          <PaginationItem key={i}>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                handlePageChange(i + 1)
-                              }}
-                              isActive={memoriesPage === i + 1}
-                            >
-                              {i + 1}
-                            </PaginationLink>
-                          </PaginationItem>
-                        ))}
+                        {memoriesPageCount <= 7 ? (
+                          // Show all pages if 7 or fewer
+                          [...Array(memoriesPageCount)].map((_, i) => (
+                            <PaginationItem key={i}>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  handlePageChange(i + 1)
+                                }}
+                                isActive={memoriesPage === i + 1}
+                              >
+                                {i + 1}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))
+                        ) : (
+                          // Show limited pages with ellipsis for large page counts
+                          <>
+                            {/* First page */}
+                            <PaginationItem>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  handlePageChange(1)
+                                }}
+                                isActive={memoriesPage === 1}
+                              >
+                                1
+                              </PaginationLink>
+                            </PaginationItem>
+
+                            {/* Ellipsis before current pages if needed */}
+                            {memoriesPage > 3 && (
+                              <PaginationItem>
+                                <div className="flex h-9 w-9 items-center justify-center">
+                                  …
+                                </div>
+                              </PaginationItem>
+                            )}
+
+                            {/* Pages around current page */}
+                            {Array.from({ length: 3 }, (_, i) => {
+                              const pageNumber = Math.min(
+                                Math.max(
+                                  memoriesPage + i - 1,
+                                  memoriesPage > 2 ? 2 : 2 + i
+                                ),
+                                memoriesPageCount - 1
+                              )
+
+                              // Skip if we're showing first or last page elsewhere
+                              if (pageNumber <= 1 || pageNumber >= memoriesPageCount) {
+                                return null
+                              }
+
+                              return (
+                                <PaginationItem key={pageNumber}>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handlePageChange(pageNumber)
+                                    }}
+                                    isActive={memoriesPage === pageNumber}
+                                  >
+                                    {pageNumber}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              )
+                            }).filter(Boolean)}
+
+                            {/* Ellipsis after current pages if needed */}
+                            {memoriesPage < memoriesPageCount - 2 && (
+                              <PaginationItem>
+                                <div className="flex h-9 w-9 items-center justify-center">
+                                  …
+                                </div>
+                              </PaginationItem>
+                            )}
+
+                            {/* Last page */}
+                            <PaginationItem>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  handlePageChange(memoriesPageCount)
+                                }}
+                                isActive={memoriesPage === memoriesPageCount}
+                              >
+                                {memoriesPageCount}
+                              </PaginationLink>
+                            </PaginationItem>
+                          </>
+                        )}
 
                         <PaginationItem>
                           <PaginationNext
