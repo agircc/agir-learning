@@ -11,7 +11,6 @@ from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
 from agir_db.models.state import State
 from agir_db.db.session import get_db
-from src.llm.llm_provider import get_llm_model
 import uuid
 import datetime
 import numpy as np
@@ -158,6 +157,8 @@ def extract_knowledge_from_content(content: str, model_name: str) -> str:
     if not content.strip():
         logger.warning("Empty content provided for knowledge extraction")
         return ""
+    
+    from src.llm.llm_provider import get_llm_model
     
     # Get LLM model without memory (not needed for simple extraction)
     llm_model = get_llm_model(model_name)
