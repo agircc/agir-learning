@@ -7,8 +7,8 @@ import { AuthProvider } from "@/lib/auth-context"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "AGIR Visualization",
-  description: "Visualization for AGIR scenarios and users",
+  title: "Agir Learning",
+  description: "Learning from work and reading books",
 }
 
 export default function RootLayout({
@@ -23,6 +23,18 @@ export default function RootLayout({
           <div className="min-h-screen flex flex-col">
             <Navbar />
             <main className="flex-1">{children}</main>
+            <footer className="border-t py-6 bg-background">
+              <div className="container mx-auto flex flex-col items-center justify-center gap-4 md:flex-row md:justify-between text-sm text-muted-foreground">
+                <div>
+                  <p>&copy; {new Date().getFullYear()} Agir Learning. All rights reserved.</p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <a href="#" className="hover:text-foreground transition-colors">Terms</a>
+                  <a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a>
+                  <a href="#" className="hover:text-foreground transition-colors">Contact</a>
+                </div>
+              </div>
+            </footer>
           </div>
         </AuthProvider>
       </body>

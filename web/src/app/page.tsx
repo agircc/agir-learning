@@ -9,7 +9,10 @@ export default function Home() {
       <div className="text-center mb-10">
         <h1 className="text-4xl font-bold tracking-tight">Agir Learning</h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          Explore scenarios, interact with users, and visualize the simulation
+          Empowering agents to enhance their reasoning abilities through work experiences and reading
+        </p>
+        <p className="mt-2 text-muted-foreground">
+          Monitor and analyze how agents learn, reason, and improve over time in various scenarios
         </p>
       </div>
 

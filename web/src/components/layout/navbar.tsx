@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, Menu, X, LogOut, User } from "lucide-react"
+import { LayoutDashboard, Users, Menu, X, LogOut, User, Github, FileText } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -31,6 +31,19 @@ const navItems = [
     name: "Users",
     href: "/users",
     icon: <Users className="h-4 w-4 mr-2" />,
+  },
+]
+
+const externalLinks = [
+  {
+    name: "GitHub",
+    href: "https://github.com/agircc/agir-learning",
+    icon: <Github className="h-4 w-4 mr-2" />,
+  },
+  {
+    name: "Docs",
+    href: "/docs",
+    icon: <FileText className="h-4 w-4 mr-2" />,
   },
 ]
 
@@ -82,6 +95,22 @@ export function Navbar() {
               </Link>
             ))}
           </nav>
+
+          {/* External links */}
+          <div className="hidden md:flex items-center mx-4 space-x-4">
+            {externalLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="flex items-center text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+                target={link.href.startsWith("http") ? "_blank" : undefined}
+                rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+              >
+                {link.icon}
+                {link.name}
+              </a>
+            ))}
+          </div>
         </div>
 
         {/* User menu */}
@@ -139,6 +168,22 @@ export function Navbar() {
                 {item.name}
               </Link>
             ))}
+
+            {/* External links in mobile menu */}
+            {externalLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="flex items-center text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+                target={link.href.startsWith("http") ? "_blank" : undefined}
+                rel={link.href.startsWith("http") ? "noopener noreferrer" : undefined}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {link.icon}
+                {link.name}
+              </a>
+            ))}
+
             {user && (
               <Button
                 variant="ghost"
