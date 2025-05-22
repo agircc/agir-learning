@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { usersAPI, chatAPI } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,8 +35,14 @@ interface Conversation {
   messages: Message[]
 }
 
+interface ConversationItem {
+  id: string
+  related_type: string
+  related_id: string
+  [key: string]: unknown
+}
+
 export default function ChatPage() {
-  const router = useRouter()
   const params = useParams()
   const userId = params.userId as string
   const [user, setUser] = useState<User | null>(null)
@@ -46,15 +52,18 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" })
+    } else if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
+    }
   }
 
   useEffect(() => {
-    if (conversation?.messages) {
-      scrollToBottom()
-    }
+    scrollToBottom()
   }, [conversation?.messages])
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export default function ChatPage() {
         try {
           const conversations = await chatAPI.getConversations()
           const userConversation = conversations.find(
-            (conv: any) => conv.related_type === "user" && conv.related_id === userId
+            (conv: ConversationItem) => conv.related_type === "user" && conv.related_id === userId
           )
 
           if (userConversation) {
@@ -184,36 +193,38 @@ export default function ChatPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col h-[60vh]">
-              <ScrollArea className="flex-1 p-4 mb-4 border rounded-md">
-                {!conversation || conversation.messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    No messages yet. Start the conversation!
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {conversation.messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.sender_id !== userId ? "justify-end" : "justify-start"
-                          }`}
-                      >
+              <div className="flex-1 p-4 mb-4 border rounded-md overflow-hidden">
+                <ScrollArea className="h-full" ref={scrollAreaRef}>
+                  {!conversation || conversation.messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      No messages yet. Start the conversation!
+                    </div>
+                  ) : (
+                    <div className="space-y-4 pb-2">
+                      {conversation.messages.map((msg) => (
                         <div
-                          className={`max-w-[80%] rounded-lg px-4 py-2 ${msg.sender_id !== userId
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted"
+                          key={msg.id}
+                          className={`flex ${msg.sender_id !== userId ? "justify-end" : "justify-start"
                             }`}
                         >
-                          <div className="text-xs mb-1">
-                            {msg.sender_name || "Unknown"} • {new Date(msg.created_at).toLocaleTimeString()}
+                          <div
+                            className={`max-w-[80%] rounded-lg px-4 py-2 ${msg.sender_id !== userId
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                              }`}
+                          >
+                            <div className="text-xs mb-1">
+                              {msg.sender_name || "Unknown"} • {new Date(msg.created_at).toLocaleTimeString()}
+                            </div>
+                            <div className="whitespace-pre-wrap">{msg.content}</div>
                           </div>
-                          <div className="whitespace-pre-wrap">{msg.content}</div>
                         </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                )}
-              </ScrollArea>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  )}
+                </ScrollArea>
+              </div>
 
               <div className="flex gap-2">
                 <Textarea
