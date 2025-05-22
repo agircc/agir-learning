@@ -2,10 +2,19 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Users, MessageSquare, Menu, X } from "lucide-react"
+import { LayoutDashboard, Users, Menu, X, LogOut, User } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const navItems = [
   {
@@ -23,44 +32,40 @@ const navItems = [
     href: "/users",
     icon: <Users className="h-4 w-4 mr-2" />,
   },
-  {
-    name: "Chat",
-    href: "/chat",
-    icon: <MessageSquare className="h-4 w-4 mr-2" />,
-  },
 ]
 
 export function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { user, logout, isLoading } = useAuth()
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background">
-      <div className="container flex h-16 items-center">
-        <div className="mr-4 md:hidden">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Menu className="h-6 w-6" />
-            )}
-          </Button>
-        </div>
+      <div className="container flex h-16 items-center justify-between">
+        <div className="flex items-center">
+          <div className="mr-4 md:hidden">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
+            </Button>
+          </div>
 
-        <div className="mr-4 flex">
-          <Link href="/" className="flex items-center space-x-2">
-            <span className="font-bold text-xl">AGIR</span>
-          </Link>
-        </div>
+          <div className="mr-6 flex">
+            <Link href="/" className="flex items-center space-x-2">
+              <span className="font-bold text-xl">AGIR</span>
+            </Link>
+          </div>
 
-        {/* Desktop navigation */}
-        <nav className="hidden md:flex md:flex-1 md:items-center md:justify-between">
-          <div className="flex items-center space-x-4">
+          {/* Desktop navigation */}
+          <nav className="hidden md:flex md:items-center space-x-4">
             {navItems.map((item) => (
               <Link
                 key={item.href}
@@ -76,8 +81,42 @@ export function Navbar() {
                 {item.name}
               </Link>
             ))}
-          </div>
-        </nav>
+          </nav>
+        </div>
+
+        {/* User menu */}
+        <div className="flex items-center">
+          {!isLoading && (
+            <>
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <User className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>
+                      {user.first_name ? `${user.first_name} ${user.last_name}` : user.username}
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={logout}
+                      className="text-destructive cursor-pointer"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/login">Login</Link>
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Mobile navigation */}
@@ -100,6 +139,19 @@ export function Navbar() {
                 {item.name}
               </Link>
             ))}
+            {user && (
+              <Button
+                variant="ghost"
+                className="justify-start px-2"
+                onClick={() => {
+                  logout()
+                  setMobileMenuOpen(false)
+                }}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Logout</span>
+              </Button>
+            )}
           </div>
         </div>
       )}

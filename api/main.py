@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import uvicorn
 
 from agir_db.db.session import get_db
-from api.routes import scenarios, episodes, steps, users, memories, chat
+from api.routes import scenarios, episodes, steps, users, memories, chat, auth
 
 app = FastAPI(title="AGIR API", description="API for AGIR Scenario Visualization")
 
@@ -18,6 +18,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(scenarios.router, prefix="/api/scenarios", tags=["scenarios"])
 app.include_router(episodes.router, prefix="/api/episodes", tags=["episodes"])
 app.include_router(steps.router, prefix="/api/steps", tags=["steps"])
