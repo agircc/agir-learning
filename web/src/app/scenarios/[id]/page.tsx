@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { scenariosAPI } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -37,8 +37,10 @@ interface Episode {
   created_at: string
 }
 
-export default function ScenarioDetailsPage({ params }: { params: { id: string } }) {
+export default function ScenarioDetailsPage() {
   const router = useRouter()
+  const params = useParams()
+  const id = params.id as string
   const [scenario, setScenario] = useState<Scenario | null>(null)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,10 +50,10 @@ export default function ScenarioDetailsPage({ params }: { params: { id: string }
     const fetchScenarioData = async () => {
       try {
         setLoading(true)
-        const scenarioData = await scenariosAPI.getById(params.id)
+        const scenarioData = await scenariosAPI.getById(id)
         setScenario(scenarioData)
 
-        const episodesData = await scenariosAPI.getEpisodes(params.id)
+        const episodesData = await scenariosAPI.getEpisodes(id)
         setEpisodes(episodesData)
 
         setError(null)
@@ -63,8 +65,10 @@ export default function ScenarioDetailsPage({ params }: { params: { id: string }
       }
     }
 
-    fetchScenarioData()
-  }, [params.id])
+    if (id) {
+      fetchScenarioData()
+    }
+  }, [id])
 
   if (loading) {
     return (
