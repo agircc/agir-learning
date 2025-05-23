@@ -12,6 +12,7 @@ from agir_db.models.chat_conversation import ChatConversation
 from agir_db.models.chat_message import ChatMessage
 from api.middleware.auth import get_current_user
 from src.chat.chat_with_learner import LearnerChatSession
+from src.completions.fast_completion import create_fast_completion
 
 router = APIRouter()
 
@@ -196,18 +197,24 @@ async def send_message_to_user(
 async def create_completion(request: CompletionRequest):
     """Create a text completion (similar to OpenAI's completions API)"""
     try:
-        # Use a default user ID if none provided, or create a session without user context
+        # Use a default user ID if none provided
         user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
         
-        # Initialize chat session with temperature and max_tokens
-        chat_session = LearnerChatSession(
-            user_id=user_id, 
-            temperature=request.temperature, 
+        # Use fast completion for better performance
+        fast_completion = create_fast_completion(
+            user_id=user_id,
+            temperature=request.temperature,
             max_tokens=request.max_tokens
         )
         
-        # Get AI response
-        ai_response = chat_session.chat(request.prompt)
+        if not fast_completion:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to initialize completion service"
+            )
+        
+        # Generate completion
+        ai_response = fast_completion.complete(request.prompt)
         
         # Generate a unique completion ID
         completion_id = f"cmpl-{uuid.uuid4().hex[:20]}"
@@ -246,13 +253,6 @@ async def create_chat_completion(request: ChatCompletionRequest):
         # Use a default user ID if none provided
         user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
         
-        # Initialize chat session with temperature and max_tokens
-        chat_session = LearnerChatSession(
-            user_id=user_id, 
-            temperature=request.temperature, 
-            max_tokens=request.max_tokens
-        )
-        
         # Get the last user message
         user_messages = [msg for msg in request.messages if msg.role == "user"]
         if not user_messages:
@@ -263,8 +263,21 @@ async def create_chat_completion(request: ChatCompletionRequest):
         
         last_user_message = user_messages[-1].content
         
-        # Get AI response
-        ai_response = chat_session.chat(last_user_message)
+        # Use fast completion for better performance
+        fast_completion = create_fast_completion(
+            user_id=user_id,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens
+        )
+        
+        if not fast_completion:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to initialize completion service"
+            )
+        
+        # Generate completion
+        ai_response = fast_completion.complete(last_user_message)
         
         # Generate a unique completion ID
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:20]}"
@@ -296,4 +309,43 @@ async def create_chat_completion(request: ChatCompletionRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Error generating chat completion: {str(e)}"
+        )
+
+@router.post("/cache/clear")
+async def clear_completion_cache():
+    """Clear the completion memory cache"""
+    try:
+        from src.completions.fast_memory_retriever import clear_memory_cache
+        clear_memory_cache()
+        
+        return {
+            "message": "Completion memory cache cleared successfully",
+            "timestamp": int(time.time())
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error clearing cache: {str(e)}"
+        )
+
+@router.get("/cache/stats")
+async def get_cache_stats():
+    """Get cache statistics"""
+    try:
+        from src.completions.fast_memory_retriever import _retriever_cache
+        from src.completions.fast_completion import _user_cache
+        
+        retriever_cache_size = len(_retriever_cache)
+        user_cache_size = len(_user_cache)
+        
+        return {
+            "retriever_cache_size": retriever_cache_size,
+            "user_cache_size": user_cache_size,
+            "retriever_cache_keys": list(_retriever_cache.keys()),
+            "timestamp": int(time.time())
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting cache stats: {str(e)}"
         ) 
