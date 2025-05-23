@@ -1,5 +1,6 @@
 """
-Fast memory retriever using FAISS for efficient similarity search
+Fast memory retrieval using FAISS for optimal performance.
+Pre-loads user memories into vector store for fast similarity search.
 """
 
 import logging
@@ -7,10 +8,11 @@ import uuid
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 import numpy as np
+from datetime import datetime
 
-from langchain.vectorstores import FAISS
-from langchain.schema import Document
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain.docstore.document import Document
+from langchain_community.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User

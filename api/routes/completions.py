@@ -34,6 +34,9 @@ async def create_completion(request: CompletionRequest):
         # Use a default user ID if none provided
         user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
         
+        # Track timing for performance monitoring
+        start_time = time.time()
+        
         # Use fast completion for better performance
         fast_completion = create_fast_completion(
             user_id=user_id,
@@ -47,14 +50,17 @@ async def create_completion(request: CompletionRequest):
                 detail="Failed to initialize completion service"
             )
         
-        # Generate completion
+        # Generate completion with enhanced thinking process
         ai_response = fast_completion.complete(request.prompt)
+        
+        # Calculate processing time
+        processing_time = time.time() - start_time
         
         # Generate a unique completion ID
         completion_id = f"cmpl-{uuid.uuid4().hex[:20]}"
         
-        # Return OpenAI-like response format
-        return {
+        # Return OpenAI-like response format with performance info
+        response_data = {
             "id": completion_id,
             "object": "text_completion",
             "created": int(time.time()),
@@ -70,9 +76,12 @@ async def create_completion(request: CompletionRequest):
             "usage": {
                 "prompt_tokens": len(request.prompt.split()),
                 "completion_tokens": len(ai_response.split()),
-                "total_tokens": len(request.prompt.split()) + len(ai_response.split())
+                "total_tokens": len(request.prompt.split()) + len(ai_response.split()),
+                "processing_time_ms": round(processing_time * 1000, 2)
             }
         }
+        
+        return response_data
     
     except Exception as e:
         raise HTTPException(
@@ -86,6 +95,9 @@ async def create_chat_completion(request: ChatCompletionRequest):
     try:
         # Use a default user ID if none provided
         user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
+        
+        # Track timing for performance monitoring
+        start_time = time.time()
         
         # Get the last user message
         user_messages = [msg for msg in request.messages if msg.role == "user"]
@@ -110,14 +122,17 @@ async def create_chat_completion(request: ChatCompletionRequest):
                 detail="Failed to initialize completion service"
             )
         
-        # Generate completion
+        # Generate completion with enhanced thinking process
         ai_response = fast_completion.complete(last_user_message)
+        
+        # Calculate processing time
+        processing_time = time.time() - start_time
         
         # Generate a unique completion ID
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:20]}"
         
-        # Return OpenAI-like response format
-        return {
+        # Return OpenAI-like response format with performance info
+        response_data = {
             "id": completion_id,
             "object": "chat.completion",
             "created": int(time.time()),
@@ -135,9 +150,12 @@ async def create_chat_completion(request: ChatCompletionRequest):
             "usage": {
                 "prompt_tokens": sum(len(msg.content.split()) for msg in request.messages),
                 "completion_tokens": len(ai_response.split()),
-                "total_tokens": sum(len(msg.content.split()) for msg in request.messages) + len(ai_response.split())
+                "total_tokens": sum(len(msg.content.split()) for msg in request.messages) + len(ai_response.split()),
+                "processing_time_ms": round(processing_time * 1000, 2)
             }
         }
+        
+        return response_data
     
     except Exception as e:
         raise HTTPException(
