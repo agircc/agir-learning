@@ -65,6 +65,25 @@ export_memories:
 clear_db_force:
 	PYTHONPATH=$(shell pwd) python scripts/clear_db.py --confirm
 
+# Add negative memories for all users
+add_negative_memories:
+	PYTHONPATH=$(shell pwd) python scripts/add_negative_memory.py
+
+# Add negative memories with custom options
+add_negative_memories_custom:
+	@if [ -z "$(MODEL)" ]; then \
+		MODEL="gpt-4.1-nano"; \
+	fi
+	PYTHONPATH=$(shell pwd) python scripts/add_negative_memory.py --model=$(MODEL) $(if $(LIMIT),--limit=$(LIMIT),) $(if $(FORCE),--force,) $(if $(DEBUG),--debug,)
+
+# Add negative memories for limited users (testing)
+add_negative_memories_test:
+	PYTHONPATH=$(shell pwd) python scripts/add_negative_memory.py --limit=3 --debug
+
+# Add negative memories with force mode (overwrite existing)
+add_negative_memories_force:
+	PYTHONPATH=$(shell pwd) python scripts/add_negative_memory.py --force
+
 # Start the API server
 api:
 	python -m api.run
