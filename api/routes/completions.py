@@ -27,7 +27,8 @@ class CompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
     user_id: Optional[str] = None
 
-@router.post("/")
+@router.post("/", include_in_schema=True)
+@router.post("", include_in_schema=False)  # Add support for path without slash
 async def create_completion(request: CompletionRequest):
     """Create a text completion (similar to OpenAI's completions API)"""
     try:
@@ -90,6 +91,7 @@ async def create_completion(request: CompletionRequest):
         )
 
 @router.post("/chat")
+@router.post("/chat/", include_in_schema=False)  # Add support for path with slash
 async def create_chat_completion(request: ChatCompletionRequest):
     """Create a chat completion (similar to OpenAI's chat completions API)"""
     try:
