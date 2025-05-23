@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { usersAPI, memoriesAPI } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, ArrowLeft, MessageSquare } from "lucide-react"
+import { Loader2, ArrowLeft, MessageSquare, BookOpen, FlaskConical, Clock, CalendarDays, Info } from "lucide-react"
 import Link from "next/link"
 import { ProtectedRoute } from "@/components/auth/protected-route"
 import {
@@ -16,6 +16,8 @@ import {
   PaginationNext,
   PaginationPrevious
 } from "@/components/ui/pagination"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
 
 interface User {
   id: string
@@ -197,69 +199,115 @@ export default function UserDetailsPage() {
               ) : (
                 <div className="space-y-4">
                   {memories.map((memory) => (
-                    <Card key={memory.id} className="bg-muted/40">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm flex justify-between items-center">
-                          <span>{memory.memory_type}</span>
-                          <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md">
-                            Importance: {memory.importance.toFixed(1)}
-                          </span>
-                        </CardTitle>
-                        <CardDescription>
-                          {new Date(memory.created_at).toLocaleDateString()}
+                    <Card key={memory.id} className={cn(
+                      "overflow-hidden transition-all hover:shadow-md",
+                      memory.source === "book_reading_record" ? "border-l-4 border-l-blue-500/50" :
+                        memory.source === "episode" ? "border-l-4 border-l-green-500/50" : ""
+                    )}>
+                      <CardHeader className="pb-2 relative">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            {memory.source === "book_reading_record" && (
+                              <BookOpen className="h-4 w-4 text-blue-500" />
+                            )}
+                            {memory.source === "episode" && (
+                              <FlaskConical className="h-4 w-4 text-green-500" />
+                            )}
+                            <Badge variant="outline" className="font-normal">
+                              {memory.memory_type}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Info className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md font-medium">
+                              {memory.importance.toFixed(1)}
+                            </span>
+                          </div>
+                        </div>
+                        <CardDescription className="flex items-center mt-2 text-xs gap-1">
+                          <Clock className="h-3 w-3" />
+                          {new Date(memory.created_at).toLocaleDateString()} {new Date(memory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <p>{memory.content}</p>
+                        <p className="whitespace-pre-wrap leading-relaxed">{memory.content}</p>
 
-                        {memory.source && (
-                          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-                            <div className="font-semibold mb-1">Source: {memory.source}</div>
+                        {memory.source && memory.meta_data && (
+                          <div className="mt-4 pt-3 border-t text-xs text-muted-foreground">
+                            {memory.source === "episode" && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1.5">
+                                  <FlaskConical className="h-3.5 w-3.5" />
+                                  <span className="font-medium">From Simulation</span>
+                                </div>
 
-                            {memory.source === "episode" && memory.meta_data && (
-                              <div className="space-y-1">
-                                {memory.meta_data.scenario_name && (
-                                  <div>Scenario: {memory.meta_data.scenario_name}</div>
-                                )}
-                                {memory.meta_data.scenario_id && (
-                                  <div>
-                                    Scenario ID:
-                                    <Link
-                                      href={`/scenarios/${memory.meta_data.scenario_id}`}
-                                      className="ml-1 text-primary hover:underline"
-                                    >
-                                      {memory.meta_data.scenario_id}
-                                    </Link>
-                                  </div>
-                                )}
-                                {memory.meta_data.episode_id && (
-                                  <div>
-                                    Episode ID:
-                                    <Link
-                                      href={`/scenarios/${memory.meta_data.scenario_id}/episodes/${memory.meta_data.episode_id}`}
-                                      className="ml-1 text-primary hover:underline"
-                                    >
-                                      {memory.meta_data.episode_id}
-                                    </Link>
-                                  </div>
-                                )}
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
+                                  {memory.meta_data.scenario_name && (
+                                    <div className="col-span-2">
+                                      <span className="text-muted-foreground">Scenario: </span>
+                                      <span className="text-foreground">{memory.meta_data.scenario_name}</span>
+                                    </div>
+                                  )}
+                                  {memory.meta_data.scenario_id && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-muted-foreground">Scenario ID: </span>
+                                      <Link
+                                        href={`/scenarios/${memory.meta_data.scenario_id}`}
+                                        className="text-primary hover:underline"
+                                      >
+                                        View
+                                      </Link>
+                                    </div>
+                                  )}
+                                  {memory.meta_data.episode_id && (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-muted-foreground">Episode ID: </span>
+                                      <Link
+                                        href={`/scenarios/${memory.meta_data.scenario_id}/episodes/${memory.meta_data.episode_id}`}
+                                        className="text-primary hover:underline"
+                                      >
+                                        View
+                                      </Link>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
 
-                            {memory.source === "book_reading_record" && memory.meta_data && (
-                              <div className="space-y-1">
-                                {memory.meta_data.book_title && (
-                                  <div>Book: {memory.meta_data.book_title}</div>
-                                )}
-                                {memory.meta_data.memory_type && (
-                                  <div>Type: {memory.meta_data.memory_type}</div>
-                                )}
-                                {memory.meta_data.importance_score !== undefined && (
-                                  <div>Importance Score: {memory.meta_data.importance_score}</div>
-                                )}
-                                {memory.meta_data.read_date && (
-                                  <div>Read Date: {new Date(memory.meta_data.read_date).toLocaleDateString()}</div>
-                                )}
+                            {memory.source === "book_reading_record" && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-1.5">
+                                  <BookOpen className="h-3.5 w-3.5" />
+                                  <span className="font-medium">From Book Reading</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
+                                  {memory.meta_data.book_title && (
+                                    <div className="col-span-2">
+                                      <span className="text-muted-foreground">Book: </span>
+                                      <span className="text-foreground font-medium">{memory.meta_data.book_title}</span>
+                                    </div>
+                                  )}
+                                  {memory.meta_data.memory_type && (
+                                    <div>
+                                      <span className="text-muted-foreground">Type: </span>
+                                      <span>{memory.meta_data.memory_type}</span>
+                                    </div>
+                                  )}
+                                  {memory.meta_data.importance_score !== undefined && (
+                                    <div>
+                                      <span className="text-muted-foreground">Importance: </span>
+                                      <span>{memory.meta_data.importance_score}</span>
+                                    </div>
+                                  )}
+                                  {memory.meta_data.read_date && (
+                                    <div className="col-span-2 flex items-center gap-1">
+                                      <CalendarDays className="h-3 w-3" />
+                                      <span className="text-muted-foreground">Read on: </span>
+                                      <span>{new Date(memory.meta_data.read_date).toLocaleDateString()} {new Date(memory.meta_data.read_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>

@@ -99,13 +99,14 @@ def extract_llm_response(response) -> str:
     else:
         return str(response)
 
-def process_book_for_user(username: str, book_path: str) -> Optional[List[uuid.UUID]]:
+def process_book_for_user(username: str, book_path: str, start_chunk: int = 0) -> Optional[List[uuid.UUID]]:
     """
     Process a book and create memories for a user.
     
     Args:
         username: Username to find user
         book_path: Path to the book file
+        start_chunk: Index of the chunk to start processing from (default: 0)
         
     Returns:
         Optional[List[uuid.UUID]]: List of created memory IDs if successful, None otherwise
@@ -135,52 +136,61 @@ def process_book_for_user(username: str, book_path: str) -> Optional[List[uuid.U
         book_title = os.path.basename(book_path)
         book_title = os.path.splitext(book_title)[0]
         
-        # First, create a memory recording that the user has read this book
-        read_date = datetime.now().strftime("%Y-%m-%d")
-        book_record_content = f"I read the book '{book_title}' on {read_date}. This book was located at {book_path}."
-        
-        book_record_context_info = {
-            "state_name": f"Reading Record",
-            "task": f"Recording that I've read '{book_title}'",
-            "content_type": "Book Reading Record"
-        }
-        
-        book_record_metadata = {
-            "memory_type": "book_reading_record",
-            "book_title": book_title,
-            "read_date": read_date,
-            "source_path": book_path,
-            "importance_score": 0.95  # Very high importance for remembering what books were read
-        }
-        
-        book_record_id = create_user_memory(
-            db=db,
-            user_id=user.id,
-            context_info=book_record_context_info,
-            original_content=book_record_content,
-            model_name=model_name,
-            metadata=book_record_metadata,
-            source="book_reading_record",
-            importance=0.95
-        )
-        
         memory_ids = []
-        if book_record_id:
-            memory_ids.append(book_record_id)
-            logger.info(f"Created book reading record for '{book_title}' for user {username}")
+        
+        # Only create the book record if starting from the beginning
+        if start_chunk == 0:
+            # First, create a memory recording that the user has read this book
+            read_date = datetime.now().strftime("%Y-%m-%d")
+            book_record_content = f"I read the book '{book_title}' on {read_date}. This book was located at {book_path}."
+            
+            book_record_context_info = {
+                "state_name": f"Reading Record",
+                "task": f"Recording that I've read '{book_title}'",
+                "content_type": "Book Reading Record"
+            }
+            
+            book_record_metadata = {
+                "memory_type": "book_reading_record",
+                "book_title": book_title,
+                "read_date": read_date,
+                "source_path": book_path,
+                "importance_score": 0.95  # Very high importance for remembering what books were read
+            }
+            
+            book_record_id = create_user_memory(
+                db=db,
+                user_id=user.id,
+                context_info=book_record_context_info,
+                original_content=book_record_content,
+                model_name=model_name,
+                metadata=book_record_metadata,
+                source="book_reading_record",
+                importance=0.95
+            )
+            
+            if book_record_id:
+                memory_ids.append(book_record_id)
+                logger.info(f"Created book reading record for '{book_title}' for user {username}")
         
         # Process content in chunks
         chunks = chunk_book_content(content)
-        logger.info(f"Processing book '{book_title}' with {len(chunks)} chunks")
+        total_chunks = len(chunks)
+        logger.info(f"Processing book '{book_title}' with {total_chunks} chunks, starting from chunk {start_chunk}")
+        
+        if start_chunk >= total_chunks:
+            logger.error(f"Start chunk index {start_chunk} is out of range. Total chunks: {total_chunks}")
+            return memory_ids
         
         llm = get_llm_model(model_name)
         
-        # Process each chunk
-        for i, chunk in enumerate(chunks):
+        # Process each chunk starting from start_chunk
+        for i in range(start_chunk, total_chunks):
+            chunk = chunks[i]
             # Create context info for content memory
             context_info = {
                 "state_name": f"Reading {book_title}",
-                "task": f"Reading and extracting knowledge from part {i+1} of {len(chunks)}",
+                "task": f"Reading and extracting knowledge from part {i+1} of {total_chunks}",
                 "content_type": "Book Content"
             }
             
@@ -189,7 +199,7 @@ def process_book_for_user(username: str, book_path: str) -> Optional[List[uuid.U
                 "memory_type": "book_knowledge",
                 "book_title": book_title,
                 "chunk_index": i,
-                "total_chunks": len(chunks),
+                "total_chunks": total_chunks,
                 "source_path": book_path,
                 "importance_score": 0.8  # Default importance
             }
@@ -229,7 +239,7 @@ What do you find most interesting or valuable from this section?
             # Create chunk reflection memory
             chunk_context_info = {
                 "state_name": f"Reflecting on section of {book_title}",
-                "task": f"Reflection on part {i+1} of {len(chunks)}",
+                "task": f"Reflection on part {i+1} of {total_chunks}",
                 "content_type": "Section Reflection"
             }
             
@@ -237,7 +247,7 @@ What do you find most interesting or valuable from this section?
                 "memory_type": "book_section_reflection",
                 "book_title": book_title,
                 "chunk_index": i,
-                "total_chunks": len(chunks),
+                "total_chunks": total_chunks,
                 "source_path": book_path,
                 "importance_score": 0.85  # Slightly higher than content
             }
@@ -257,47 +267,49 @@ What do you find most interesting or valuable from this section?
                 memory_ids.append(chunk_reflection_id)
                 logger.info(f"Created reflection for chunk {i+1} for user {username}")
             
-        # Create a final reflection for the entire book
-        if memory_ids:
-            # Prepare a prompt for reflecting on the book
-            reflection_prompt = f"""
+        # Only create final reflection if processing the last chunks
+        if total_chunks - start_chunk <= total_chunks:
+            # Create a final reflection for the entire book
+            if memory_ids:
+                # Prepare a prompt for reflecting on the book
+                reflection_prompt = f"""
 You've just finished reading the book "{book_title}".
 Please reflect on the main themes, key insights, and how this book has impacted your understanding.
 Summarize what you've learned and how it might influence your thinking or actions in the future.
 """
-            
-            # Generate reflection
-            response = llm.invoke(reflection_prompt)
-            reflection = extract_llm_response(response)
-            
-            # Create reflection memory
-            context_info = {
-                "state_name": f"Reflecting on {book_title}",
-                "task": "Overall reflection on the book",
-                "content_type": "Book Reflection"
-            }
-            
-            metadata = {
-                "memory_type": "book_reflection",
-                "book_title": book_title,
-                "source_path": book_path,
-                "importance_score": 0.9  # Higher importance for reflection
-            }
-            
-            reflection_memory_id = create_user_memory(
-                db=db,
-                user_id=user.id,
-                context_info=context_info,
-                original_content=reflection,
-                model_name=model_name,
-                metadata=metadata,
-                source="book_reflection",
-                importance=0.9
-            )
-            
-            if reflection_memory_id:
-                memory_ids.append(reflection_memory_id)
-                logger.info(f"Created book reflection memory for user {username}")
+                
+                # Generate reflection
+                response = llm.invoke(reflection_prompt)
+                reflection = extract_llm_response(response)
+                
+                # Create reflection memory
+                context_info = {
+                    "state_name": f"Reflecting on {book_title}",
+                    "task": "Overall reflection on the book",
+                    "content_type": "Book Reflection"
+                }
+                
+                metadata = {
+                    "memory_type": "book_reflection",
+                    "book_title": book_title,
+                    "source_path": book_path,
+                    "importance_score": 0.9  # Higher importance for reflection
+                }
+                
+                reflection_memory_id = create_user_memory(
+                    db=db,
+                    user_id=user.id,
+                    context_info=context_info,
+                    original_content=reflection,
+                    model_name=model_name,
+                    metadata=metadata,
+                    source="book_reflection",
+                    importance=0.9
+                )
+                
+                if reflection_memory_id:
+                    memory_ids.append(reflection_memory_id)
+                    logger.info(f"Created book reflection memory for user {username}")
         
         logger.info(f"Completed processing book '{book_title}' for user {username}")
         return memory_ids

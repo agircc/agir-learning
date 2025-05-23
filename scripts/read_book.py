@@ -34,13 +34,14 @@ def main():
     parser = argparse.ArgumentParser(description='Read a book and create memories for a user')
     parser.add_argument('username', help='Username of the user to create memories for')
     parser.add_argument('book_path', help='Path to the book file')
+    parser.add_argument('--start-chunk', type=int, default=0, help='Index of the chunk to start processing from (default: 0)')
     
     args = parser.parse_args()
     
-    logger.info(f"Starting book reading for user {args.username} from {args.book_path}")
+    logger.info(f"Starting book reading for user {args.username} from {args.book_path} at chunk {args.start_chunk}")
     
     # Process the book
-    memory_ids = process_book_for_user(args.username, args.book_path)
+    memory_ids = process_book_for_user(args.username, args.book_path, args.start_chunk)
     
     if memory_ids:
         logger.info(f"Successfully created {len(memory_ids)} memories for user {args.username}")

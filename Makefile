@@ -31,7 +31,7 @@ read_book:
 		echo "❌ Error: You must provide BOOK_PATH. Usage: make read_book USERNAME=alice_007 BOOK_PATH=scenarios/books/THE PSYCHOLOGY OF THE EMOTIONS.txt"; \
 		exit 1; \
 	fi
-	PYTHONPATH=$(shell pwd) python scripts/read_book.py $(USERNAME) "$(BOOK_PATH)"
+	PYTHONPATH=$(shell pwd) python scripts/read_book.py $(USERNAME) "$(BOOK_PATH)" $(if $(START_CHUNK),--start-chunk=$(START_CHUNK),)
 
 # Run scenario initialization only
 run_init:
