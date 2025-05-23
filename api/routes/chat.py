@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
 import uuid
 from datetime import datetime
+import time
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User
@@ -12,6 +14,25 @@ from api.middleware.auth import get_current_user
 from src.chat.chat_with_learner import LearnerChatSession
 
 router = APIRouter()
+
+# Pydantic models for OpenAI-like API
+class ChatMessage(BaseModel):
+    role: str  # "user", "assistant", "system"
+    content: str
+
+class ChatCompletionRequest(BaseModel):
+    messages: List[ChatMessage]
+    model: Optional[str] = "agir-learner"
+    max_tokens: Optional[int] = 150
+    temperature: Optional[float] = 0.7
+    user_id: Optional[str] = None  # Optional user ID for personalized responses
+
+class CompletionRequest(BaseModel):
+    prompt: str
+    model: Optional[str] = "agir-learner"
+    max_tokens: Optional[int] = 150
+    temperature: Optional[float] = 0.7
+    user_id: Optional[str] = None
 
 @router.get("/conversations")
 async def get_conversations(
@@ -169,4 +190,102 @@ async def send_message_to_user(
             "sender_id": message.sender_id,
             "content": message.content,
             "created_at": message.created_at
-        } 
+        }
+
+@router.post("/completions")
+async def create_completion(request: CompletionRequest):
+    """Create a text completion (similar to OpenAI's completions API)"""
+    try:
+        # Use a default user ID if none provided, or create a session without user context
+        user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
+        
+        # Initialize chat session
+        chat_session = LearnerChatSession(user_id=user_id)
+        
+        # Get AI response
+        ai_response = chat_session.chat(request.prompt)
+        
+        # Generate a unique completion ID
+        completion_id = f"cmpl-{uuid.uuid4().hex[:20]}"
+        
+        # Return OpenAI-like response format
+        return {
+            "id": completion_id,
+            "object": "text_completion",
+            "created": int(time.time()),
+            "model": request.model,
+            "choices": [
+                {
+                    "text": ai_response,
+                    "index": 0,
+                    "logprobs": None,
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": len(request.prompt.split()),
+                "completion_tokens": len(ai_response.split()),
+                "total_tokens": len(request.prompt.split()) + len(ai_response.split())
+            }
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Error generating completion: {str(e)}"
+        )
+
+@router.post("/chat/completions")
+async def create_chat_completion(request: ChatCompletionRequest):
+    """Create a chat completion (similar to OpenAI's chat completions API)"""
+    try:
+        # Use a default user ID if none provided
+        user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
+        
+        # Initialize chat session
+        chat_session = LearnerChatSession(user_id=user_id)
+        
+        # Get the last user message
+        user_messages = [msg for msg in request.messages if msg.role == "user"]
+        if not user_messages:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No user message found in the conversation"
+            )
+        
+        last_user_message = user_messages[-1].content
+        
+        # Get AI response
+        ai_response = chat_session.chat(last_user_message)
+        
+        # Generate a unique completion ID
+        completion_id = f"chatcmpl-{uuid.uuid4().hex[:20]}"
+        
+        # Return OpenAI-like response format
+        return {
+            "id": completion_id,
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": request.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": ai_response
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": sum(len(msg.content.split()) for msg in request.messages),
+                "completion_tokens": len(ai_response.split()),
+                "total_tokens": sum(len(msg.content.split()) for msg in request.messages) + len(ai_response.split())
+            }
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Error generating chat completion: {str(e)}"
+        ) 
