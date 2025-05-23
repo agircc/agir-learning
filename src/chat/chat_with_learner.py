@@ -27,13 +27,15 @@ class LearnerChatSession:
     Class to manage a chat session with a learner.
     """
     
-    def __init__(self, username: str = None, user_id: str = None):
+    def __init__(self, username: str = None, user_id: str = None, temperature: float = 0.7, max_tokens: Optional[int] = None):
         """
         Initialize a chat session with a learner.
         
         Args:
             username: Username of the learner to chat with
             user_id: User ID of the learner to chat with (alternative to username)
+            temperature: Sampling temperature for the LLM (0.0 to 2.0)
+            max_tokens: Maximum tokens to generate
         """
         if not username and not user_id:
             raise ValueError("Either username or user_id must be provided")
@@ -48,11 +50,13 @@ class LearnerChatSession:
             raise ValueError(f"User {self.user.username} has no LLM model specified")
         
         self.model_name = self.user.llm_model
-        self.llm = get_llm_model(self.model_name)
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.llm = get_llm_model(self.model_name, temperature=temperature, max_tokens=max_tokens)
         self.chat_history = []
         self.memories = self._load_initial_memories()
         
-        logger.info(f"Initialized chat session with learner {self.user.username} using model {self.model_name}")
+        logger.info(f"Initialized chat session with learner {self.user.username} using model {self.model_name}, temperature={temperature}, max_tokens={max_tokens}")
     
     def _find_user(self, username: str = None, user_id: str = None) -> Optional[User]:
         """
@@ -232,19 +236,21 @@ You should respond based on your memories and learned knowledge.
             logger.info(f"Closed chat session with learner {self.user.username}")
 
 
-def create_chat_session(username: str = None, user_id: str = None) -> Optional[LearnerChatSession]:
+def create_chat_session(username: str = None, user_id: str = None, temperature: float = 0.7, max_tokens: Optional[int] = None) -> Optional[LearnerChatSession]:
     """
     Create a chat session with a learner.
     
     Args:
         username: Username of the learner to chat with
         user_id: User ID of the learner to chat with (alternative to username)
+        temperature: Sampling temperature for the LLM (0.0 to 2.0)
+        max_tokens: Maximum tokens to generate
         
     Returns:
         Optional[LearnerChatSession]: Chat session if created successfully, None otherwise
     """
     try:
-        return LearnerChatSession(username=username, user_id=user_id)
+        return LearnerChatSession(username=username, user_id=user_id, temperature=temperature, max_tokens=max_tokens)
     except Exception as e:
         logger.error(f"Failed to create chat session: {str(e)}")
         return None

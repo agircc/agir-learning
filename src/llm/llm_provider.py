@@ -16,13 +16,17 @@ logger = logging.getLogger(__name__)
 class BaseLangChainProvider:
     """Base class for LangChain LLM providers"""
     
-    def __init__(self, model_name: str):
+    def __init__(self, model_name: str, temperature: float = 0.7, max_tokens: Optional[int] = None):
         """Initialize the LangChain provider
         
         Args:
             model_name: Name of the model
+            temperature: Sampling temperature (0.0 to 2.0)
+            max_tokens: Maximum tokens to generate
         """
         self.model_name = model_name
+        self.temperature = temperature
+        self.max_tokens = max_tokens
         self._llm = None
     
     def get_llm(self):
@@ -168,11 +172,18 @@ class OpenAILangChainProvider(BaseLangChainProvider):
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable not set")
         
-        self._llm = ChatOpenAI(
-            model_name=self.model_name,
-            temperature=0.7,
-            api_key=api_key
-        )
+        # Build ChatOpenAI kwargs
+        kwargs = {
+            'model_name': self.model_name,
+            'temperature': self.temperature,
+            'api_key': api_key
+        }
+        
+        # Add max_tokens if specified
+        if self.max_tokens is not None:
+            kwargs['max_tokens'] = self.max_tokens
+        
+        self._llm = ChatOpenAI(**kwargs)
 
 class AnthropicLangChainProvider(BaseLangChainProvider):
     """LangChain provider for Anthropic models"""
@@ -183,11 +194,18 @@ class AnthropicLangChainProvider(BaseLangChainProvider):
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY environment variable not set")
         
-        self._llm = ChatAnthropic(
-            model_name=self.model_name,
-            temperature=0.7,
-            anthropic_api_key=api_key
-        )
+        # Build ChatAnthropic kwargs
+        kwargs = {
+            'model_name': self.model_name,
+            'temperature': self.temperature,
+            'anthropic_api_key': api_key
+        }
+        
+        # Add max_tokens if specified
+        if self.max_tokens is not None:
+            kwargs['max_tokens'] = self.max_tokens
+        
+        self._llm = ChatAnthropic(**kwargs)
 
 def detect_provider_type(model_name: str) -> str:
     """Detect the provider type based on model name
@@ -209,11 +227,13 @@ def detect_provider_type(model_name: str) -> str:
         logger.warning(f"Unknown model type: {model_name}, defaulting to OpenAI")
         return "openai"
 
-def get_llm_model(model_name: str) -> BaseChatModel:
+def get_llm_model(model_name: str, temperature: float = 0.7, max_tokens: Optional[int] = None) -> BaseChatModel:
     """Get a LangChain provider for the specified model
     
     Args:
         model_name: Name of the model
+        temperature: Sampling temperature (0.0 to 2.0)
+        max_tokens: Maximum tokens to generate
         
     Returns:
         LangChain provider instance
@@ -224,10 +244,18 @@ def get_llm_model(model_name: str) -> BaseChatModel:
     provider_type = detect_provider_type(model_name)
     
     if provider_type == 'openai':
-        provider = OpenAILangChainProvider(model_name=model_name)
+        provider = OpenAILangChainProvider(
+            model_name=model_name, 
+            temperature=temperature, 
+            max_tokens=max_tokens
+        )
         
     elif provider_type == 'anthropic':
-        provider = AnthropicLangChainProvider(model_name=model_name)
+        provider = AnthropicLangChainProvider(
+            model_name=model_name, 
+            temperature=temperature, 
+            max_tokens=max_tokens
+        )
     
     return provider.get_llm()
 

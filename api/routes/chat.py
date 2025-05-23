@@ -199,8 +199,12 @@ async def create_completion(request: CompletionRequest):
         # Use a default user ID if none provided, or create a session without user context
         user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
         
-        # Initialize chat session
-        chat_session = LearnerChatSession(user_id=user_id)
+        # Initialize chat session with temperature and max_tokens
+        chat_session = LearnerChatSession(
+            user_id=user_id, 
+            temperature=request.temperature, 
+            max_tokens=request.max_tokens
+        )
         
         # Get AI response
         ai_response = chat_session.chat(request.prompt)
@@ -242,8 +246,12 @@ async def create_chat_completion(request: ChatCompletionRequest):
         # Use a default user ID if none provided
         user_id = request.user_id or "00000000-0000-0000-0000-000000000000"
         
-        # Initialize chat session
-        chat_session = LearnerChatSession(user_id=user_id)
+        # Initialize chat session with temperature and max_tokens
+        chat_session = LearnerChatSession(
+            user_id=user_id, 
+            temperature=request.temperature, 
+            max_tokens=request.max_tokens
+        )
         
         # Get the last user message
         user_messages = [msg for msg in request.messages if msg.role == "user"]
