@@ -148,13 +148,11 @@ class LearnerChatSession:
         memory_context = self._format_memories_for_context()
         
         # Create system prompt with memories
-        system_prompt = f"""You are {self.user.first_name} {self.user.last_name} ({self.user.username}).
+        system_prompt = f"""You are {self.user.first_name} {self.user.last_name}.
 You should respond based on your memories and learned knowledge.
 
 {memory_context}
 
-When asked about something not in your memories, you should acknowledge that you don't have specific knowledge about it.
-Always stay in character as {self.user.username} and respond naturally as if you are this person.
 """
         
         # Create messages for LLM
