@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from sqlalchemy import desc
+from typing import List, Dict, Any, Optional
 import uuid
+from math import ceil
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User
@@ -11,14 +13,37 @@ router = APIRouter()
 
 @router.get("/")
 async def get_users(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
 ):
-    """Get all users"""
-    users = db.query(User).all()
+    """Get all users with pagination and optional search"""
+    # Build query
+    query = db.query(User)
+    
+    # Apply search filter if provided
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            User.username.ilike(search_term) |
+            User.email.ilike(search_term) |
+            User.first_name.ilike(search_term) |
+            User.last_name.ilike(search_term)
+        )
+    
+    # Get total count for pagination
+    total = query.count()
+    
+    # Add pagination
+    query = query.order_by(desc(User.created_at))
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    
+    # Execute query
+    users = query.all()
     
     # Format response to include full name
-    result = []
+    result_items = []
     for user in users:
         full_name = f"{user.first_name} {user.last_name}" if user.first_name and user.last_name else ""
         user_data = {
@@ -33,9 +58,16 @@ async def get_users(
             "profession": getattr(user, "profession", None),
             "description": getattr(user, "description", None)
         }
-        result.append(user_data)
+        result_items.append(user_data)
     
-    return result
+    # Return paginated response
+    return {
+        "items": result_items,
+        "total": total,
+        "page": page,
+        "size": page_size,
+        "pages": ceil(total / page_size) if total > 0 else 1
+    }
 
 @router.get("/{user_id}")
 async def get_user(

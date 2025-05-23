@@ -126,7 +126,11 @@ export const stepsAPI = {
  * Users API
  */
 export const usersAPI = {
-  getAll: () => fetchAPI<any[]>('/api/users'),
+  getAll: (page = 1, pageSize = 10, search?: string) => {
+    let url = `/api/users?page=${page}&page_size=${pageSize}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    return fetchAPI<any>(url);
+  },
   getById: (id: string) => fetchAPI<any>(`/api/users/${id}`),
   getProfile: (id: string) => fetchAPI<any>(`/api/users/${id}/profile`),
 };
