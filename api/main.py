@@ -11,7 +11,7 @@ app = FastAPI(title="AGIR API", description="API for AGIR Scenario Visualization
 # Configure CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Next.js dev server
+    allow_origins=["http://localhost:3000", "https://learning.agir.cc"],  # Next.js dev server
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
