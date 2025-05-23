@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useParams } from "next/navigation"
 import { stepsAPI } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -42,7 +42,6 @@ interface StepDetails {
 }
 
 export default function StepDetailsPage() {
-  const router = useRouter()
   const params = useParams()
   const id = params.id as string
   const [step, setStep] = useState<StepDetails | null>(null)
