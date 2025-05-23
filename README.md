@@ -39,6 +39,9 @@ cd agir-learning
 conda env create -f environment.yml
 conda activate agir-learning
 
+# Install Python dependencies
+pip install -r requirements.txt
+
 # Configure your environment
 cp .env.example .env
 # Edit .env with your database URL and API keys
@@ -92,6 +95,7 @@ make visualizer
 ├── vector_stores/         # Vector databases for memory
 ├── Makefile               # Common commands
 ├── environment.yml        # Conda environment specification
+├── requirements.txt       # Python package dependencies
 └── run.py                 # Main execution script
 ```
 
