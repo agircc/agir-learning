@@ -177,16 +177,6 @@ async def create_simple_completion(request: CompletionRequest):
         # Track timing for performance monitoring
         start_time = time.time()
         
-        # Get the last user message
-        user_messages = [msg for msg in request.messages if msg.role == "user"]
-        if not user_messages:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No user message found in the conversation"
-            )
-        
-        last_user_message = user_messages[-1].content
-        
         # Use fast completion for better performance
         fast_completion = create_fast_completion(
             user_id=user_id,
@@ -201,34 +191,32 @@ async def create_simple_completion(request: CompletionRequest):
             )
         
         # Generate completion with enhanced thinking process
-        ai_response = fast_completion.complete(last_user_message)
+        ai_response = fast_completion.complete(request.prompt)
         
         # Calculate processing time
         processing_time = time.time() - start_time
         
         # Generate a unique completion ID
-        completion_id = f"chatcmpl-{uuid.uuid4().hex[:20]}"
+        completion_id = f"cmpl-{uuid.uuid4().hex[:20]}"
         
         # Return OpenAI-like response format with performance info
         response_data = {
             "id": completion_id,
-            "object": "chat.completion",
+            "object": "text_completion",
             "created": int(time.time()),
             "model": request.model,
             "choices": [
                 {
+                    "text": ai_response,
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": ai_response
-                    },
+                    "logprobs": None,
                     "finish_reason": "stop"
                 }
             ],
             "usage": {
-                "prompt_tokens": sum(len(msg.content.split()) for msg in request.messages),
+                "prompt_tokens": len(request.prompt.split()),
                 "completion_tokens": len(ai_response.split()),
-                "total_tokens": sum(len(msg.content.split()) for msg in request.messages) + len(ai_response.split()),
+                "total_tokens": len(request.prompt.split()) + len(ai_response.split()),
                 "processing_time_ms": round(processing_time * 1000, 2)
             }
         }
@@ -238,7 +226,7 @@ async def create_simple_completion(request: CompletionRequest):
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Error generating chat completion: {str(e)}"
+            detail=f"Error generating completion: {str(e)}"
         )
 
 @router.post("/chat/simple")
