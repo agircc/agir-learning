@@ -103,8 +103,8 @@ export default function UsersPage() {
   }
 
   // Generate pagination items
-  const getPaginationItems = () => {
-    const items = []
+  const getPaginationItems = (): (number | string)[] => {
+    const items: (number | string)[] = []
     const maxVisible = 5
 
     if (totalPages <= maxVisible) {
