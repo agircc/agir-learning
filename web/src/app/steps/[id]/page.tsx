@@ -73,6 +73,19 @@ export default function StepDetailsPage() {
     }
   }, [id])
 
+  // Handle URL hash navigation to conversations
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#conversations') {
+      // Wait for the component to render and scroll to conversations
+      setTimeout(() => {
+        const conversationsElement = document.getElementById('conversations-section')
+        if (conversationsElement) {
+          conversationsElement.scrollIntoView({ behavior: 'smooth' })
+        }
+      }, 100)
+    }
+  }, [conversations])
+
   if (loading) {
     return (
       <div className="container mx-auto py-10">
@@ -145,7 +158,7 @@ export default function StepDetailsPage() {
             </div>
 
             {conversations.length > 0 && (
-              <div>
+              <div id="conversations-section">
                 <h3 className="text-lg font-medium mb-4">Conversations</h3>
                 <Tabs defaultValue={conversations[0].id}>
                   <TabsList className="mb-4">
