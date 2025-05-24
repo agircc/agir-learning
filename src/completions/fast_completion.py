@@ -101,6 +101,50 @@ class FastCompletion:
             Generated completion
         """
         try:
+            relevant_memories = self.memory_retriever.search_memories(prompt, k=5)
+
+ # Format memories for context
+            memory_context = self._format_memories_for_context(relevant_memories)
+            
+            # Create system prompt with user context and memories
+            system_prompt = f"""You are {self.user.first_name} {self.user.last_name}.
+Respond based on your knowledge and the provided context.
+
+{memory_context}
+
+Provide a helpful, accurate response based on the above context."""
+            
+            # Create messages for LLM
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=prompt)
+            ]
+            
+            # Generate response
+            response = self.llm.invoke(messages)
+            
+            # Extract content
+            if hasattr(response, 'content'):
+                return response.content
+            else:
+                return str(response)
+                
+        except Exception as e:
+            logger.error(f"Error generating completion: {str(e)}")
+            return f"Error: {str(e)}"
+    
+        
+    def complete_cot(self, prompt: str) -> str:
+        """
+        Generate completion for the given prompt with enhanced thinking process
+        
+        Args:
+            prompt: Input prompt
+            
+        Returns:
+            Generated completion
+        """
+        try:
             # Step 1: Search for initial relevant memories
             initial_memories = self.memory_retriever.search_memories(prompt, k=5)
             
