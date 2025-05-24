@@ -72,8 +72,7 @@ async def get_users(
 @router.get("/{user_id}")
 async def get_user(
     user_id: uuid.UUID, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """Get a user by ID"""
     user = db.query(User).filter(User.id == user_id).first()
