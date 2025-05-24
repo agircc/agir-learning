@@ -113,11 +113,17 @@ def j_get_next_state(db: Session, scenario_id: int, current_state_id: int, episo
           # Get LLM response
           logger.info(f"User LLM model: {user}")
           llm_model = get_llm_model(user.llm_model)
-          response = llm_model.generate(prompt)
+          response = llm_model.invoke(prompt)
+          
+          # Extract content from response
+          if hasattr(response, 'content'):
+              response_text = response.content
+          else:
+              response_text = str(response)
           
           # Find the transition based on LLM response
           for t in transitions:
-              if t.to_state and t.to_state.name.lower() in response.lower():
+              if t.to_state and t.to_state.name.lower() in response_text.lower():
                   selected_transition = t
                   break
       
