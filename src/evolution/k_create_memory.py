@@ -15,6 +15,7 @@ from agir_db.models.step import Step, StepStatus
 from agir_db.models.chat_message import ChatMessage
 from agir_db.models.chat_conversation import ChatConversation
 
+from src.common.data_store import get_learner
 from src.evolution.a_create_or_find_episode import a_create_or_find_episode
 from src.evolution.b_get_initial_state import b_get_initial_state
 from src.evolution.c_get_state_roles import c_get_state_roles
@@ -54,22 +55,8 @@ def create_episode_memories(db: Session, episode_id: uuid.UUID) -> bool:
             logger.error(f"Scenario with ID {episode.scenario_id} not found")
             return False
             
-        # Get the learner role
-        learner_role = db.query(AgentRole).filter(
-            AgentRole.scenario_id == scenario.id,
-            AgentRole.name == scenario.learner_role
-        ).first()
-        
-        if not learner_role:
-            logger.error(f"Learner role '{scenario.learner_role}' not found in scenario {scenario.id}")
-            return False
-            
         # Find the learner user assigned to this episode
-        learner_user = db.query(User).join(
-            Step, Step.user_id == User.id
-        ).filter(
-            Step.episode_id == episode_id
-        ).first()
+        learner_user = get_learner()
         
         if not learner_user:
             logger.error(f"Learner user not found for episode {episode_id}")
