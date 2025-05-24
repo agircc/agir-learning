@@ -46,7 +46,7 @@ class FastCompletion:
     Optimized for speed with FAISS-based memory retrieval.
     """
     
-    def __init__(self, user_id: str, temperature: float = 0.7, max_tokens: Optional[int] = None):
+    def __init__(self, user_id: str, temperature: float = 0.7, max_tokens: Optional[int] = None, model: Optional[str] = None):
         """
         Initialize fast completion
         
@@ -54,6 +54,7 @@ class FastCompletion:
             user_id: User ID for context
             temperature: LLM temperature
             max_tokens: Maximum tokens to generate
+            model: Optional model name to override user's default model
         """
         self.user_id = user_id
         self.temperature = temperature
@@ -64,12 +65,16 @@ class FastCompletion:
         if not self.user:
             raise ValueError(f"User {user_id} not found")
         
-        if not self.user.llm_model:
-            raise ValueError(f"User {self.user.username} has no LLM model specified")
+        # Determine which model to use - prioritize passed-in model over user's model
+        model_to_use = model or self.user.llm_model
+        if not model_to_use:
+            raise ValueError(f"No model specified and user {self.user.username} has no default LLM model")
+        
+        self.model_name = model_to_use
         
         # Initialize LLM
         self.llm = get_llm_model(
-            self.user.llm_model, 
+            model_to_use, 
             temperature=temperature, 
             max_tokens=max_tokens
         )
@@ -373,12 +378,12 @@ Respond as the expert you are, using your knowledge to provide valuable insights
             "user_id": self.user_id,
             "username": self.user.username,
             "memory_count": self.memory_retriever.get_memory_count(),
-            "model": self.user.llm_model,
+            "model": self.model_name,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens
         }
 
-def create_fast_completion(user_id: str, temperature: float = 0.7, max_tokens: Optional[int] = None) -> Optional[FastCompletion]:
+def create_fast_completion(user_id: str, temperature: float = 0.7, max_tokens: Optional[int] = None, model: Optional[str] = None) -> Optional[FastCompletion]:
     """
     Create a fast completion instance
     
@@ -386,12 +391,13 @@ def create_fast_completion(user_id: str, temperature: float = 0.7, max_tokens: O
         user_id: User ID
         temperature: LLM temperature
         max_tokens: Maximum tokens to generate
+        model: Optional model name to override user's default model
         
     Returns:
         FastCompletion instance or None if failed
     """
     try:
-        return FastCompletion(user_id, temperature, max_tokens)
+        return FastCompletion(user_id, temperature, max_tokens, model)
     except Exception as e:
         logger.error(f"Failed to create fast completion: {str(e)}")
         return None 

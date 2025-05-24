@@ -43,7 +43,8 @@ async def create_completion(request: CompletionRequest):
         fast_completion = create_fast_completion(
             user_id=user_id,
             temperature=request.temperature,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
+            model=request.model
         )
         
         if not fast_completion:
@@ -116,7 +117,8 @@ async def create_chat_completion(request: ChatCompletionRequest):
         fast_completion = create_fast_completion(
             user_id=user_id,
             temperature=request.temperature,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
+            model=request.model
         )
         
         if not fast_completion:
@@ -181,7 +183,8 @@ async def create_simple_completion(request: CompletionRequest):
         fast_completion = create_fast_completion(
             user_id=user_id,
             temperature=request.temperature,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
+            model=request.model
         )
         
         if not fast_completion:
@@ -254,7 +257,8 @@ async def create_simple_chat_completion(request: ChatCompletionRequest):
         chat_session = create_chat_session(
             user_id=user_id,
             temperature=request.temperature,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
+            model=request.model
         )
         
         if not chat_session:

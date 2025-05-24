@@ -218,7 +218,11 @@ def detect_provider_type(model_name: str) -> str:
     """
     model_name = model_name.lower()
     
-    if model_name.startswith("gpt-") or model_name.startswith("text-davinci-"):
+    # OpenAI models
+    if (model_name.startswith("gpt-") or 
+        model_name.startswith("text-davinci-") or
+        model_name.startswith("o1-") or
+        model_name.startswith("o3-")):
         return "openai"
     elif model_name.startswith("claude-"):
         return "anthropic"
