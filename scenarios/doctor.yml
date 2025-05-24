@@ -1,6 +1,6 @@
 scenario:
   name: "Agent Hospital Full Cycle"
-  description: "Simulates the full closed cycle of patient treatment in a virtual hospital powered by LLM agents."
+  description: "Simulates the full closed cycle of dermatological treatment in a virtual hospital powered by LLM agents."
   learner_role: "doctor"
 
   learner:
@@ -15,54 +15,54 @@ scenario:
   roles:
     - name: "patient"
       model: "gpt-4.1-nano"
-      description: "Patient agent with medical history, symptoms."
+      description: "Patient agent presenting with skin-related symptoms and dermatological history."
     - name: "nurse"
       model: "gpt-4.1-nano"
-      description: "Nurse agent for triage, registration, and examinations."
+      description: "Nurse agent responsible for dermatology triage, registration, and examination support."
     - name: "doctor"
       model: "gpt-4.1-nano"
-      description: "Doctor agent for diagnosis, treatment, and follow-up."
+      description: "Dermatologist agent responsible for diagnosing and treating a variety of skin conditions."
 
   states:
     - name: "Disease Onset"
       roles: ["patient"]
-      description: "Patient experiences symptoms and decides to visit the hospital."
+      description: "Patient notices dermatological symptoms such as rashes, blisters, or skin irritation and decides to visit the hospital."
 
     - name: "Triage"
       roles: ["patient", "nurse"]
-      description: "Nurse conducts initial assessment and determines the appropriate department."
+      description: "Nurse assesses the patient's skin symptoms and refers them to the dermatology department."
 
     - name: "Registration"
       roles: ["patient", "nurse"]
-      description: "Patient registers and waits for doctor consultation."
+      description: "Patient registers at the dermatology desk and waits for a skin consultation."
 
     - name: "Consultation"
       roles: ["patient", "doctor"]
-      description: "Doctor listens to symptoms and decides on required medical examination."
+      description: "Dermatologist reviews the patient's skin issues and determines if further dermatological tests are required."
 
     - name: "Medical Examination"
       roles: ["patient", "nurse"]
-      description: "Nurse performs or assists with medical tests and generates reports."
+      description: "Nurse assists with skin-related tests such as visual inspection, swabs, or biopsies and delivers the report to the doctor."
 
     - name: "Diagnosis"
       roles: ["doctor"]
-      description: "Doctor reviews reports and provides diagnosis."
+      description: "Dermatologist reviews test results and provides a diagnosis for the skin condition."
 
     - name: "Medicine Dispensary"
       roles: ["nurse"]
-      description: "Patient receives medication based on prescription."
+      description: "Nurse provides prescribed dermatological treatments such as creams, antivirals, or antihistamines."
 
     - name: "Convalescence"
       roles: ["patient"]
-      description: "Patient returns home and recovers. May return if not healed."
+      description: "Patient follows the treatment plan at home and observes improvements in the skin condition. May return to the hospital if the condition worsens."
 
     - name: "Recovery"
       roles: ["patient"]
-      description: "Patient successfully recovers after treatment and completes the healthcare cycle."
+      description: "Patient's skin condition fully resolves, completing the treatment process."
 
     - name: "Case Closed"
       roles: ["doctor"]
-      description: "Patient follow-up is complete with no significant issues. Case is closed."
+      description: "Follow-up confirms successful dermatological care and the case is officially closed."
 
   transitions:
     - from: Disease Onset
@@ -89,7 +89,7 @@ scenario:
     - from: Convalescence
       to: Recovery
       condition: "Follow-up shows no significant issues; patient is healthy."
-  
+
     - from: Convalescence
       to: Triage
       condition: "Patient raises significant complaints or experiences recurrence of illness."
