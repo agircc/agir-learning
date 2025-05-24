@@ -136,13 +136,9 @@ export default function StepDetailsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div>
+            <div className="mb-6">
               <h3 className="text-lg font-medium mb-2">Generated Text</h3>
               <p className="p-3 bg-muted rounded-md">{step.generated_text}</p>
-            </div>
-            <div className="mb-6">
-              <h3 className="text-lg font-medium mb-2">Action</h3>
-              <p className="p-3 bg-muted rounded-md">{step.action}</p>
             </div>
 
             <div className="mb-6">
@@ -161,9 +157,9 @@ export default function StepDetailsPage() {
               <div id="conversations-section">
                 <h3 className="text-lg font-medium mb-4">Conversations</h3>
                 <Tabs defaultValue={conversations[0].id}>
-                  <TabsList className="mb-4">
+                  <TabsList className="mb-4 w-full justify-start overflow-x-auto flex-wrap sm:flex-nowrap">
                     {conversations.map((conv) => (
-                      <TabsTrigger key={conv.id} value={conv.id}>
+                      <TabsTrigger key={conv.id} value={conv.id} className="whitespace-nowrap max-w-[200px] truncate">
                         {conv.name}
                       </TabsTrigger>
                     ))}
@@ -177,7 +173,7 @@ export default function StepDetailsPage() {
                             key={message.id}
                             className="p-3 bg-muted rounded-md"
                           >
-                            <div className="mb-1 flex justify-between">
+                            <div className="mb-1 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                               <span className="font-medium">{message.sender_name}</span>
                               <span className="text-xs text-muted-foreground">
                                 {new Date(message.created_at).toLocaleString()}

@@ -180,24 +180,27 @@ export default function EpisodeDetailsPage() {
                         </div>
                       )}
 
-                      <div className="flex justify-between items-center gap-2">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                         {step.conversations_count && step.conversations_count > 0 && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => router.push(`/steps/${step.id}#conversations`)}
+                            className="w-full sm:w-auto"
                           >
                             <MessageSquare className="mr-2 h-4 w-4" />
-                            View Conversations ({step.conversations_count})
+                            <span className="hidden sm:inline">View Conversations ({step.conversations_count})</span>
+                            <span className="sm:hidden">Conversations ({step.conversations_count})</span>
                           </Button>
                         )}
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => router.push(`/steps/${step.id}`)}
-                          className="ml-auto"
+                          className="w-full sm:w-auto sm:ml-auto"
                         >
-                          View Details
+                          <span className="hidden sm:inline">View Details</span>
+                          <span className="sm:hidden">Details</span>
                           <ChevronRight className="ml-2 h-4 w-4" />
                         </Button>
                       </div>
