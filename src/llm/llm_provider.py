@@ -175,15 +175,52 @@ class OpenAILangChainProvider(BaseLangChainProvider):
         # Build ChatOpenAI kwargs
         kwargs = {
             'model_name': self.model_name,
-            'temperature': self.temperature,
             'api_key': api_key
         }
         
-        # Add max_tokens if specified
-        if self.max_tokens is not None:
+        # Check if model supports temperature parameter
+        if self._model_supports_temperature():
+            kwargs['temperature'] = self.temperature
+        else:
+            logger.warning(f"Model {self.model_name} does not support temperature parameter, skipping")
+        
+        # Check if model supports max_tokens parameter  
+        if self.max_tokens is not None and self._model_supports_max_tokens():
             kwargs['max_tokens'] = self.max_tokens
+        elif self.max_tokens is not None:
+            logger.warning(f"Model {self.model_name} does not support max_tokens parameter, skipping")
         
         self._llm = ChatOpenAI(**kwargs)
+    
+    def _model_supports_temperature(self) -> bool:
+        """Check if the model supports temperature parameter"""
+        model_name = self.model_name.lower()
+        
+        # Models that don't support temperature
+        unsupported_temperature_models = [
+            'o1-preview',
+            'o1-mini', 
+            'o3-mini',
+            'o3-preview',
+            'o4-mini'
+        ]
+        
+        return model_name not in unsupported_temperature_models
+    
+    def _model_supports_max_tokens(self) -> bool:
+        """Check if the model supports max_tokens parameter"""
+        model_name = self.model_name.lower()
+        
+        # Models that don't support max_tokens (using different parameter names)
+        unsupported_max_tokens_models = [
+            'o1-preview',
+            'o1-mini',
+            'o3-mini', 
+            'o3-preview',
+            'o4-mini'
+        ]
+        
+        return model_name not in unsupported_max_tokens_models
 
 class AnthropicLangChainProvider(BaseLangChainProvider):
     """LangChain provider for Anthropic models"""
