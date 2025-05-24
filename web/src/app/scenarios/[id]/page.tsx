@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import { scenariosAPI } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, ArrowLeft, ArrowRight } from "lucide-react"
+import { Loader2, ArrowLeft, ArrowRight, ArrowDownRight } from "lucide-react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -34,6 +34,173 @@ interface Episode {
   scenario_id: string
   status: string
   created_at: string
+}
+
+// Component for the state flow diagram
+const StateFlowDiagram = ({ states }: { states: ScenarioState[] }) => {
+  // Find starting states (states with no incoming transitions)
+  const startingStates = states.filter(state => state.transitions_to.length === 0)
+
+  // Find ending states (states with no outgoing transitions)
+  const endingStates = states.filter(state => state.transitions_from.length === 0)
+
+  return (
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-fit p-4">
+        {/* Starting states */}
+        {startingStates.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-sm font-medium mb-3 text-green-700">Starting States</h4>
+            <div className="flex flex-wrap gap-4">
+              {startingStates.map(state => (
+                <div key={state.id} className="relative">
+                  <Card className="bg-green-50 border-green-200 min-w-[200px]">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-green-800">{state.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-green-700">{state.description || "No description"}</p>
+                      {state.roles.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-green-600">Roles: {state.roles.length}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Outgoing transitions */}
+                  {state.transitions_from.map(transition => (
+                    <div key={transition.id} className="flex items-center mt-2 ml-4">
+                      <ArrowDownRight className="h-4 w-4 text-muted-foreground mr-2" />
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                        {transition.description}
+                      </span>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground mx-2" />
+                      <span className="text-xs font-medium">{transition.to_state_name}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Middle states (have both incoming and outgoing transitions) */}
+        {states.filter(state => state.transitions_to.length > 0 && state.transitions_from.length > 0).length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-sm font-medium mb-3 text-blue-700">Intermediate States</h4>
+            <div className="flex flex-wrap gap-4">
+              {states
+                .filter(state => state.transitions_to.length > 0 && state.transitions_from.length > 0)
+                .map(state => (
+                  <div key={state.id} className="relative">
+                    <Card className="bg-blue-50 border-blue-200 min-w-[200px]">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-blue-800">{state.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <p className="text-xs text-blue-700">{state.description || "No description"}</p>
+                        {state.roles.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs text-blue-600">Roles: {state.roles.length}</p>
+                          </div>
+                        )}
+
+                        {/* Incoming transitions */}
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-blue-600">From:</p>
+                          {state.transitions_to.map(transition => (
+                            <div key={transition.id} className="text-xs text-blue-500 ml-2">
+                              {transition.from_state_name}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Outgoing transitions */}
+                    {state.transitions_from.map(transition => (
+                      <div key={transition.id} className="flex items-center mt-2 ml-4">
+                        <ArrowDownRight className="h-4 w-4 text-muted-foreground mr-2" />
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                          {transition.description}
+                        </span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground mx-2" />
+                        <span className="text-xs font-medium">{transition.to_state_name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Ending states */}
+        {endingStates.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-sm font-medium mb-3 text-red-700">Ending States</h4>
+            <div className="flex flex-wrap gap-4">
+              {endingStates.map(state => (
+                <div key={state.id} className="relative">
+                  <Card className="bg-red-50 border-red-200 min-w-[200px]">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-red-800">{state.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-red-700">{state.description || "No description"}</p>
+                      {state.roles.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-red-600">Roles: {state.roles.length}</p>
+                        </div>
+                      )}
+
+                      {/* Incoming transitions */}
+                      {state.transitions_to.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-red-600">From:</p>
+                          {state.transitions_to.map(transition => (
+                            <div key={transition.id} className="text-xs text-red-500 ml-2">
+                              {transition.from_state_name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Show states that have no transitions at all (isolated states) */}
+        {states.filter(state => state.transitions_to.length === 0 && state.transitions_from.length === 0).length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-sm font-medium mb-3 text-gray-700">Isolated States</h4>
+            <div className="flex flex-wrap gap-4">
+              {states
+                .filter(state => state.transitions_to.length === 0 && state.transitions_from.length === 0)
+                .map(state => (
+                  <Card key={state.id} className="bg-gray-50 border-gray-200 min-w-[200px]">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-gray-800">{state.name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <p className="text-xs text-gray-700">{state.description || "No description"}</p>
+                      {state.roles.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs text-gray-600">Roles: {state.roles.length}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function ScenarioDetailsPage() {
@@ -121,13 +288,26 @@ export default function ScenarioDetailsPage() {
           <CardContent>
             <p className="mb-4">{scenario.description || "No description available"}</p>
 
-            <Tabs defaultValue="states" className="mt-6">
+            <Tabs defaultValue="flow" className="mt-6">
               <TabsList>
-                <TabsTrigger value="states">States</TabsTrigger>
+                <TabsTrigger value="flow">State Flow</TabsTrigger>
+                <TabsTrigger value="details">State Details</TabsTrigger>
                 <TabsTrigger value="episodes">Episodes ({episodes.length})</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="states" className="space-y-4 mt-4">
+              <TabsContent value="flow" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>State Transition Flow</CardTitle>
+                    <CardDescription>Visual representation of how states transition to each other</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <StateFlowDiagram states={scenario.states} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="details" className="space-y-4 mt-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {scenario.states.map((state) => (
                     <Card key={state.id} className="bg-muted/40">
@@ -149,12 +329,25 @@ export default function ScenarioDetailsPage() {
                         )}
 
                         {state.transitions_from.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium mb-1">Transitions:</h4>
+                          <div className="mb-3">
+                            <h4 className="text-sm font-medium mb-1">Transitions To:</h4>
                             <ul className="text-sm list-disc pl-5">
                               {state.transitions_from.map((transition) => (
                                 <li key={transition.id}>
                                   {transition.description} → {transition.to_state_name}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {state.transitions_to.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium mb-1">Transitions From:</h4>
+                            <ul className="text-sm list-disc pl-5">
+                              {state.transitions_to.map((transition) => (
+                                <li key={transition.id}>
+                                  {transition.from_state_name} → {state.name}
                                 </li>
                               ))}
                             </ul>
