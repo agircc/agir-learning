@@ -10,22 +10,17 @@ scenario:
     gender: "MALE"
     birth_date: "1979-01-01" 
     profession: "Dermatologist"
-    model: "phi:latest"
-    skills:
-      - "Diagnosis"
-      - "Treatment Planning"
-      - "Skin Surgery"
-    evolution_objective: "Improve diagnostic and treatment accuracy for skin-related diseases through repeated patient interactions and reflection."
+    model: "gpt-4.1-nano"
 
   roles:
     - name: "patient"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
       description: "Patient agent with medical history, symptoms."
     - name: "nurse"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
       description: "Nurse agent for triage, registration, and examinations."
     - name: "doctor"
-      model: "phi:latest"
+      model: "gpt-4.1-nano"
       description: "Doctor agent for diagnosis, treatment, and follow-up."
 
   states:
@@ -34,19 +29,19 @@ scenario:
       description: "Patient experiences symptoms and decides to visit the hospital."
 
     - name: "Triage"
-      roles: ["nurse"]
+      roles: ["patient", "nurse"]
       description: "Nurse conducts initial assessment and determines the appropriate department."
 
     - name: "Registration"
-      roles: ["nurse"]
+      roles: ["patient", "nurse"]
       description: "Patient registers and waits for doctor consultation."
 
     - name: "Consultation"
-      roles: ["doctor"]
+      roles: ["patient", "doctor"]
       description: "Doctor listens to symptoms and decides on required medical examination."
 
     - name: "Medical Examination"
-      roles: ["nurse"]
+      roles: ["patient", "nurse"]
       description: "Nurse performs or assists with medical tests and generates reports."
 
     - name: "Diagnosis"
@@ -64,10 +59,6 @@ scenario:
     - name: "Recovery"
       roles: ["patient"]
       description: "Patient successfully recovers after treatment and completes the healthcare cycle."
-
-    - name: "Post-Hospital Follow-up"
-      roles: ["doctor"]
-      description: "Doctor handles patient follow-up and complaints."
 
     - name: "Case Closed"
       roles: ["doctor"]
@@ -97,14 +88,11 @@ scenario:
 
     - from: Convalescence
       to: Recovery
-
-    - from: Recovery
-      to: Post-Hospital Follow-up
-
-    - from: Post-Hospital Follow-up
+      condition: "Follow-up shows no significant issues; patient is healthy."
+  
+    - from: Convalescence
       to: Triage
       condition: "Patient raises significant complaints or experiences recurrence of illness."
 
-    - from: Post-Hospital Follow-up
+    - from: Recovery
       to: Case Closed
-      condition: "Follow-up shows no significant issues; patient is healthy."
