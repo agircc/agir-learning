@@ -93,7 +93,7 @@ async def get_step_conversations(step_id: uuid.UUID, db: Session = Depends(get_d
         
         result.append({
             "id": conv.id,
-            "name": conv.name if conv.name else f"Conversation {conv.id}",
+            "name": conv.title if hasattr(conv, 'title') and conv.title else f"Conversation {conv.id}",
             "created_at": conv.created_at,
             "messages": formatted_messages
         })
