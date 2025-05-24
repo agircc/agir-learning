@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Loader2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 interface State {
   id: string
@@ -156,17 +155,14 @@ export default function StepDetailsPage() {
             {conversations.length > 0 && (
               <div id="conversations-section">
                 <h3 className="text-lg font-medium mb-4">Conversations</h3>
-                <Tabs defaultValue={conversations[0].id}>
-                  <TabsList className="mb-4 w-full justify-start overflow-x-auto flex-wrap sm:flex-nowrap">
-                    {conversations.map((conv) => (
-                      <TabsTrigger key={conv.id} value={conv.id} className="whitespace-nowrap max-w-[200px] truncate">
-                        {conv.name}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-
+                <div className="space-y-6">
                   {conversations.map((conv) => (
-                    <TabsContent key={conv.id} value={conv.id} className="space-y-4">
+                    <div key={conv.id} className="space-y-4">
+                      {conversations.length > 1 && (
+                        <h4 className="text-md font-medium text-muted-foreground border-b pb-2">
+                          {conv.name}
+                        </h4>
+                      )}
                       <div className="space-y-4">
                         {conv.messages.map((message) => (
                           <div
@@ -183,9 +179,9 @@ export default function StepDetailsPage() {
                           </div>
                         ))}
                       </div>
-                    </TabsContent>
+                    </div>
                   ))}
-                </Tabs>
+                </div>
               </div>
             )}
           </CardContent>
@@ -193,4 +189,4 @@ export default function StepDetailsPage() {
       </div>
     </div>
   )
-} 
+}
