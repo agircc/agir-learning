@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import { usersAPI, memoriesAPI } from "@/lib/api"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, ArrowLeft, MessageSquare, BookOpen, FlaskConical, Clock, CalendarDays, Info } from "lucide-react"
+import { Loader2, ArrowLeft, MessageSquare, BookOpen, FlaskConical, Clock, CalendarDays, Info, GraduationCap } from "lucide-react"
 import Link from "next/link"
 import {
   Pagination,
@@ -76,6 +76,14 @@ export default function UserDetailsPage() {
   const [memoriesTotal, setMemoriesTotal] = useState(0)
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [episodesLoading, setEpisodesLoading] = useState(false)
+  const [episodesPage, setEpisodesPage] = useState(1)
+  const [episodesPageCount, setEpisodesPageCount] = useState(1)
+  const [episodesTotal, setEpisodesTotal] = useState(0)
+  const [learningEpisodes, setLearningEpisodes] = useState<Episode[]>([])
+  const [learningLoading, setLearningLoading] = useState(false)
+  const [learningPage, setLearningPage] = useState(1)
+  const [learningPageCount, setLearningPageCount] = useState(1)
+  const [learningTotal, setLearningTotal] = useState(0)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -106,12 +114,28 @@ export default function UserDetailsPage() {
   const fetchEpisodes = async () => {
     try {
       setEpisodesLoading(true)
-      const episodesData = await usersAPI.getEpisodes(id)
-      setEpisodes(episodesData)
+      const episodesData = await usersAPI.getEpisodes(id, episodesPage, 10)
+      setEpisodes(episodesData.items)
+      setEpisodesPageCount(episodesData.pages)
+      setEpisodesTotal(episodesData.total)
     } catch (err) {
       console.error("Failed to fetch episodes:", err)
     } finally {
       setEpisodesLoading(false)
+    }
+  }
+
+  const fetchLearningEpisodes = async () => {
+    try {
+      setLearningLoading(true)
+      const learningData = await usersAPI.getLearningEpisodes(id, learningPage, 10)
+      setLearningEpisodes(learningData.items)
+      setLearningPageCount(learningData.pages)
+      setLearningTotal(learningData.total)
+    } catch (err) {
+      console.error("Failed to fetch learning episodes:", err)
+    } finally {
+      setLearningLoading(false)
     }
   }
 
@@ -122,6 +146,28 @@ export default function UserDetailsPage() {
   const handlePageChange = (page: number) => {
     setMemoriesPage(page)
   }
+
+  const handleEpisodesPageChange = (page: number) => {
+    setEpisodesPage(page)
+  }
+
+  const handleLearningPageChange = (page: number) => {
+    setLearningPage(page)
+  }
+
+  // Fetch episodes when page changes
+  useEffect(() => {
+    if (episodesPage > 1 && episodes.length > 0) {
+      fetchEpisodes()
+    }
+  }, [episodesPage])
+
+  // Fetch learning episodes when page changes
+  useEffect(() => {
+    if (learningPage > 1 && learningEpisodes.length > 0) {
+      fetchLearningEpisodes()
+    }
+  }, [learningPage])
 
   if (loading) {
     return (
@@ -205,15 +251,22 @@ export default function UserDetailsPage() {
             if (value === "episodes" && episodes.length === 0) {
               fetchEpisodes()
             }
+            if (value === "learning" && learningEpisodes.length === 0) {
+              fetchLearningEpisodes()
+            }
           }}>
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="memories" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
                 Memories ({memoriesTotal})
               </TabsTrigger>
               <TabsTrigger value="episodes" className="flex items-center gap-2">
                 <FlaskConical className="h-4 w-4" />
-                Episodes
+                Episodes ({episodesTotal})
+              </TabsTrigger>
+              <TabsTrigger value="learning" className="flex items-center gap-2">
+                <GraduationCap className="h-4 w-4" />
+                Learning ({learningTotal})
               </TabsTrigger>
             </TabsList>
 
@@ -540,6 +593,319 @@ export default function UserDetailsPage() {
                           </CardContent>
                         </Card>
                       ))}
+
+                      {episodesPageCount > 1 && (
+                        <Pagination className="mt-6">
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (episodesPage > 1) handleEpisodesPageChange(episodesPage - 1)
+                                }}
+                                className={episodesPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                              />
+                            </PaginationItem>
+
+                            {episodesPageCount <= 7 ? (
+                              [...Array(episodesPageCount)].map((_, i) => (
+                                <PaginationItem key={i}>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handleEpisodesPageChange(i + 1)
+                                    }}
+                                    isActive={episodesPage === i + 1}
+                                  >
+                                    {i + 1}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              ))
+                            ) : (
+                              <>
+                                <PaginationItem>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handleEpisodesPageChange(1)
+                                    }}
+                                    isActive={episodesPage === 1}
+                                  >
+                                    1
+                                  </PaginationLink>
+                                </PaginationItem>
+
+                                {episodesPage > 3 && (
+                                  <PaginationItem>
+                                    <div className="flex h-9 w-9 items-center justify-center">
+                                      …
+                                    </div>
+                                  </PaginationItem>
+                                )}
+
+                                {Array.from({ length: 3 }, (_, i) => {
+                                  const pageNumber = Math.min(
+                                    Math.max(episodesPage + i - 1, 2),
+                                    episodesPageCount - 1
+                                  )
+
+                                  if (pageNumber === 1 || pageNumber === episodesPageCount) {
+                                    return null
+                                  }
+
+                                  return (
+                                    <PaginationItem key={pageNumber}>
+                                      <PaginationLink
+                                        href="#"
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          handleEpisodesPageChange(pageNumber)
+                                        }}
+                                        isActive={episodesPage === pageNumber}
+                                      >
+                                        {pageNumber}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  )
+                                })}
+
+                                {episodesPage < episodesPageCount - 2 && (
+                                  <PaginationItem>
+                                    <div className="flex h-9 w-9 items-center justify-center">
+                                      …
+                                    </div>
+                                  </PaginationItem>
+                                )}
+
+                                <PaginationItem>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handleEpisodesPageChange(episodesPageCount)
+                                    }}
+                                    isActive={episodesPage === episodesPageCount}
+                                  >
+                                    {episodesPageCount}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </>
+                            )}
+
+                            <PaginationItem>
+                              <PaginationNext
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (episodesPage < episodesPageCount) handleEpisodesPageChange(episodesPage + 1)
+                                }}
+                                className={episodesPage >= episodesPageCount ? "pointer-events-none opacity-50" : ""}
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="learning" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Learning Episodes</CardTitle>
+                  <CardDescription>Episodes initiated by this user for learning</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {learningLoading ? (
+                    <div className="flex justify-center items-center h-32">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : learningEpisodes.length === 0 ? (
+                    <div className="text-center p-4 bg-muted/40 rounded-md">
+                      <p className="text-muted-foreground">No learning episodes found for this user.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {learningEpisodes.map((episode) => (
+                        <Card key={episode.id} className="overflow-hidden transition-all hover:shadow-md border-l-4 border-l-orange-500/50">
+                          <CardHeader className="pb-2">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-2">
+                                <GraduationCap className="h-4 w-4 text-orange-500" />
+                                <CardTitle className="text-lg">
+                                  Learning Episode {episode.id.split('-')[0]}
+                                </CardTitle>
+                              </div>
+                              <Badge variant={episode.status === 'completed' ? 'default' : 'secondary'}>
+                                {episode.status}
+                              </Badge>
+                            </div>
+                            <CardDescription className="flex items-center gap-1">
+                              <CalendarDays className="h-3 w-3" />
+                              {new Date(episode.created_at).toLocaleDateString()} {new Date(episode.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {episode.scenario_name && (
+                                <div>
+                                  <span className="text-sm font-medium text-muted-foreground">Scenario: </span>
+                                  <span className="text-sm">{episode.scenario_name}</span>
+                                </div>
+                              )}
+
+                              {episode.role_description && (
+                                <div>
+                                  <span className="text-sm font-medium text-muted-foreground">Role: </span>
+                                  <span className="text-sm">{episode.role_description}</span>
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 p-2 bg-orange-50 rounded-md border">
+                                <GraduationCap className="h-4 w-4 text-orange-600" />
+                                <span className="text-sm text-orange-700 font-medium">Self-initiated Learning Session</span>
+                              </div>
+
+                              <div className="flex justify-end gap-2 pt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/scenarios/${episode.scenario_id}`)}
+                                >
+                                  View Scenario
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/episodes/${episode.id}`)}
+                                >
+                                  View Episode
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+
+                      {learningPageCount > 1 && (
+                        <Pagination className="mt-6">
+                          <PaginationContent>
+                            <PaginationItem>
+                              <PaginationPrevious
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (learningPage > 1) handleLearningPageChange(learningPage - 1)
+                                }}
+                                className={learningPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                              />
+                            </PaginationItem>
+
+                            {learningPageCount <= 7 ? (
+                              [...Array(learningPageCount)].map((_, i) => (
+                                <PaginationItem key={i}>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handleLearningPageChange(i + 1)
+                                    }}
+                                    isActive={learningPage === i + 1}
+                                  >
+                                    {i + 1}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              ))
+                            ) : (
+                              <>
+                                <PaginationItem>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handleLearningPageChange(1)
+                                    }}
+                                    isActive={learningPage === 1}
+                                  >
+                                    1
+                                  </PaginationLink>
+                                </PaginationItem>
+
+                                {learningPage > 3 && (
+                                  <PaginationItem>
+                                    <div className="flex h-9 w-9 items-center justify-center">
+                                      …
+                                    </div>
+                                  </PaginationItem>
+                                )}
+
+                                {Array.from({ length: 3 }, (_, i) => {
+                                  const pageNumber = Math.min(
+                                    Math.max(learningPage + i - 1, 2),
+                                    learningPageCount - 1
+                                  )
+
+                                  if (pageNumber === 1 || pageNumber === learningPageCount) {
+                                    return null
+                                  }
+
+                                  return (
+                                    <PaginationItem key={pageNumber}>
+                                      <PaginationLink
+                                        href="#"
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          handleLearningPageChange(pageNumber)
+                                        }}
+                                        isActive={learningPage === pageNumber}
+                                      >
+                                        {pageNumber}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  )
+                                })}
+
+                                {learningPage < learningPageCount - 2 && (
+                                  <PaginationItem>
+                                    <div className="flex h-9 w-9 items-center justify-center">
+                                      …
+                                    </div>
+                                  </PaginationItem>
+                                )}
+
+                                <PaginationItem>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handleLearningPageChange(learningPageCount)
+                                    }}
+                                    isActive={learningPage === learningPageCount}
+                                  >
+                                    {learningPageCount}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </>
+                            )}
+
+                            <PaginationItem>
+                              <PaginationNext
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (learningPage < learningPageCount) handleLearningPageChange(learningPage + 1)
+                                }}
+                                className={learningPage >= learningPageCount ? "pointer-events-none opacity-50" : ""}
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      )}
                     </div>
                   )}
                 </CardContent>

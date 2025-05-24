@@ -133,7 +133,14 @@ export const usersAPI = {
   },
   getById: (id: string) => fetchAPI<any>(`/api/users/${id}`),
   getProfile: (id: string) => fetchAPI<any>(`/api/users/${id}/profile`),
-  getEpisodes: (id: string) => fetchAPI<any[]>(`/api/users/${id}/episodes`),
+  getEpisodes: (id: string, page = 1, pageSize = 10) => {
+    const url = `/api/users/${id}/episodes?page=${page}&page_size=${pageSize}`;
+    return fetchAPI<any>(url);
+  },
+  getLearningEpisodes: (id: string, page = 1, pageSize = 10) => {
+    const url = `/api/users/${id}/learning?page=${page}&page_size=${pageSize}`;
+    return fetchAPI<any>(url);
+  },
 };
 
 /**

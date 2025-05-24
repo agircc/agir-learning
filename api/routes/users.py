@@ -136,7 +136,9 @@ async def get_user_profile(
 
 @router.get("/{user_id}/episodes")
 async def get_user_episodes(
-    user_id: uuid.UUID, 
+    user_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     """Get episodes that this user has participated in via agent assignments"""
@@ -144,13 +146,25 @@ async def get_user_episodes(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
-    # Get all agent assignments for this user
-    assignments = db.query(AgentAssignment).filter(
+    # Get agent assignments for this user with pagination
+    assignments_query = db.query(AgentAssignment).filter(
         AgentAssignment.user_id == user_id
-    ).all()
+    )
+    
+    # Get total count for pagination
+    total = assignments_query.count()
+    
+    # Apply pagination
+    assignments = assignments_query.order_by(desc(AgentAssignment.created_at)).offset((page - 1) * page_size).limit(page_size).all()
     
     if not assignments:
-        return []
+        return {
+            "items": [],
+            "total": total,
+            "page": page,
+            "size": page_size,
+            "pages": ceil(total / page_size) if total > 0 else 1
+        }
     
     # Get episodes and related info
     result = []
@@ -181,4 +195,82 @@ async def get_user_episodes(
     # Sort by creation date, newest first
     result.sort(key=lambda x: x["created_at"], reverse=True)
     
-    return result 
+    return {
+        "items": result,
+        "total": total,
+        "page": page,
+        "size": page_size,
+        "pages": ceil(total / page_size) if total > 0 else 1
+    }
+
+@router.get("/{user_id}/learning")
+async def get_user_learning_episodes(
+    user_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get episodes that this user initiated (learning episodes)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Get episodes initiated by this user with pagination
+    episodes_query = db.query(Episode).filter(
+        Episode.initiator_id == user_id
+    )
+    
+    # Get total count for pagination
+    total = episodes_query.count()
+    
+    # Apply pagination
+    episodes = episodes_query.order_by(desc(Episode.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+    
+    if not episodes:
+        return {
+            "items": [],
+            "total": total,
+            "page": page,
+            "size": page_size,
+            "pages": ceil(total / page_size) if total > 0 else 1
+        }
+    
+    # Get related info for each episode
+    result = []
+    for episode in episodes:
+        # Get scenario
+        scenario = db.query(Scenario).filter(Scenario.id == episode.scenario_id).first()
+        
+        # Get user's role in this episode (if any)
+        assignment = db.query(AgentAssignment).filter(
+            AgentAssignment.episode_id == episode.id,
+            AgentAssignment.user_id == user_id
+        ).first()
+        
+        role_description = None
+        if assignment:
+            role = db.query(AgentRole).filter(AgentRole.id == assignment.role_id).first()
+            role_description = assignment.description if assignment.description else (role.description if role else None)
+        
+        episode_data = {
+            "id": episode.id,
+            "scenario_id": episode.scenario_id,
+            "status": episode.status.value if hasattr(episode.status, 'value') else str(episode.status),
+            "created_at": episode.created_at,
+            "updated_at": episode.updated_at,
+            "scenario_name": scenario.name if scenario else None,
+            "role_description": role_description
+        }
+        
+        result.append(episode_data)
+    
+    # Sort by creation date, newest first
+    result.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return {
+        "items": result,
+        "total": total,
+        "page": page,
+        "size": page_size,
+        "pages": ceil(total / page_size) if total > 0 else 1
+    } 
