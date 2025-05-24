@@ -133,6 +133,7 @@ export const usersAPI = {
   },
   getById: (id: string) => fetchAPI<any>(`/api/users/${id}`),
   getProfile: (id: string) => fetchAPI<any>(`/api/users/${id}/profile`),
+  getEpisodes: (id: string) => fetchAPI<any[]>(`/api/users/${id}/episodes`),
 };
 
 /**

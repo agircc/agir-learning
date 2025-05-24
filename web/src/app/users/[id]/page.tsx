@@ -16,6 +16,7 @@ import {
   PaginationPrevious
 } from "@/components/ui/pagination"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 interface User {
@@ -52,6 +53,16 @@ interface Memory {
   }
 }
 
+interface Episode {
+  id: string
+  scenario_id: string
+  status: string
+  created_at: string
+  updated_at: string
+  scenario_name?: string
+  role_description?: string
+}
+
 export default function UserDetailsPage() {
   const router = useRouter()
   const params = useParams()
@@ -63,6 +74,8 @@ export default function UserDetailsPage() {
   const [memoriesPage, setMemoriesPage] = useState(1)
   const [memoriesPageCount, setMemoriesPageCount] = useState(1)
   const [memoriesTotal, setMemoriesTotal] = useState(0)
+  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [episodesLoading, setEpisodesLoading] = useState(false)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -89,6 +102,18 @@ export default function UserDetailsPage() {
       fetchUserData()
     }
   }, [id, memoriesPage])
+
+  const fetchEpisodes = async () => {
+    try {
+      setEpisodesLoading(true)
+      const episodesData = await usersAPI.getEpisodes(id)
+      setEpisodes(episodesData)
+    } catch (err) {
+      console.error("Failed to fetch episodes:", err)
+    } finally {
+      setEpisodesLoading(false)
+    }
+  }
 
   const handleChatClick = () => {
     router.push(`/chat/${user?.id}`)
@@ -140,6 +165,7 @@ export default function UserDetailsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* User Profile Sidebar */}
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle className="text-2xl">User Profile</CardTitle>
@@ -173,270 +199,354 @@ export default function UserDetailsPage() {
           </CardContent>
         </Card>
 
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex justify-between items-center">
-              <span>Memories</span>
-              <span className="text-sm font-normal text-muted-foreground">
-                Total: {memoriesTotal}
-              </span>
-            </CardTitle>
-            <CardDescription>User&apos;s memories and reflections</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {memories.length === 0 ? (
-              <div className="text-center p-4 bg-muted/40 rounded-md">
-                <p className="text-muted-foreground">No memories available for this user.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {memories.map((memory) => (
-                  <Card key={memory.id} className={cn(
-                    "overflow-hidden transition-all hover:shadow-md",
-                    memory.source === "book_reading_record" ? "border-l-4 border-l-blue-500/50" :
-                      memory.source === "episode" ? "border-l-4 border-l-green-500/50" : ""
-                  )}>
-                    <CardHeader className="pb-2 relative">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          {memory.source === "book_reading_record" && (
-                            <BookOpen className="h-4 w-4 text-blue-500" />
-                          )}
-                          {memory.source === "episode" && (
-                            <FlaskConical className="h-4 w-4 text-green-500" />
-                          )}
-                          <Badge variant="outline" className="font-normal">
-                            {memory.memory_type}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Info className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md font-medium">
-                            {memory.importance.toFixed(1)}
-                          </span>
-                        </div>
-                      </div>
-                      <CardDescription className="flex items-center mt-2 text-xs gap-1">
-                        <Clock className="h-3 w-3" />
-                        {new Date(memory.created_at).toLocaleDateString()} {new Date(memory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="whitespace-pre-wrap leading-relaxed">{memory.content}</p>
+        {/* Main Content with Tabs */}
+        <div className="md:col-span-2">
+          <Tabs defaultValue="memories" className="w-full" onValueChange={(value) => {
+            if (value === "episodes" && episodes.length === 0) {
+              fetchEpisodes()
+            }
+          }}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="memories" className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4" />
+                Memories ({memoriesTotal})
+              </TabsTrigger>
+              <TabsTrigger value="episodes" className="flex items-center gap-2">
+                <FlaskConical className="h-4 w-4" />
+                Episodes
+              </TabsTrigger>
+            </TabsList>
 
-                      {memory.source && memory.meta_data && (
-                        <div className="mt-4 pt-3 border-t text-xs text-muted-foreground">
-                          {memory.source === "episode" && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-1.5">
-                                <FlaskConical className="h-3.5 w-3.5" />
-                                <span className="font-medium">From Simulation</span>
+            <TabsContent value="memories" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Memories</CardTitle>
+                  <CardDescription>User&apos;s memories and reflections</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {memories.length === 0 ? (
+                    <div className="text-center p-4 bg-muted/40 rounded-md">
+                      <p className="text-muted-foreground">No memories available for this user.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {memories.map((memory) => (
+                        <Card key={memory.id} className={cn(
+                          "overflow-hidden transition-all hover:shadow-md",
+                          memory.source === "book_reading_record" ? "border-l-4 border-l-blue-500/50" :
+                            memory.source === "episode" ? "border-l-4 border-l-green-500/50" : ""
+                        )}>
+                          <CardHeader className="pb-2 relative">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-2">
+                                {memory.source === "book_reading_record" && (
+                                  <BookOpen className="h-4 w-4 text-blue-500" />
+                                )}
+                                {memory.source === "episode" && (
+                                  <FlaskConical className="h-4 w-4 text-green-500" />
+                                )}
+                                <Badge variant="outline" className="font-normal">
+                                  {memory.memory_type}
+                                </Badge>
                               </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
-                                {memory.meta_data.scenario_name && (
-                                  <div className="col-span-full">
-                                    <span className="text-muted-foreground">Scenario: </span>
-                                    <span className="text-foreground">{memory.meta_data.scenario_name}</span>
-                                  </div>
-                                )}
-                                {memory.meta_data.scenario_id && (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-muted-foreground">Scenario ID: </span>
-                                    <Link
-                                      href={`/scenarios/${memory.meta_data.scenario_id}`}
-                                      className="text-primary hover:underline"
-                                    >
-                                      View
-                                    </Link>
-                                  </div>
-                                )}
-                                {memory.meta_data.episode_id && (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-muted-foreground">Episode ID: </span>
-                                    <Link
-                                      href={`/scenarios/${memory.meta_data.scenario_id}/episodes/${memory.meta_data.episode_id}`}
-                                      className="text-primary hover:underline"
-                                    >
-                                      View
-                                    </Link>
-                                  </div>
-                                )}
+                              <div className="flex items-center gap-1">
+                                <Info className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md font-medium">
+                                  {memory.importance.toFixed(1)}
+                                </span>
                               </div>
                             </div>
-                          )}
+                            <CardDescription className="flex items-center mt-2 text-xs gap-1">
+                              <Clock className="h-3 w-3" />
+                              {new Date(memory.created_at).toLocaleDateString()} {new Date(memory.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="whitespace-pre-wrap leading-relaxed">{memory.content}</p>
 
-                          {memory.source === "book_reading_record" && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-1.5">
-                                <BookOpen className="h-3.5 w-3.5" />
-                                <span className="font-medium">From Book Reading</span>
+                            {memory.source && memory.meta_data && (
+                              <div className="mt-4 pt-3 border-t text-xs text-muted-foreground">
+                                {memory.source === "episode" && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <FlaskConical className="h-3.5 w-3.5" />
+                                      <span className="font-medium">From Simulation</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
+                                      {memory.meta_data.scenario_name && (
+                                        <div className="col-span-full">
+                                          <span className="text-muted-foreground">Scenario: </span>
+                                          <span className="text-foreground">{memory.meta_data.scenario_name}</span>
+                                        </div>
+                                      )}
+                                      {memory.meta_data.scenario_id && (
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-muted-foreground">Scenario ID: </span>
+                                          <Link
+                                            href={`/scenarios/${memory.meta_data.scenario_id}`}
+                                            className="text-primary hover:underline"
+                                          >
+                                            View
+                                          </Link>
+                                        </div>
+                                      )}
+                                      {memory.meta_data.episode_id && (
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-muted-foreground">Episode ID: </span>
+                                          <Link
+                                            href={`/episodes/${memory.meta_data.episode_id}`}
+                                            className="text-primary hover:underline"
+                                          >
+                                            View
+                                          </Link>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {memory.source === "book_reading_record" && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-1.5">
+                                      <BookOpen className="h-3.5 w-3.5" />
+                                      <span className="font-medium">From Book Reading</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
+                                      {memory.meta_data.book_title && (
+                                        <div className="col-span-full">
+                                          <span className="text-muted-foreground">Book: </span>
+                                          <span className="text-foreground font-medium">{memory.meta_data.book_title}</span>
+                                        </div>
+                                      )}
+                                      {memory.meta_data.memory_type && (
+                                        <div>
+                                          <span className="text-muted-foreground">Type: </span>
+                                          <span>{memory.meta_data.memory_type}</span>
+                                        </div>
+                                      )}
+                                      {memory.meta_data.importance_score !== undefined && (
+                                        <div>
+                                          <span className="text-muted-foreground">Importance: </span>
+                                          <span>{memory.meta_data.importance_score}</span>
+                                        </div>
+                                      )}
+                                      {memory.meta_data.read_date && (
+                                        <div className="col-span-full flex items-center gap-1">
+                                          <CalendarDays className="h-3 w-3" />
+                                          <span className="text-muted-foreground">Read on: </span>
+                                          <span>{new Date(memory.meta_data.read_date).toLocaleDateString()} {new Date(memory.meta_data.read_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
 
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
-                                {memory.meta_data.book_title && (
-                                  <div className="col-span-full">
-                                    <span className="text-muted-foreground">Book: </span>
-                                    <span className="text-foreground font-medium">{memory.meta_data.book_title}</span>
-                                  </div>
-                                )}
-                                {memory.meta_data.memory_type && (
-                                  <div>
-                                    <span className="text-muted-foreground">Type: </span>
-                                    <span>{memory.meta_data.memory_type}</span>
-                                  </div>
-                                )}
-                                {memory.meta_data.importance_score !== undefined && (
-                                  <div>
-                                    <span className="text-muted-foreground">Importance: </span>
-                                    <span>{memory.meta_data.importance_score}</span>
-                                  </div>
-                                )}
-                                {memory.meta_data.read_date && (
-                                  <div className="col-span-full flex items-center gap-1">
-                                    <CalendarDays className="h-3 w-3" />
-                                    <span className="text-muted-foreground">Read on: </span>
-                                    <span>{new Date(memory.meta_data.read_date).toLocaleDateString()} {new Date(memory.meta_data.read_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-
-                {memoriesPageCount > 1 && (
-                  <Pagination className="mt-6">
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            if (memoriesPage > 1) handlePageChange(memoriesPage - 1)
-                          }}
-                          className={memoriesPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                        />
-                      </PaginationItem>
-
-                      {memoriesPageCount <= 7 ? (
-                        // Show all pages if 7 or fewer
-                        [...Array(memoriesPageCount)].map((_, i) => (
-                          <PaginationItem key={i}>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                handlePageChange(i + 1)
-                              }}
-                              isActive={memoriesPage === i + 1}
-                            >
-                              {i + 1}
-                            </PaginationLink>
-                          </PaginationItem>
-                        ))
-                      ) : (
-                        // Show limited pages with ellipsis for large page counts
-                        <>
-                          {/* First page */}
-                          <PaginationItem>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                handlePageChange(1)
-                              }}
-                              isActive={memoriesPage === 1}
-                            >
-                              1
-                            </PaginationLink>
-                          </PaginationItem>
-
-                          {/* Ellipsis before current pages if needed */}
-                          {memoriesPage > 3 && (
+                      {memoriesPageCount > 1 && (
+                        <Pagination className="mt-6">
+                          <PaginationContent>
                             <PaginationItem>
-                              <div className="flex h-9 w-9 items-center justify-center">
-                                …
-                              </div>
+                              <PaginationPrevious
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (memoriesPage > 1) handlePageChange(memoriesPage - 1)
+                                }}
+                                className={memoriesPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                              />
                             </PaginationItem>
-                          )}
 
-                          {/* Pages around current page */}
-                          {Array.from({ length: 3 }, (_, i) => {
-                            const pageNumber = Math.min(
-                              Math.max(
-                                memoriesPage + i - 1,
-                                memoriesPage > 2 ? 2 : 2 + i
-                              ),
-                              memoriesPageCount - 1
-                            )
+                            {memoriesPageCount <= 7 ? (
+                              [...Array(memoriesPageCount)].map((_, i) => (
+                                <PaginationItem key={i}>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handlePageChange(i + 1)
+                                    }}
+                                    isActive={memoriesPage === i + 1}
+                                  >
+                                    {i + 1}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              ))
+                            ) : (
+                              <>
+                                <PaginationItem>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handlePageChange(1)
+                                    }}
+                                    isActive={memoriesPage === 1}
+                                  >
+                                    1
+                                  </PaginationLink>
+                                </PaginationItem>
 
-                            // Skip if we're showing first or last page elsewhere
-                            if (pageNumber <= 1 || pageNumber >= memoriesPageCount) {
-                              return null
-                            }
+                                {memoriesPage > 3 && (
+                                  <PaginationItem>
+                                    <div className="flex h-9 w-9 items-center justify-center">
+                                      …
+                                    </div>
+                                  </PaginationItem>
+                                )}
 
-                            return (
-                              <PaginationItem key={pageNumber}>
-                                <PaginationLink
-                                  href="#"
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    handlePageChange(pageNumber)
-                                  }}
-                                  isActive={memoriesPage === pageNumber}
+                                {Array.from({ length: 3 }, (_, i) => {
+                                  const pageNumber = Math.min(
+                                    Math.max(memoriesPage + i - 1, 2),
+                                    memoriesPageCount - 1
+                                  )
+
+                                  if (pageNumber === 1 || pageNumber === memoriesPageCount) {
+                                    return null
+                                  }
+
+                                  return (
+                                    <PaginationItem key={pageNumber}>
+                                      <PaginationLink
+                                        href="#"
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          handlePageChange(pageNumber)
+                                        }}
+                                        isActive={memoriesPage === pageNumber}
+                                      >
+                                        {pageNumber}
+                                      </PaginationLink>
+                                    </PaginationItem>
+                                  )
+                                })}
+
+                                {memoriesPage < memoriesPageCount - 2 && (
+                                  <PaginationItem>
+                                    <div className="flex h-9 w-9 items-center justify-center">
+                                      …
+                                    </div>
+                                  </PaginationItem>
+                                )}
+
+                                <PaginationItem>
+                                  <PaginationLink
+                                    href="#"
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      handlePageChange(memoriesPageCount)
+                                    }}
+                                    isActive={memoriesPage === memoriesPageCount}
+                                  >
+                                    {memoriesPageCount}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              </>
+                            )}
+
+                            <PaginationItem>
+                              <PaginationNext
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  if (memoriesPage < memoriesPageCount) handlePageChange(memoriesPage + 1)
+                                }}
+                                className={memoriesPage >= memoriesPageCount ? "pointer-events-none opacity-50" : ""}
+                              />
+                            </PaginationItem>
+                          </PaginationContent>
+                        </Pagination>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="episodes" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Episodes</CardTitle>
+                  <CardDescription>Episodes where this user participated</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {episodesLoading ? (
+                    <div className="flex justify-center items-center h-32">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : episodes.length === 0 ? (
+                    <div className="text-center p-4 bg-muted/40 rounded-md">
+                      <p className="text-muted-foreground">No episodes found for this user.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {episodes.map((episode) => (
+                        <Card key={episode.id} className="overflow-hidden transition-all hover:shadow-md">
+                          <CardHeader className="pb-2">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-2">
+                                <FlaskConical className="h-4 w-4 text-green-500" />
+                                <CardTitle className="text-lg">
+                                  Episode {episode.id.split('-')[0]}
+                                </CardTitle>
+                              </div>
+                              <Badge variant={episode.status === 'completed' ? 'default' : 'secondary'}>
+                                {episode.status}
+                              </Badge>
+                            </div>
+                            <CardDescription className="flex items-center gap-1">
+                              <CalendarDays className="h-3 w-3" />
+                              {new Date(episode.created_at).toLocaleDateString()} {new Date(episode.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              {episode.scenario_name && (
+                                <div>
+                                  <span className="text-sm font-medium text-muted-foreground">Scenario: </span>
+                                  <span className="text-sm">{episode.scenario_name}</span>
+                                </div>
+                              )}
+
+                              {episode.role_description && (
+                                <div>
+                                  <span className="text-sm font-medium text-muted-foreground">Role: </span>
+                                  <span className="text-sm">{episode.role_description}</span>
+                                </div>
+                              )}
+
+                              <div className="flex justify-end gap-2 pt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/scenarios/${episode.scenario_id}`)}
                                 >
-                                  {pageNumber}
-                                </PaginationLink>
-                              </PaginationItem>
-                            )
-                          }).filter(Boolean)}
-
-                          {/* Ellipsis after current pages if needed */}
-                          {memoriesPage < memoriesPageCount - 2 && (
-                            <PaginationItem>
-                              <div className="flex h-9 w-9 items-center justify-center">
-                                …
+                                  View Scenario
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/episodes/${episode.id}`)}
+                                >
+                                  View Episode
+                                </Button>
                               </div>
-                            </PaginationItem>
-                          )}
-
-                          {/* Last page */}
-                          <PaginationItem>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                handlePageChange(memoriesPageCount)
-                              }}
-                              isActive={memoriesPage === memoriesPageCount}
-                            >
-                              {memoriesPageCount}
-                            </PaginationLink>
-                          </PaginationItem>
-                        </>
-                      )}
-
-                      <PaginationItem>
-                        <PaginationNext
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            if (memoriesPage < memoriesPageCount) handlePageChange(memoriesPage + 1)
-                          }}
-                          className={memoriesPage >= memoriesPageCount ? "pointer-events-none opacity-50" : ""}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       </div>
     </div>
   )

@@ -7,6 +7,10 @@ from math import ceil
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User
+from agir_db.models.agent_assignment import AgentAssignment
+from agir_db.models.agent_role import AgentRole
+from agir_db.models.episode import Episode
+from agir_db.models.scenario import Scenario
 from api.middleware.auth import get_current_user
 
 router = APIRouter()
@@ -128,4 +132,53 @@ async def get_user_profile(
         if hasattr(user, attr) and getattr(user, attr):
             profile[attr] = getattr(user, attr)
     
-    return profile 
+    return profile
+
+@router.get("/{user_id}/episodes")
+async def get_user_episodes(
+    user_id: uuid.UUID, 
+    db: Session = Depends(get_db)
+):
+    """Get episodes that this user has participated in via agent assignments"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Get all agent assignments for this user
+    assignments = db.query(AgentAssignment).filter(
+        AgentAssignment.user_id == user_id
+    ).all()
+    
+    if not assignments:
+        return []
+    
+    # Get episodes and related info
+    result = []
+    for assignment in assignments:
+        # Get episode
+        episode = db.query(Episode).filter(Episode.id == assignment.episode_id).first()
+        if not episode:
+            continue
+            
+        # Get role
+        role = db.query(AgentRole).filter(AgentRole.id == assignment.role_id).first()
+        
+        # Get scenario
+        scenario = db.query(Scenario).filter(Scenario.id == episode.scenario_id).first()
+        
+        episode_data = {
+            "id": episode.id,
+            "scenario_id": episode.scenario_id,
+            "status": episode.status.value if hasattr(episode.status, 'value') else str(episode.status),
+            "created_at": episode.created_at,
+            "updated_at": episode.updated_at,
+            "scenario_name": scenario.name if scenario else None,
+            "role_description": assignment.description if assignment.description else (role.description if role else None)
+        }
+        
+        result.append(episode_data)
+    
+    # Sort by creation date, newest first
+    result.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return result 
