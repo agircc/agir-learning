@@ -37,6 +37,7 @@ interface StepDetails {
   updated_at: string
   episode_id: string
   state_id: string
+  generated_text: string
   state: State
 }
 
@@ -122,6 +123,10 @@ export default function StepDetailsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div>
+              <h3 className="text-lg font-medium mb-2">Generated Text</h3>
+              <p className="p-3 bg-muted rounded-md">{step.generated_text}</p>
+            </div>
             <div className="mb-6">
               <h3 className="text-lg font-medium mb-2">Action</h3>
               <p className="p-3 bg-muted rounded-md">{step.action}</p>

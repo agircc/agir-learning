@@ -47,8 +47,8 @@ async def get_step_details(step_id: uuid.UUID, db: Session = Depends(get_db)):
     response = {
         "id": step.id,
         "action": step.action,
+        "generated_text": step.generated_text,
         "created_at": step.created_at,
-        "updated_at": step.updated_at,
         "episode_id": step.episode_id,
         "state_id": step.state_id,
         "state": state_data
