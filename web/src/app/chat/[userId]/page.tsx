@@ -238,14 +238,14 @@ export default function ChatPage() {
                 <Button
                   onClick={handleSendMessage}
                   disabled={sending || !message.trim()}
-                  className="self-end"
+                  className="self-end shrink-0"
                 >
                   {sending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
                   )}
-                  <span className="ml-2">Send</span>
+                  <span className="ml-2 hidden sm:inline">Send</span>
                 </Button>
               </div>
             </div>

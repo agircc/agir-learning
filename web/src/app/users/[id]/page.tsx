@@ -233,9 +233,9 @@ export default function UserDetailsPage() {
                                 <span className="font-medium">From Simulation</span>
                               </div>
 
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
                                 {memory.meta_data.scenario_name && (
-                                  <div className="col-span-2">
+                                  <div className="col-span-full">
                                     <span className="text-muted-foreground">Scenario: </span>
                                     <span className="text-foreground">{memory.meta_data.scenario_name}</span>
                                   </div>
@@ -273,9 +273,9 @@ export default function UserDetailsPage() {
                                 <span className="font-medium">From Book Reading</span>
                               </div>
 
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 pl-1">
                                 {memory.meta_data.book_title && (
-                                  <div className="col-span-2">
+                                  <div className="col-span-full">
                                     <span className="text-muted-foreground">Book: </span>
                                     <span className="text-foreground font-medium">{memory.meta_data.book_title}</span>
                                   </div>
@@ -293,7 +293,7 @@ export default function UserDetailsPage() {
                                   </div>
                                 )}
                                 {memory.meta_data.read_date && (
-                                  <div className="col-span-2 flex items-center gap-1">
+                                  <div className="col-span-full flex items-center gap-1">
                                     <CalendarDays className="h-3 w-3" />
                                     <span className="text-muted-foreground">Read on: </span>
                                     <span>{new Date(memory.meta_data.read_date).toLocaleDateString()} {new Date(memory.meta_data.read_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
