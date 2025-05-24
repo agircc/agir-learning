@@ -62,7 +62,14 @@ const StateFlowDiagram = ({ states }: { states: ScenarioState[] }) => {
                       <p className="text-xs text-green-700">{state.description || "No description"}</p>
                       {state.roles.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-xs text-green-600">Roles: {state.roles.length}</p>
+                          <p className="text-xs font-medium text-green-600">Roles:</p>
+                          <div className="text-xs text-green-500 ml-2">
+                            {state.roles.map((role) => (
+                              <div key={role.id}>
+                                {role.name} ({role.agent_role})
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </CardContent>
@@ -102,7 +109,14 @@ const StateFlowDiagram = ({ states }: { states: ScenarioState[] }) => {
                         <p className="text-xs text-blue-700">{state.description || "No description"}</p>
                         {state.roles.length > 0 && (
                           <div className="mt-2">
-                            <p className="text-xs text-blue-600">Roles: {state.roles.length}</p>
+                            <p className="text-xs font-medium text-blue-600">Roles:</p>
+                            <div className="text-xs text-blue-500 ml-2">
+                              {state.roles.map((role) => (
+                                <div key={role.id}>
+                                  {role.name} ({role.agent_role})
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -150,7 +164,14 @@ const StateFlowDiagram = ({ states }: { states: ScenarioState[] }) => {
                       <p className="text-xs text-red-700">{state.description || "No description"}</p>
                       {state.roles.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-xs text-red-600">Roles: {state.roles.length}</p>
+                          <p className="text-xs font-medium text-red-600">Roles:</p>
+                          <div className="text-xs text-red-500 ml-2">
+                            {state.roles.map((role) => (
+                              <div key={role.id}>
+                                {role.name} ({role.agent_role})
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -189,7 +210,14 @@ const StateFlowDiagram = ({ states }: { states: ScenarioState[] }) => {
                       <p className="text-xs text-gray-700">{state.description || "No description"}</p>
                       {state.roles.length > 0 && (
                         <div className="mt-2">
-                          <p className="text-xs text-gray-600">Roles: {state.roles.length}</p>
+                          <p className="text-xs font-medium text-gray-600">Roles:</p>
+                          <div className="text-xs text-gray-500 ml-2">
+                            {state.roles.map((role) => (
+                              <div key={role.id}>
+                                {role.name} ({role.agent_role})
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </CardContent>
