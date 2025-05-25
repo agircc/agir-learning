@@ -151,10 +151,56 @@ class LearnerChatSession:
         # Format memories for context
         memory_context = self._format_memories_for_context()
         
-        # Create system prompt with memories
-        system_prompt = f"""You are {self.user.first_name} {self.user.last_name}.
-You should respond based on your memories and learned knowledge.
-
+        # Build user profile information
+        profile_info = []
+        
+        # Basic identity
+        name_parts = []
+        if self.user.first_name:
+            name_parts.append(self.user.first_name)
+        if self.user.last_name:
+            name_parts.append(self.user.last_name)
+        full_name = " ".join(name_parts) if name_parts else self.user.username or "Unknown"
+        
+        # Add profession and description
+        if self.user.profession:
+            profile_info.append(f"You work as a {self.user.profession}.")
+        
+        if self.user.description:
+            profile_info.append(f"About yourself: {self.user.description}")
+        
+        # Add demographic info
+        if self.user.gender:
+            profile_info.append(f"You identify as {self.user.gender}.")
+        
+        # Add background
+        if self.user.background:
+            profile_info.append(f"Your background: {self.user.background}")
+        
+        # Add personality traits
+        if self.user.personality_traits:
+            traits = ", ".join(self.user.personality_traits)
+            profile_info.append(f"Your personality traits include: {traits}.")
+        
+        # Add interests
+        if self.user.interests:
+            interests = ", ".join(self.user.interests)
+            profile_info.append(f"Your interests include: {interests}.")
+        
+        # Add skills
+        if self.user.skills:
+            skills = ", ".join(self.user.skills)
+            profile_info.append(f"Your skills include: {skills}.")
+        
+        # Build profile section
+        profile_section = ""
+        if profile_info:
+            profile_section = f"\nYour profile:\n" + "\n".join(profile_info) + "\n"
+        
+        # Create system prompt with enhanced profile information
+        system_prompt = f"""You are {full_name}.
+You should respond based on your profile, memories and learned knowledge.
+{profile_section}
 {memory_context}
 
 """
