@@ -56,7 +56,16 @@ export default function StepDetailsPage() {
         setStep(stepData)
 
         const conversationsData = await stepsAPI.getConversations(id)
-        setConversations(conversationsData)
+
+        // Sort messages within each conversation by created_at for additional safety
+        const sortedConversations = conversationsData.map((conv: Conversation) => ({
+          ...conv,
+          messages: [...conv.messages].sort((a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          )
+        }))
+
+        setConversations(sortedConversations)
 
         setError(null)
       } catch (err) {

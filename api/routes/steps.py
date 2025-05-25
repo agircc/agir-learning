@@ -64,18 +64,23 @@ async def get_step_conversations(step_id: uuid.UUID, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Step not found")
     
     # Get conversations related to this step
-    conversations = db.query(ChatConversation).options(
-        joinedload(ChatConversation.messages).joinedload(ChatMessage.sender)
-    ).filter(
+    conversations = db.query(ChatConversation).filter(
         ChatConversation.related_id == step_id,
         ChatConversation.related_type == 'step'
     ).all()
     
     result = []
     for conv in conversations:
+        # Get messages for this conversation sorted by created_at
+        messages = db.query(ChatMessage).options(
+            joinedload(ChatMessage.sender)
+        ).filter(
+            ChatMessage.conversation_id == conv.id
+        ).order_by(ChatMessage.created_at).all()
+        
         # Format messages for this conversation
         formatted_messages = []
-        for msg in conv.messages:
+        for msg in messages:
             sender_name = "Unknown"
             if msg.sender:
                 if msg.sender.first_name and msg.sender.last_name:
