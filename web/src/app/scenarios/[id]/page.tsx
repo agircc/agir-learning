@@ -248,7 +248,13 @@ export default function ScenarioDetailsPage() {
         setScenario(scenarioData)
 
         const episodesData = await scenariosAPI.getEpisodes(id)
-        setEpisodes(episodesData)
+
+        // Sort episodes by created_at in descending order (newest first) for additional safety
+        const sortedEpisodes = [...episodesData].sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+
+        setEpisodes(sortedEpisodes)
 
         setError(null)
       } catch (err) {

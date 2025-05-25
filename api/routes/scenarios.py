@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc
 from typing import List
 import uuid
 
@@ -110,5 +111,5 @@ async def get_scenario_episodes(scenario_id: uuid.UUID, db: Session = Depends(ge
     if not scenario:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scenario not found")
     
-    episodes = db.query(Episode).filter(Episode.scenario_id == scenario_id).all()
+    episodes = db.query(Episode).filter(Episode.scenario_id == scenario_id).order_by(desc(Episode.created_at)).all()
     return episodes 
