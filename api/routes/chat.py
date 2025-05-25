@@ -16,7 +16,7 @@ from src.chat.chat_with_learner import LearnerChatSession
 router = APIRouter()
 
 # Pydantic models for chat endpoints only
-class ChatMessage(BaseModel):
+class ChatMessageRequest(BaseModel):
     role: str  # "user", "assistant", "system"
     content: str
 
