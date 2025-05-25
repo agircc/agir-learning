@@ -181,7 +181,7 @@ export default function EpisodeDetailsPage() {
                       )}
 
                       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                        {step.conversations_count && step.conversations_count > 0 && (
+                        {step.conversations_count && step.conversations_count > 0 ? (
                           <Button
                             variant="outline"
                             size="sm"
@@ -192,7 +192,7 @@ export default function EpisodeDetailsPage() {
                             <span className="hidden sm:inline">View Conversations ({step.conversations_count})</span>
                             <span className="sm:hidden">Conversations ({step.conversations_count})</span>
                           </Button>
-                        )}
+                        ) : <></>}
                         <Button
                           variant="outline"
                           size="sm"
