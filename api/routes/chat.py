@@ -25,8 +25,11 @@ async def get_conversations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all chat conversations"""
-    conversations = db.query(ChatConversation).all()
+    """Get chat conversations for current user"""
+    # Only get conversations created by the current user
+    conversations = db.query(ChatConversation).filter(
+        ChatConversation.created_by == current_user.id
+    ).all()
     
     result = []
     for conv in conversations:
@@ -50,7 +53,10 @@ async def get_conversation(
     current_user: User = Depends(get_current_user)
 ):
     """Get a conversation by ID with its messages"""
-    conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
+    conversation = db.query(ChatConversation).filter(
+        ChatConversation.id == conversation_id,
+        ChatConversation.created_by == current_user.id  # Only allow access to own conversations
+    ).first()
     if not conversation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     
@@ -104,20 +110,31 @@ async def send_message_to_user(
     # Get or create conversation
     conversation = None
     if conversation_id:
-        conversation = db.query(ChatConversation).filter(ChatConversation.id == conversation_id).first()
+        conversation = db.query(ChatConversation).filter(
+            ChatConversation.id == conversation_id,
+            ChatConversation.created_by == current_user.id  # Only allow access to own conversations
+        ).first()
         if not conversation:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
     else:
-        # Create new conversation using the authenticated user
-        conversation = ChatConversation(
-            title=f"Chat with {user.username}",
-            created_by=current_user.id,
-            related_type="user",
-            related_id=user_id
-        )
-        db.add(conversation)
-        db.commit()
-        db.refresh(conversation)
+        # Try to find existing conversation between current user and target user
+        conversation = db.query(ChatConversation).filter(
+            ChatConversation.created_by == current_user.id,
+            ChatConversation.related_type == "user",
+            ChatConversation.related_id == user_id
+        ).first()
+        
+        # Create new conversation if none exists
+        if not conversation:
+            conversation = ChatConversation(
+                title=f"Chat with {user.username}",
+                created_by=current_user.id,
+                related_type="user",
+                related_id=user_id
+            )
+            db.add(conversation)
+            db.commit()
+            db.refresh(conversation)
     
     # Create the message from the authenticated user
     message = ChatMessage(
