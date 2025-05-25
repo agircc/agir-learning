@@ -37,8 +37,8 @@ scenario:
       description: "Patient registers at the dermatology desk and waits for a skin consultation."
 
     - name: "Consultation"
-      roles: ["patient", "doctor"]
-      description: "Dermatologist reviews the patient's skin issues and determines if further dermatological tests are required."
+      roles: ["doctor", "patient"]
+      description: "Dermatologist conducts initial consultation with the patient, discussing symptoms, medical history, and performing preliminary examination to assess the skin condition."
 
     - name: "Medical Examination"
       roles: ["patient", "nurse"]
