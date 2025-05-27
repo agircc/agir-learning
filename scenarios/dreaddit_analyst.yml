@@ -1,0 +1,47 @@
+scenario:
+  name: "Dreaddit Analysis"
+  description: "A user posts a message, the analyst evaluates distress and explains their reasoning, and the user provides feedback."
+  learner_role: "analyst"
+
+  learner:
+    username: emotion_master
+    model: "gpt-4.1-nano"
+
+  roles:
+    - name: "user"
+      model: "gpt-4.1-nano"
+      description: "A user submits a personal post"
+    - name: "analyst"
+      model: "gpt-4.1-nano"
+      description: "A mental health analyst who assesses the user's post for emotional distress and explains their reasoning."
+
+  states:
+    - name: "User Post Submission"
+      roles: ["user"]
+      description: "A user submits a personal post, which may express positive, negative, or neutral emotions."
+      prompts:
+        - |
+          You are simulating a Reddit user posting in r/vent, r/anxiety, or r/ptsd.
+      
+          Please write a realistic Reddit post that:
+          - Describes a distressing or emotionally difficult real-life situation
+          - Clearly reflects negative emotions such as anxiety, depression, trauma, or hopelessness
+          - Is personal, vulnerable, and emotionally expressive (but not exaggerated)
+          - Is between 50–150 words
+      
+          Return only the post content. Do NOT include any labels or metadata.
+
+    - name: "Analyst Evaluation"
+      roles: ["analyst"]
+      description: "The analyst reviews the post, identifies the type of emotional state (e.g., stress, anxiety, trauma, or none), and explains the reasoning behind the classification."
+
+    - name: "User Feedback"
+      roles: ["user"]
+      description: "The user reads the analyst’s classification and explanation, and replies whether they agree with the assessment."
+
+  transitions:
+    - from_state_name: User Post Submission
+      to_state_name: Analyst Evaluation
+
+    - from_state_name: Analyst Evaluation
+      to_state_name: User Feedback
