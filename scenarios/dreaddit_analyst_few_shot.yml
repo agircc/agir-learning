@@ -1,0 +1,107 @@
+scenario:
+  name: "Dreaddit Analysis"
+  description: "A user posts a message, the analyst evaluates distress and explains their reasoning, and the user provides feedback."
+  learner_role: "analyst"
+
+  learner:
+    username: emotion_master
+    model: "gpt-4.1-nano"
+
+  roles:
+    - name: "user"
+      model: "gpt-4.1-nano"
+      description: "A user submits a personal post"
+    - name: "analyst"
+      model: "gpt-4.1-nano"
+      description: "A mental health analyst who assesses the user's post for emotional distress and explains their reasoning."
+
+  states:
+    - name: "User Post Submission"
+      roles: ["user"]
+      description: "A user submits a personal post, which may express positive, negative, or neutral emotions."
+      prompts:
+        - |
+          You are simulating a Reddit user posting in a support-related subreddit.  
+          Choose one from the following list:  
+          r/ptsd, r/anxiety, r/relationships, r/domesticviolence, r/assistance, r/survivorsofabuse, r/homeless, r/almosthomeless, r/stress, or r/food_pantry.
+
+          Please write a realistic Reddit post that:
+          - Describes a distressing or emotionally difficult real-life situation
+          - Clearly reflects negative emotions such as anxiety, depression, trauma, or hopelessness
+          - Uses natural, personal, and emotionally expressive language (can include informal tone, fragmented thoughts, inner monologue)
+          - Is between 50–150 words
+          - Matches the tone and content of the selected subreddit
+          - Can reflect either high emotional intensity (label=1) or low emotional intensity (label=0), depending on the situation
+
+          Here are real examples of Reddit posts to guide your writing:
+
+          ---
+
+          Example 1 — r/ptsd  
+          He said he had not felt that way before, suggeted I go rest and so ..TRIGGER AHEAD IF YOU'RE A HYPOCONDRIAC LIKE ME: i decide to look up "feelings of doom" in hopes of maybe getting sucked into some rabbit hole of ludicrous conspiracy, a stupid "are you psychic" test or new age b.s., something I could even laugh at down the road. No, I ended up reading that this sense of doom can be indicative of various health ailments; one of which I am prone to.. So on top of my "doom" to my gloom..I am now f'n worried about my heart. I do happen to have a physical in 48 hours.
+
+          ---
+
+          Example 2 — r/anxiety  
+          It cleared up and I was okay but. On Monday I was thinking about humans and how the brain works and it tripped me out I got worried that because I was thinking about how the brain works that I would lose sleep and I did. That night was bad just like last time. Also yesterday my sleep was bad I woke up like every hour of the night just like last time. I got kind of scared like I did last time but this time I think that this is fake life which is absurd but I just think about it then get really scared then I think rationally then calm down.
+
+          ---
+
+          Example 3 — r/relationships  
+          until i met my new boyfriend, he is amazing, he is kind, he is sweet, he is a good student, he likes the same things as me, my family likes him, and so on... but i dont feel that passion that rush i felt with my ex [...] and recently i found out that he has a girl and he is actually enjoying the experience and i got so mad and so hurt (i know i dont have any right to feel that way) i felt betrayed and I STILL feel that way, i gross myself out.
+
+          ---
+
+          Example 4 — r/domesticviolence  
+          It did hurt but didnt leave any marks. When I lied down I kept coughing and today it feels kinda constricted like theres a lump in my throat. Ive googled and realised how serious it can be and now Im terrified but scared to go doctor. What do I do Im not calling police and I am not going to any hospital. I will go to doctor if they are sensitive about it.
+
+          ---
+
+          Example 5 — r/assistance  
+          I just feel like the street life has fucked my head up. There's so much I don't even know how to talk about anymore, I just hold that shit. Only person I can really chat with is a pal I know at the bar. He has PTSD and shit from the military bad, hard up alcoholic nowadays after killing people.. We talk once every few weeks and we are open and it's cool. But normal people?
+
+          ---
+
+          Example 6 — r/survivorsofabuse  
+          October is Domestic Violence Awareness Month and I am a domestic violence survivor who is still struggling, even after over four years. Lately I have been feeling very angry. Angry that my abusive ex received no real consequences for his actions. This man abused me in all manners: physically, sexually, emotionally, verbally, financially, etc. I was granted a restraining order against him (and it was renewed a year later) but I was unable to press criminal charges against him because I didnt have enough evidence to have a case.
+
+          ---
+
+          Example 7 — r/homeless  
+          No place in my city has shelter space for us, and I won't put my baby on the literal street. (I've been there before. Fine for new, but I don't want to have to go through that with a baby). What cities have good shelter programs for homeless mothers and children? I'd love to be able to make some calls and get on a greyhound between the 7th and 16th (when I'll likely be able to get the money to go).
+
+          ---
+
+          Example 8 — r/almosthomeless  
+          I can't take a shower and I haven't eaten today. I am sitting in my car and almost on empty. I keep ending up with abusive men who pretend to love me and my kids then hurt us. I am on a waiting list for housing but no call backs yet. The kids are safe and good and I go see them every few days til I have a place.
+
+          ---
+
+          Example 9 — r/stress  
+          I'm 24 and have massive amounts of stress going on with job hunting. I live with parents who are constantly on my back and getting angry with me for not having a job. They keep trying to help me by saying "oh this place is hiring and that place is hiring again." I have tried all places where I live and every time I don't get an interview let alone hired.
+
+          ---
+
+          Example 10 — r/food_pantry  
+          I'm a freshman in college. I had to move out asap due to a volatile home situation, and I'm still struggling with finances and figuring out the real world. I just got a job, but am currently extremely sick, and worried about starting. Even so, my phone bill is due and I won't be paid for a few weeks.
+
+          ---
+
+          Now write a new post in the same style.  
+          Return only the post content. Do not include any subreddit names, labels, or metadata.
+
+
+    - name: "Analyst Evaluation"
+      roles: ["analyst"]
+      description: "The analyst reviews the post, identifies the type of emotional state (e.g., stress, anxiety, trauma, or none), and explains the reasoning behind the classification."
+
+    - name: "User Feedback"
+      roles: ["user"]
+      description: "The user reads the analyst’s classification and explanation, and replies whether they agree with the assessment."
+
+  transitions:
+    - from_state_name: User Post Submission
+      to_state_name: Analyst Evaluation
+
+    - from_state_name: Analyst Evaluation
+      to_state_name: User Feedback
