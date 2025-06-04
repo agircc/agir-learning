@@ -9,6 +9,7 @@ load balancing.
 import logging
 from typing import Dict, Any, Optional
 from collections import defaultdict
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +198,7 @@ def initialize_assignment_counts_from_db(db, scenario_id: Optional[int] = None) 
     try:
         # Query to get assignment counts per role and user
         query = db.query(AgentAssignment.role_id, AgentAssignment.user_id, 
-                        db.func.count(AgentAssignment.id).label('count'))
+                        func.count(AgentAssignment.id).label('count'))
         
         if scenario_id:
             # Join with Episode to filter by scenario
@@ -232,7 +233,7 @@ def validate_assignment_counts(db, scenario_id: Optional[int] = None) -> bool:
     try:
         # Get counts from database
         query = db.query(AgentAssignment.role_id, AgentAssignment.user_id, 
-                        db.func.count(AgentAssignment.id).label('count'))
+                        func.count(AgentAssignment.id).label('count'))
         
         if scenario_id:
             query = query.join(Episode, AgentAssignment.episode_id == Episode.id)
