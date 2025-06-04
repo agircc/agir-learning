@@ -1,6 +1,8 @@
 EPISODES ?= 1
 SCENARIO ?= scenarios/hello.yml
 OPTS ?=
+ALLOW_MULTI_ASSIGN ?= false
+START_ASSIGN_COUNT ?= 1
 
 migrate:
 	@python -m alembic -c "$$(python -c 'import agir_db; import os; print(os.path.join(agir_db.__path__[0], "alembic.ini"))')" upgrade head
@@ -12,7 +14,10 @@ clear_db:
 	PYTHONPATH=$(shell pwd) python scripts/clear_db.py
 
 learning:
-	PYTHONPATH=$(shell pwd) python scripts/run.py $(SCENARIO) --episodes=$(EPISODES)
+	PYTHONPATH=$(shell pwd) python scripts/run.py $(SCENARIO) --episodes=$(EPISODES) $(if $(filter true,$(ALLOW_MULTI_ASSIGN)),--allow-multi-assign,) $(if $(filter-out 1,$(START_ASSIGN_COUNT)),--start-assign-count=$(START_ASSIGN_COUNT),)
+
+learning_multi:
+	PYTHONPATH=$(shell pwd) python scripts/run.py $(SCENARIO) --episodes=$(EPISODES) --allow-multi-assign --start-assign-count=$(START_ASSIGN_COUNT)
 
 chat:
 	@if [ -z "$(AGENT)" ]; then \

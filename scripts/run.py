@@ -90,6 +90,20 @@ def parse_args():
         help='Path to write logs to a file'
     )
     
+    parser.add_argument(
+        '--allow-multi-assign',
+        action='store_true',
+        default=False,
+        help='Allow users to be assigned to multiple episodes (default: False)'
+    )
+    
+    parser.add_argument(
+        '--start-assign-count',
+        type=int,
+        default=1,
+        help='Starting assignment count for multi-assign mode (default: 1)'
+    )
+    
     return parser.parse_args()
 
 def main():
@@ -157,7 +171,14 @@ def main():
     try:        
         # Run evolution scenario, now using the ID rather than loading from file again
         logger.info(f"Running evolution scenario with ID: {scenario_id}, episodes: {args.episodes}")
-        success = run_evolution(scenario_id, num_episodes=args.episodes)
+        
+        # Prepare assignment configuration
+        assignment_config = {
+            'allow_multi_assign': args.allow_multi_assign,
+            'start_assign_count': args.start_assign_count
+        }
+        
+        success = run_evolution(scenario_id, num_episodes=args.episodes, assignment_config=assignment_config)
         
         if success:
             logger.info("Evolution scenario completed successfully")

@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Optional, Union, List, Dict, Any
 from contextlib import contextmanager
+from sqlalchemy.orm import Session
 
 from agir_db.db.session import get_db
 from agir_db.models.scenario import Scenario
@@ -31,6 +32,7 @@ from .j_get_next_state import j_get_next_state
 from .f_generate_llm_response import f_generate_llm_response
 from .h_create_conversation import h_create_conversation
 from .i_conduct_multi_turn_conversation import i_conduct_multi_turn_conversation
+from .assignment_config import set_assignment_config, reset_assignment_tracking, initialize_assignment_counts_from_db
 
 logger = logging.getLogger(__name__)
 
@@ -177,13 +179,14 @@ def start_episode(scenario_id: int) -> Optional[int]:
         logger.error(f"Failed to execute scenario: {str(e)}")
         return None
 
-def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1) -> bool:
+def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1, assignment_config: Dict[str, Any] = None) -> bool:
     """
     Run a previously defined scenario.
     
     Args:
         scenario_id: ID of the scenario to run
         num_episodes: Number of episodes to run (default: 1)
+        assignment_config: Configuration for user assignment strategy
         
     Returns:
         bool: True if successful, False otherwise
@@ -191,6 +194,11 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
     success = True
     
     try:
+        # Set assignment configuration if provided
+        if assignment_config:
+            set_assignment_config(assignment_config)
+            logger.info(f"Using assignment configuration: {assignment_config}")
+        
         with get_db_session() as db:
             logger.info(f"Looking up scenario with ID: {scenario_id}")
             scenario = db.query(Scenario).filter(Scenario.id == scenario_id).first()
@@ -200,6 +208,15 @@ def run_evolution(scenario_id: Union[int, str, uuid.UUID], num_episodes: int = 1
                 return False
             
             logger.info(f"Found scenario: {scenario.name}")
+            
+            # Initialize assignment tracking
+            if assignment_config and assignment_config.get('allow_multi_assign', False):
+                # For multi-assign mode, initialize counts from existing database records
+                logger.info("Initializing assignment counts from database for multi-assign mode")
+                initialize_assignment_counts_from_db(db)
+            else:
+                # For single-assign mode, reset tracking
+                reset_assignment_tracking()
             
             logger.info(f"Running {num_episodes} episodes for scenario: {scenario.name}")
         

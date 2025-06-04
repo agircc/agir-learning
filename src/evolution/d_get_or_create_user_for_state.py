@@ -8,46 +8,69 @@ from agir_db.models.episode import Episode
 from agir_db.models.agent_assignment import AgentAssignment
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 from src.evolution.store import get_episode
+from src.evolution.assignment_config import (
+    is_multi_assign_enabled, 
+    get_current_assign_count,
+    track_user_assignment,
+    get_least_assigned_users,
+    should_increment_assign_count,
+    increment_assign_count
+)
 
 logger = logging.getLogger(__name__)
 
 def d_get_or_create_user_for_state(db: Session, role_id: int) -> Optional[User]:
-  """
-  Get or create a user for a role in an episode.
-  
-  Args:
-      db: Database session
-      role_id: ID of the role
-      episode_id: ID of the episode
-      
-  Returns:
-      Optional[User]: User if found or created, None otherwise
-  """
-  try:
-    episode = get_episode()
-      
-    if not episode:
-      logger.error(f"Episode not found")
-      sys.exit(1)
-      
-    agentRole = db.query(AgentRole).filter(AgentRole.id == role_id).first()
-    if not agentRole:
-        logger.error(f"Role not found: {role_id}")
-        sys.exit(1)
-      
-    # Check if agent assignment exists
-    agent_assignment = db.query(AgentAssignment).filter(
-        AgentAssignment.role_id == role_id,
-        AgentAssignment.episode_id == episode.id
-    ).first()
-      
-    if agent_assignment:
-        # User exists for this role
-        user = db.query(User).filter(User.id == agent_assignment.user_id).first()
-        if user:
-            logger.info(f"Found existing user {user.username} for role {agentRole.name}")
-            return user
+    """
+    Get or create a user for a role in an episode with support for multi-assignment strategy.
     
+    Args:
+        db: Database session
+        role_id: ID of the role
+        
+    Returns:
+        Optional[User]: User if found or created, None otherwise
+    """
+    try:
+        episode = get_episode()
+        
+        if not episode:
+            logger.error(f"Episode not found")
+            sys.exit(1)
+            
+        agentRole = db.query(AgentRole).filter(AgentRole.id == role_id).first()
+        if not agentRole:
+            logger.error(f"Role not found: {role_id}")
+            sys.exit(1)
+        
+        # Check if agent assignment already exists for this episode
+        agent_assignment = db.query(AgentAssignment).filter(
+            AgentAssignment.role_id == role_id,
+            AgentAssignment.episode_id == episode.id
+        ).first()
+        
+        if agent_assignment:
+            # User already assigned to this episode
+            user = db.query(User).filter(User.id == agent_assignment.user_id).first()
+            if user:
+                logger.info(f"Found existing user {user.username} for role {agentRole.name}")
+                return user
+        
+        # No existing assignment for this episode, need to find or create user
+        if not is_multi_assign_enabled():
+            # Original single-assignment logic
+            return _handle_single_assignment(db, role_id, episode, agentRole)
+        else:
+            # New multi-assignment logic with load balancing
+            return _handle_multi_assignment(db, role_id, episode, agentRole)
+        
+    except Exception as e:
+        logger.error(f"Failed to get or create agent assignment: {str(e)}")
+        return None
+
+def _handle_single_assignment(db: Session, role_id: int, episode: Episode, agentRole: AgentRole) -> Optional[User]:
+    """
+    Handle user assignment with single-assignment strategy (original logic).
+    """
     # Find users who have been assigned to this role in other scenarios
     # First, get all users assigned to this role
     role_assignments = db.query(AgentAssignment).filter(
@@ -82,19 +105,77 @@ def d_get_or_create_user_for_state(db: Session, role_id: int) -> Optional[User]:
                 db.add(new_assignment)
                 db.commit()
                 return user
-      
+    
     # If no existing user can be reused, create a new user for this role
     logger.info(f"Creating new user for role {agentRole.name} in scenario {episode.scenario_id}")
     user = create_agent_assignment(
-      db, 
-      agentRole.name, 
-      episode.scenario_id, 
-      username=f"{agentRole.name}_{episode.id}",
-      model=getattr(agentRole, 'model', None)
+        db, 
+        agentRole.name, 
+        episode.scenario_id, 
+        username=f"{agentRole.name}_{episode.id}",
+        model=getattr(agentRole, 'model', None)
     )
-      
+    
     return user
-      
-  except Exception as e:
-      logger.error(f"Failed to get or create agent assignment: {str(e)}")
-      return None
+
+def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentRole: AgentRole) -> Optional[User]:
+    """
+    Handle user assignment with multi-assignment strategy and load balancing.
+    """
+    # Get all users who have been assigned to this role (across all scenarios)
+    role_assignments = db.query(AgentAssignment).filter(
+        AgentAssignment.role_id == role_id
+    ).all()
+    
+    if not role_assignments:
+        # No users exist for this role, create a new one
+        logger.info(f"Creating first user for role {agentRole.name}")
+        user = create_agent_assignment(
+            db, 
+            agentRole.name, 
+            episode.scenario_id, 
+            username=f"{agentRole.name}_001",
+            model=getattr(agentRole, 'model', None)
+        )
+        
+        if user:
+            # Track this assignment
+            track_user_assignment(role_id, user.id)
+        
+        return user
+    
+    # Get all unique users for this role
+    user_ids = list(set(assignment.user_id for assignment in role_assignments))
+    
+    # Get users with the least assignments
+    least_assigned_user_ids = get_least_assigned_users(role_id, user_ids)
+    
+    # Check if we need to increment the assignment count
+    if should_increment_assign_count(role_id, user_ids):
+        increment_assign_count()
+        logger.info(f"All users for role {agentRole.name} have reached current threshold, incremented assignment count")
+    
+    # Choose the first user from the least assigned list
+    # (In the future, this could be made more sophisticated with additional criteria)
+    selected_user_id = least_assigned_user_ids[0]
+    user = db.query(User).filter(User.id == selected_user_id).first()
+    
+    if user:
+        logger.info(f"Selected user {user.username} for role {agentRole.name} (load balancing)")
+        
+        # Create new assignment for this episode
+        new_assignment = AgentAssignment(
+            user_id=user.id,
+            role_id=role_id,
+            episode_id=episode.id
+        )
+        db.add(new_assignment)
+        db.commit()
+        
+        # Track this assignment
+        track_user_assignment(role_id, user.id)
+        
+        return user
+    else:
+        logger.error(f"User {selected_user_id} not found")
+        return None
