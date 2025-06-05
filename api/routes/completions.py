@@ -16,14 +16,14 @@ class ChatMessage(BaseModel):
 
 class ChatCompletionRequest(BaseModel):
     messages: List[ChatMessage]
-    model: Optional[str] = "agir-learner"
+    model: Optional[str] = None
     max_tokens: Optional[int] = 150
     temperature: Optional[float] = 0.7
     user_id: Optional[str] = None  # Optional user ID for personalized responses
 
 class CompletionRequest(BaseModel):
     prompt: str
-    model: Optional[str] = "agir-learner"
+    model: Optional[str] = None
     max_tokens: Optional[int] = 150
     temperature: Optional[float] = 0.7
     user_id: Optional[str] = None
@@ -67,7 +67,7 @@ async def create_completion(request: CompletionRequest):
             "id": completion_id,
             "object": "text_completion",
             "created": int(time.time()),
-            "model": request.model,
+            "model": fast_completion.model_name,
             "choices": [
                 {
                     "text": ai_response,
@@ -141,7 +141,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
             "id": completion_id,
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": request.model,
+            "model": fast_completion.model_name,
             "choices": [
                 {
                     "index": 0,
@@ -207,7 +207,7 @@ async def create_simple_completion(request: CompletionRequest):
             "id": completion_id,
             "object": "text_completion",
             "created": int(time.time()),
-            "model": request.model,
+            "model": fast_completion.model_name,
             "choices": [
                 {
                     "text": ai_response,
@@ -285,7 +285,7 @@ async def create_simple_chat_completion(request: ChatCompletionRequest):
             "id": completion_id,
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": f"{request.model}-simple",
+            "model": chat_session.model_name,
             "choices": [
                 {
                     "index": 0,
