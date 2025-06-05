@@ -6,15 +6,18 @@ from agir_db.models.user import User
 from agir_db.models.agent_role import AgentRole
 from agir_db.models.episode import Episode
 from agir_db.models.agent_assignment import AgentAssignment
+from agir_db.models.scenario import Scenario
 from src.evolution.scenario_manager.create_agent_assignment import create_agent_assignment
 from src.evolution.store import get_episode
+from src.common.data_store import get_learner, get_scenario
 from src.evolution.assignment_config import (
     is_multi_assign_enabled, 
     get_current_assign_count,
     track_user_assignment,
     get_least_assigned_users,
     should_increment_assign_count,
-    increment_assign_count
+    increment_assign_count,
+    get_user_assignment_count
 )
 
 logger = logging.getLogger(__name__)
@@ -121,33 +124,62 @@ def _handle_single_assignment(db: Session, role_id: int, episode: Episode, agent
 def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentRole: AgentRole) -> Optional[User]:
     """
     Handle user assignment with multi-assignment strategy and load balancing.
+    Only uses existing users from the database, never creates new users.
+    Handles learner role specially - learner role can only use learner user,
+    other roles cannot use learner user.
     """
-    # Get all users who have been assigned to this role (across all scenarios)
-    role_assignments = db.query(AgentAssignment).filter(
-        AgentAssignment.role_id == role_id
-    ).all()
+    # Get scenario and learner role information
+    scenario = get_scenario()
+    learner_role = None
+    if scenario:
+        logger.info(f"Scenario learner role: {scenario.learner_role}")
+        learner_role = scenario.learner_role
+    else:
+        logger.warning("Scenario not found in data store, proceeding without learner role check")
     
-    if not role_assignments:
-        # No users exist for this role, create a new one
-        logger.info(f"Creating first user for role {agentRole.name}")
-        user = create_agent_assignment(
-            db, 
-            agentRole.name, 
-            episode.scenario_id, 
-            username=f"{agentRole.name}_001",
-            model=getattr(agentRole, 'model', None)
-        )
-        
-        if user:
-            # Track this assignment
-            track_user_assignment(role_id, user.id)
-        
-        return user
+    # Check if current role is the learner role
+    if learner_role and learner_role == agentRole.name:
+        # This is the learner role - use existing learner
+        learner = get_learner()
+        if learner:
+            logger.info(f"Using existing learner: {learner.username} for learner role {agentRole.name} (no assignment created)")
+            user = db.query(User).filter(User.id == learner.id).first()
+            if user:
+                # For learner role, return user directly without creating assignment
+                return user
+        else:
+            logger.error("No learner found and this is learner role")
+            return None
     
-    # Get all unique users for this role
-    user_ids = list(set(assignment.user_id for assignment in role_assignments))
+    # This is not the learner role - get all users except learner
+    all_users = db.query(User).all()
     
-    # Get users with the least assignments
+    if not all_users:
+        # No users exist in the database at all
+        logger.error(f"No users exist in database for role {agentRole.name}")
+        return None
+    
+    # Filter out learner user if it exists
+    available_users = []
+    learner = get_learner()
+    learner_user_id = learner.id if learner else None
+    
+    for user in all_users:
+        if learner_user_id and user.id == learner_user_id:
+            # Skip learner user for non-learner roles
+            continue
+        available_users.append(user)
+    
+    if not available_users:
+        logger.error(f"No available users for non-learner role {agentRole.name} (learner user excluded)")
+        return None
+    
+    # Get user IDs from available users (excluding learner)
+    user_ids = [user.id for user in available_users]
+    
+    logger.info(f"Found {len(user_ids)} available users for non-learner role {agentRole.name} (learner excluded)")
+    
+    # Get users with the least assignments for this specific role
     least_assigned_user_ids = get_least_assigned_users(role_id, user_ids)
     
     # Check if we need to increment the assignment count
@@ -156,12 +188,11 @@ def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentR
         logger.info(f"All users for role {agentRole.name} have reached current threshold, incremented assignment count")
     
     # Choose the first user from the least assigned list
-    # (In the future, this could be made more sophisticated with additional criteria)
     selected_user_id = least_assigned_user_ids[0]
     user = db.query(User).filter(User.id == selected_user_id).first()
     
     if user:
-        logger.info(f"Selected user {user.username} for role {agentRole.name} (load balancing)")
+        logger.info(f"Selected existing user {user.username} for non-learner role {agentRole.name} (assignments: {get_user_assignment_count(role_id, user.id)})")
         
         # Create new assignment for this episode
         new_assignment = AgentAssignment(
