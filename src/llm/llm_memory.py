@@ -30,7 +30,7 @@ class UserMemoryManager:
         self.memory_key = "relevant_memories"
         logger.info(f"Initialized memory manager for user {self.user_id}")
     
-    def retrieve_relevant_memories(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
+    def retrieve_relevant_memories(self, query: str, k: int = 2) -> List[Dict[str, Any]]:
         """
         Retrieve relevant memories based on a query directly from database.
         
