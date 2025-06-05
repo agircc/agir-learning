@@ -15,7 +15,8 @@ import argparse
 from agir_db.db.session import get_db
 from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
-from src.common.utils.memory_utils import get_user_memories, search_user_memories, add_user_memory, search_user_memories_vector
+from src.common.utils.memory_utils import get_user_memories, search_user_memories, add_user_memory
+from src.completions.fast_memory_retriever import get_fast_memory_retriever
 from src.llm.llm_provider import get_llm_model
 
 from langchain.schema import HumanMessage, AIMessage, SystemMessage
@@ -54,9 +55,12 @@ class LearnerChatSession:
         self.max_tokens = max_tokens
         self.llm = get_llm_model(self.model_name, temperature=temperature, max_tokens=max_tokens)
         self.chat_history = []
-        self.memories = self._load_initial_memories()
+        
+        # Use cached FastMemoryRetriever instead of loading memories directly
+        self.memory_retriever = get_fast_memory_retriever(str(self.user.id))
         
         logger.info(f"Initialized chat session with learner {self.user.username} using model {self.model_name}, temperature={temperature}, max_tokens={max_tokens}")
+        logger.info(f"Loaded {self.memory_retriever.get_memory_count()} memories using cached retriever")
     
     def _find_user(self, username: str = None, user_id: str = None) -> Optional[User]:
         """
@@ -79,18 +83,6 @@ class LearnerChatSession:
             logger.error(f"Error finding user: {str(e)}")
             return None
     
-    def _load_initial_memories(self, limit: int = 5) -> List[Dict[str, Any]]:
-        """
-        Load initial memories for the learner.
-        
-        Args:
-            limit: Maximum number of memories to load
-            
-        Returns:
-            List[Dict[str, Any]]: List of memories
-        """
-        return get_user_memories(str(self.user.id), limit=limit)
-    
     def _format_memories_for_context(self) -> str:
         """
         Format memories for inclusion in the LLM context.
@@ -98,7 +90,7 @@ class LearnerChatSession:
         Returns:
             str: Formatted memories
         """
-        if not self.memories:
+        if not hasattr(self, 'memories') or not self.memories:
             return "You have no specific memories to draw from."
         
         formatted = "Your relevant memories and learned knowledge:\n\n"
@@ -110,19 +102,28 @@ class LearnerChatSession:
     def _search_memories(self, query: str, limit: int = 3) -> None:
         """
         Search memories related to a query and update the current memories.
-        Uses vector similarity search for better semantic matching.
+        Uses cached FastMemoryRetriever for better performance.
         
         Args:
             query: Search query
             limit: Maximum number of memories to retrieve
         """
         try:
-            # Use vector search directly
-            relevant_memories = search_user_memories_vector(str(self.user.id), query, limit=limit)
+            # Use cached memory retriever instead of rebuilding FAISS index
+            relevant_memories = self.memory_retriever.search_memories(query, k=limit)
             
             if relevant_memories:
-                self.memories = relevant_memories
-                logger.info(f"Found {len(relevant_memories)} relevant memories using vector search for query: {query}")
+                # Convert FastMemoryRetriever format to expected format
+                self.memories = []
+                for memory in relevant_memories:
+                    self.memories.append({
+                        'id': memory.get('id'),
+                        'content': memory.get('content'),
+                        'importance': memory.get('importance', 1.0),
+                        'created_at': memory.get('created_at'),
+                        'source': memory.get('source', 'unknown')
+                    })
+                logger.info(f"Found {len(relevant_memories)} relevant memories using cached retriever for query: {query}")
             else:
                 # Fall back to keyword search if vector search returns no results
                 relevant_memories = search_user_memories(str(self.user.id), query, limit=limit)
@@ -131,9 +132,12 @@ class LearnerChatSession:
                     logger.info(f"Found {len(relevant_memories)} relevant memories using text search for query: {query}")
                 else:
                     logger.info(f"No relevant memories found for query: {query}")
+                    self.memories = []
         except Exception as e:
             logger.error(f"Error searching memories: {str(e)}")
             # Keep current memories if search fails
+            if not hasattr(self, 'memories'):
+                self.memories = []
     
     def chat(self, message: str) -> str:
         """

@@ -11,12 +11,13 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
 from agir_db.models.memory import UserMemory
-from src.common.utils.memory_utils import get_user_memories, search_user_memories_vector, add_user_memory
+from src.common.utils.memory_utils import get_user_memories, add_user_memory
+from src.completions.fast_memory_retriever import get_fast_memory_retriever
 
 logger = logging.getLogger(__name__)
 
 class UserMemoryManager:
-    """Manages user memories with database vector search for semantic retrieval."""
+    """Manages user memories with cached FAISS retriever for semantic retrieval."""
     
     def __init__(self, user_id: str, embedding_model: Optional[Any] = None):
         """
@@ -24,19 +25,23 @@ class UserMemoryManager:
         
         Args:
             user_id: Unique identifier for the user
-            embedding_model: Model to use for embeddings (not used in DB search mode)
+            embedding_model: Model to use for embeddings (not used, FastMemoryRetriever handles this)
         """
         self.user_id = user_id
         self.memory_key = "relevant_memories"
-        logger.info(f"Initialized memory manager for user {self.user_id}")
+        
+        # Use cached FastMemoryRetriever instead of building our own index
+        self.memory_retriever = get_fast_memory_retriever(user_id)
+        
+        logger.info(f"Initialized memory manager for user {self.user_id} with {self.memory_retriever.get_memory_count()} cached memories")
     
-    def retrieve_relevant_memories(self, query: str, k: int = 2) -> List[Dict[str, Any]]:
+    def retrieve_relevant_memories(self, query: str, k: int = 5) -> List[Dict[str, Any]]:
         """
-        Retrieve relevant memories based on a query directly from database.
+        Retrieve relevant memories for a query using cached FAISS retriever.
         
         Args:
-            query: The query to search for
-            k: Number of relevant memories to retrieve
+            query: The query to search memories for
+            k: Maximum number of memories to return
             
         Returns:
             List of relevant memories as dictionaries
@@ -48,15 +53,31 @@ class UserMemoryManager:
             
             logger.info(f"Retrieving memories for query: '{query}'")
             
-            # Directly use database vector search
-            memories = search_user_memories_vector(self.user_id, query, limit=k)
+            # Use cached memory retriever instead of rebuilding FAISS index
+            memories = self.memory_retriever.search_memories(query, k=k)
             
             if memories:
-                logger.info(f"Retrieved {len(memories)} memories from database for query")
+                # Convert FastMemoryRetriever format to expected format
+                result = []
+                for memory in memories:
+                    result.append({
+                        "id": memory.get('id'),
+                        "content": memory.get('content'),
+                        "meta_data": {},  # FastMemoryRetriever doesn't include full metadata
+                        "importance": memory.get('importance', 1.0),
+                        "source": memory.get('source', 'unknown'),
+                        "created_at": memory.get('created_at'),
+                        "last_accessed": None,  # Not tracked by FastMemoryRetriever
+                        "access_count": 0,  # Not tracked by FastMemoryRetriever
+                        "embedding": None,  # Not exposed by FastMemoryRetriever
+                        "score": memory.get('relevance_score', 1.0)
+                    })
+                
+                logger.info(f"Retrieved {len(result)} memories from cached retriever for query")
+                return result
             else:
-                logger.info(f"No memories found in database for query")
-            
-            return memories
+                logger.info(f"No memories found in cached retriever for query")
+                return []
             
         except Exception as e:
             logger.error(f"Failed to retrieve memories: {str(e)}")

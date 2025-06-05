@@ -12,7 +12,8 @@ from datetime import datetime
 
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
-from langchain_community.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from agir_db.db.session import get_db
 from agir_db.models.user import User

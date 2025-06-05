@@ -8,6 +8,7 @@ import sys
 import os
 import argparse
 import logging
+import uuid
 from typing import List, Dict, Any, Optional
 
 # Add the project root to the Python path
@@ -16,12 +17,83 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sqlalchemy.orm import Session
 from agir_db.db.session import get_db
 from agir_db.models.user import User
-from src.common.utils.memory_utils import get_user_memories, create_user_memory, search_user_memories_vector
+from src.common.utils.memory_utils import get_user_memories, create_user_memory
+from src.completions.fast_memory_retriever import get_fast_memory_retriever
 from src.llm.llm_provider import get_llm_model
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def search_user_memories_with_query(user_id: str, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Search user memories using cached FastMemoryRetriever.
+    
+    Args:
+        user_id: User ID to search memories for
+        query: Search query
+        limit: Maximum number of results
+        
+    Returns:
+        List of memory dictionaries
+    """
+    try:
+        memory_retriever = get_fast_memory_retriever(user_id)
+        memories = memory_retriever.search_memories(query, k=limit)
+        
+        # Convert to expected format
+        result = []
+        for memory in memories:
+            result.append({
+                'id': memory.get('id'),
+                'content': memory.get('content'),
+                'importance': memory.get('importance', 1.0),
+                'created_at': memory.get('created_at'),
+                'source': memory.get('source', 'unknown')
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error searching memories: {str(e)}")
+        return []
+
+def find_memories_needing_negative_examples(user: User) -> List[Dict[str, Any]]:
+    """
+    Find memories that might benefit from negative examples.
+    
+    Args:
+        user: User object
+        
+    Returns:
+        List of memory dictionaries that might need negative examples
+    """
+    try:
+        # Search for memories related to different topics
+        queries = [
+            "business strategy advice",
+            "investment recommendations", 
+            "financial advice",
+            "career guidance",
+            "health recommendations",
+            "technical solutions",
+            "marketing strategies"
+        ]
+        
+        all_memories = []
+        seen_ids = set()
+        
+        for query in queries:
+            memories = search_user_memories_with_query(str(user.id), query, limit=5)
+            for memory in memories:
+                if memory['id'] not in seen_ids:
+                    all_memories.append(memory)
+                    seen_ids.add(memory['id'])
+        
+        return all_memories[:10]  # Return top 10 unique memories
+        
+    except Exception as e:
+        logger.error(f"Error finding memories: {str(e)}")
+        return []
 
 def generate_negative_memory_prompt(user: User, existing_memories: List[Dict[str, Any]]) -> str:
     """
@@ -99,7 +171,7 @@ def generate_negative_memory_for_user(
         
         existing_memories = []
         for query in search_queries:
-            memories = search_user_memories_vector(str(user.id), query, limit=5)
+            memories = search_user_memories_with_query(str(user.id), query, limit=5)
             existing_memories.extend(memories)
         
         # Remove duplicates based on memory ID

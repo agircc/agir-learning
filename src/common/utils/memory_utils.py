@@ -393,6 +393,9 @@ def search_user_memories_vector(user_id: str, query: str, limit: int = 10) -> Li
     """
     Search for memories based on vector similarity using FAISS.
     
+    **DEPRECATED**: This function rebuilds FAISS index on every call.
+    Use search_user_memories_cached() instead for better performance.
+    
     Args:
         user_id: ID of the user
         query: Search query
@@ -401,6 +404,9 @@ def search_user_memories_vector(user_id: str, query: str, limit: int = 10) -> Li
     Returns:
         List[Dict[str, Any]]: List of matching memories as dictionaries
     """
+    logger.warning("search_user_memories_vector() is deprecated and rebuilds FAISS index on every call. "
+                   "Use search_user_memories_cached() for better performance.")
+    
     try:
         # Use context manager to ensure the session is properly closed
         with get_db_session() as db:
@@ -483,9 +489,12 @@ def search_user_memories_vector(user_id: str, query: str, limit: int = 10) -> Li
         logger.error(f"Failed to search user memories with vector: {str(e)}")
         return []
 
-def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+def search_user_memories_cached(user_id: str, query: str, limit: int = 10) -> List[Dict[str, Any]]:
     """
-    Search for memories based on a text query using FAISS vector search.
+    Search for memories using cached FAISS retriever for optimal performance.
+    
+    **RECOMMENDED**: This function uses cached FastMemoryRetriever to avoid rebuilding
+    FAISS index on every call, resulting in much better performance.
     
     Args:
         user_id: ID of the user
@@ -496,8 +505,52 @@ def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict
         List[Dict[str, Any]]: List of matching memories as dictionaries
     """
     try:
-        # Perform vector search
-        return search_user_memories_vector(user_id, query, limit)
+        from src.completions.fast_memory_retriever import get_fast_memory_retriever
+        
+        # Get cached memory retriever
+        memory_retriever = get_fast_memory_retriever(user_id)
+        
+        # Search memories
+        memories = memory_retriever.search_memories(query, k=limit)
+        
+        # Convert FastMemoryRetriever format to expected format
+        result = []
+        for memory in memories:
+            result.append({
+                "id": memory.get('id'),
+                "content": memory.get('content'),
+                "meta_data": {},  # FastMemoryRetriever doesn't include full metadata
+                "importance": memory.get('importance', 1.0),
+                "source": memory.get('source', 'unknown'),
+                "created_at": memory.get('created_at'),
+                "last_accessed": None,  # Not tracked by FastMemoryRetriever
+                "access_count": 0,  # Not tracked by FastMemoryRetriever
+                "embedding": None,  # Not exposed by FastMemoryRetriever
+                "score": memory.get('relevance_score', 1.0)
+            })
+        
+        logger.info(f"Found {len(result)} memories using cached retriever for user {user_id}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to search user memories with cached retriever: {str(e)}")
+        return []
+
+def search_user_memories(user_id: str, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Search for memories based on a text query using cached FAISS retriever.
+    
+    Args:
+        user_id: ID of the user
+        query: Search query
+        limit: Maximum number of memories to return
+        
+    Returns:
+        List[Dict[str, Any]]: List of matching memories as dictionaries
+    """
+    try:
+        # Use cached version for better performance
+        return search_user_memories_cached(user_id, query, limit)
     except Exception as e:
         logger.error(f"Failed to search user memories: {str(e)}")
         return []
