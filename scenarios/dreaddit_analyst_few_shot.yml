@@ -1,5 +1,5 @@
 scenario:
-  name: "Dreaddit Analysis"
+  name: "Dreaddit Analysis With Few Shot Examples"
   description: "A user posts a message, the analyst evaluates distress and explains their reasoning, and the user provides feedback."
   learner_role: "analyst"
 
