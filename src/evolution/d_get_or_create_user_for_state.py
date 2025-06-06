@@ -165,9 +165,17 @@ def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentR
     learner = get_learner()
     learner_user_id = learner.id if learner else None
     
+    # TODO: Optimize this implementation by using environment variables to control excluded usernames
+    # instead of hardcoding them here. This would make the system more configurable and maintainable.
+    excluded_usernames = {'emotion_master', 'dentist_001'}
+    
     for user in all_users:
         if learner_user_id and user.id == learner_user_id:
             # Skip learner user for non-learner roles
+            continue
+        if user.username in excluded_usernames:
+            # Skip specifically excluded users
+            logger.info(f"Skipping excluded user: {user.username}")
             continue
         available_users.append(user)
     
