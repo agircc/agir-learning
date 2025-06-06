@@ -66,7 +66,7 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       if custom_prompt:
           system_prompt = custom_prompt
       else:
-          system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {user.username}. Task: {state.description}"
+          system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {current_state_role.name}. Task: {state.description}"
       
       # Log the actual prompt being used
       logger.info(f"Using prompt (first 100 chars): {system_prompt[:100]}...")
