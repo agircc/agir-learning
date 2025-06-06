@@ -66,7 +66,7 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       if custom_prompt:
           system_prompt = custom_prompt
       else:
-          system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {current_state_role.name}. Task: {state.description}"
+          system_prompt = f"You are a human working on a scenario called \"{state.name}\". Your role is {current_state_role.name}, your name is {user.first_name} {user.last_name}. Task: {state.description}"
       
       # Log the actual prompt being used
       logger.info(f"Using prompt (first 100 chars): {system_prompt[:100]}...")
@@ -85,7 +85,7 @@ def f_generate_llm_response(db: Session, state: State, current_state_role: Agent
       
       # Add current request only if we're not using a custom prompt
       if not custom_prompt:
-          current_message = f"Please respond as {user.username} for the current step: {state.name}"
+          current_message = f"Please respond as {user.first_name} {user.last_name} whose role is {current_state_role.name} for the current step: {state.name}"
           messages.append(HumanMessage(content=current_message))
       
       # Generate response using memory function - this ensures user memories are used for personalization

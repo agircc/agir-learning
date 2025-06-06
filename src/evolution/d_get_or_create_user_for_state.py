@@ -127,6 +127,7 @@ def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentR
     Only uses existing users from the database, never creates new users.
     Handles learner role specially - learner role can only use learner user,
     other roles cannot use learner user.
+    Ensures that within the same episode, a user is not assigned to multiple different roles.
     """
     # Get scenario and learner role information
     scenario = get_scenario()
@@ -174,10 +175,34 @@ def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentR
         logger.error(f"No available users for non-learner role {agentRole.name} (learner user excluded)")
         return None
     
-    # Get user IDs from available users (excluding learner)
-    user_ids = [user.id for user in available_users]
+    # Get users already assigned to OTHER roles in this episode
+    # to avoid assigning the same user to multiple roles in the same episode
+    existing_assignments_in_episode = db.query(AgentAssignment).filter(
+        AgentAssignment.episode_id == episode.id,
+        AgentAssignment.role_id != role_id  # Exclude current role (different roles only)
+    ).all()
     
-    logger.info(f"Found {len(user_ids)} available users for non-learner role {agentRole.name} (learner excluded)")
+    users_already_assigned_in_episode = set(assignment.user_id for assignment in existing_assignments_in_episode)
+    
+    if users_already_assigned_in_episode:
+        logger.info(f"Found {len(users_already_assigned_in_episode)} users already assigned to other roles in episode {episode.id}")
+    
+    # Filter out users already assigned to other roles in this episode
+    available_users_for_episode = []
+    for user in available_users:
+        if user.id not in users_already_assigned_in_episode:
+            available_users_for_episode.append(user)
+    
+    if not available_users_for_episode:
+        logger.warning(f"No available users for role {agentRole.name} - all users are already assigned to other roles in episode {episode.id}")
+        # Fallback: use all available users (allow same user for multiple roles as last resort)
+        available_users_for_episode = available_users
+        logger.warning(f"Fallback: allowing same user for multiple roles in episode {episode.id}")
+    
+    # Get user IDs from available users for this episode
+    user_ids = [user.id for user in available_users_for_episode]
+    
+    logger.info(f"Found {len(user_ids)} available users for non-learner role {agentRole.name} (learner excluded, episode conflicts excluded)")
     
     # Get users with the least assignments for this specific role
     least_assigned_user_ids = get_least_assigned_users(role_id, user_ids)
@@ -192,7 +217,7 @@ def _handle_multi_assignment(db: Session, role_id: int, episode: Episode, agentR
     user = db.query(User).filter(User.id == selected_user_id).first()
     
     if user:
-        logger.info(f"Selected existing user {user.username} for non-learner role {agentRole.name} (assignments: {get_user_assignment_count(role_id, user.id)})")
+        logger.info(f"Selected existing user {user.username} for non-learner role {agentRole.name} (assignments: {get_user_assignment_count(role_id, user.id)}, episode: {episode.id})")
         
         # Create new assignment for this episode
         new_assignment = AgentAssignment(
