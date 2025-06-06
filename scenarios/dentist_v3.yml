@@ -1,0 +1,100 @@
+scenario:
+  name: "Agent Dental Clinic Full Cycle v3"
+  description: "Simulates the full closed cycle of dental treatment in a virtual clinic powered by LLM agents."
+  learner_role: "dentist"
+
+  learner:
+    username: dentist_001
+    first_name: "Emily"
+    last_name: "Clarke"
+    gender: "FEMALE"
+    birth_date: "1969-06-01"
+    profession: "Dentist"
+    model: "gpt-4.1-nano"
+
+  roles:
+    - name: "patient"
+      model: "gpt-4.1-nano"
+      description: "Patient agent presenting with dental complaints such as toothache, gum bleeding, or cavity."
+
+    - name: "nurse"
+      model: "gpt-4.1-nano"
+      description: "Dental assistant responsible for triage, registration, preparation for dental procedures, and post-care instructions."
+
+    - name: "dentist"
+      model: "gpt-4.1-nano"
+      description: "Dentist agent responsible for examining, diagnosing, and treating dental conditions."
+
+  states:
+    - name: "Dental Discomfort"
+      roles: ["patient"]
+      description: "Patient experiences dental symptoms such as pain, swelling, or bleeding, and decides to visit the clinic."
+
+    - name: "Triage"
+      roles: ["patient", "nurse"]
+      description: "Nurse assesses the patient's dental symptoms and urgency, and refers them for dental consultation."
+
+    - name: "Registration"
+      roles: ["patient", "nurse"]
+      description: "Patient registers at the dental clinic and is placed in the queue for examination."
+
+    - name: "Consultation"
+      roles: ["dentist", "patient"]
+      description: "Dentist conducts an initial discussion about the patient's symptoms, dental hygiene, and history, followed by a basic oral checkup."
+
+    - name: "Dental Examination"
+      roles: ["nurse"]
+      description: "With the patient present, the nurse performs standard dental diagnostic procedures such as intraoral X-rays, panoramic radiographs, and oral imaging. At this stage, the system must generate realistic and professional dental examination results using appropriate clinical terminology. These findings may include observations like occlusal caries, periapical abscesses, periodontal bone loss, impacted third molars, or abnormal root structures. All results are compiled into a structured diagnostic report and forwarded to the dentist for formal evaluation."
+
+    - name: "Diagnosis"
+      roles: ["dentist"]
+      description: "Dentist reviews examination results and provides a diagnosis (e.g., cavity, gum disease, infection)."
+
+    - name: "Treatment Delivery"
+      roles: ["dentist", "nurse"]
+      description: "Dentist performs the necessary treatment such as filling, cleaning, extraction, or prescribing medication, with nurse support."
+
+    - name: "Post-Treatment Care"
+      roles: ["patient", "nurse"]
+      description: "Patient receives care instructions and follow-up plan from the nurse. Healing process begins at home."
+
+    - name: "Recovery"
+      roles: ["patient"]
+      description: "Patient recovers from dental treatment. Symptoms subside and normal oral function is restored."
+
+    - name: "Case Closed"
+      roles: ["dentist"]
+      description: "Follow-up confirms successful dental care. No further treatment is needed, and the case is closed."
+
+  transitions:
+    - from: Dental Discomfort
+      to: Triage
+
+    - from: Triage
+      to: Registration
+
+    - from: Registration
+      to: Consultation
+
+    - from: Consultation
+      to: Dental Examination
+
+    - from: Dental Examination
+      to: Diagnosis
+
+    - from: Diagnosis
+      to: Treatment Delivery
+
+    - from: Treatment Delivery
+      to: Post-Treatment Care
+
+    - from: Post-Treatment Care
+      to: Recovery
+      condition: "Patient reports improvement and no complications."
+
+    - from: Post-Treatment Care
+      to: Triage
+      condition: "Patient reports persistent or worsening symptoms."
+
+    - from: Recovery
+      to: Case Closed
