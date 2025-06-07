@@ -20,7 +20,21 @@ from agir_db.models.user import User
 from agir_db.models.memory import UserMemory
 from src.common.utils.memory_utils import DEFAULT_EMBEDDING_MODEL
 
+# Configure logger for this module
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Add console handler if none exists
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    logger.propagate = True
+
+# Log module loading
+logger.info("FastMemoryRetriever module loaded successfully")
 
 class FastMemoryRetriever:
     """
@@ -112,10 +126,66 @@ class FastMemoryRetriever:
                 self.vector_store = FAISS.from_documents([empty_doc], self.embeddings)
                 return
             
-            # Create FAISS vector store
-            self.vector_store = FAISS.from_documents(documents, self.embeddings)
+            # Process documents in batches to avoid token limits
+            # Calculate batch size based on average content length
+            total_chars = sum(len(doc.page_content) for doc in documents)
+            avg_chars_per_doc = total_chars / len(documents)
             
-            logger.info(f"Loaded {len(documents)} memories into FAISS vector store for user {self.user_id}")
+            # Estimate tokens (roughly 4 chars per token) and aim for ~40k tokens per batch
+            # to stay well below 300k limit with safety margin
+            target_tokens_per_batch = 40000
+            estimated_tokens_per_doc = avg_chars_per_doc / 4
+            batch_size = max(10, min(50, int(target_tokens_per_batch / estimated_tokens_per_doc)))
+            
+            total_docs = len(documents)
+            logger.info(f"Processing {total_docs} documents in batches of {batch_size} (avg {avg_chars_per_doc:.0f} chars per doc)")
+            
+            # Create vector store with first batch
+            first_batch = documents[:batch_size]
+            try:
+                self.vector_store = FAISS.from_documents(first_batch, self.embeddings)
+                logger.info(f"Created FAISS vector store with first batch of {len(first_batch)} documents")
+            except Exception as first_batch_error:
+                logger.error(f"Error creating initial vector store: {str(first_batch_error)}")
+                # If first batch fails, try with smaller batch size
+                if batch_size > 10:
+                    smaller_batch_size = max(5, batch_size // 2)
+                    logger.info(f"Retrying with smaller batch size: {smaller_batch_size}")
+                    first_batch = documents[:smaller_batch_size]
+                    self.vector_store = FAISS.from_documents(first_batch, self.embeddings)
+                    batch_size = smaller_batch_size
+                else:
+                    raise first_batch_error
+            
+            # Add remaining documents in batches
+            for i in range(batch_size, total_docs, batch_size):
+                batch = documents[i:i + batch_size]
+                try:
+                    # Create temporary vector store for this batch
+                    temp_vector_store = FAISS.from_documents(batch, self.embeddings)
+                    # Merge with main vector store
+                    self.vector_store.merge_from(temp_vector_store)
+                    logger.info(f"Added batch {i//batch_size + 1}: {len(batch)} documents")
+                except Exception as batch_error:
+                    logger.error(f"Error processing batch {i//batch_size + 1}: {str(batch_error)}")
+                    # If token limit error, try with smaller sub-batches
+                    if "max_tokens_per_request" in str(batch_error) and len(batch) > 1:
+                        logger.info(f"Splitting large batch into smaller sub-batches")
+                        sub_batch_size = max(1, len(batch) // 2)
+                        for j in range(0, len(batch), sub_batch_size):
+                            sub_batch = batch[j:j + sub_batch_size]
+                            try:
+                                temp_sub_vector_store = FAISS.from_documents(sub_batch, self.embeddings)
+                                self.vector_store.merge_from(temp_sub_vector_store)
+                                logger.info(f"Added sub-batch: {len(sub_batch)} documents")
+                            except Exception as sub_batch_error:
+                                logger.error(f"Error processing sub-batch: {str(sub_batch_error)}")
+                                continue
+                    else:
+                        # Continue with next batch instead of failing completely
+                        continue
+            
+            logger.info(f"Successfully loaded {len(documents)} memories into FAISS vector store for user {self.user_id}")
             
         except Exception as e:
             logger.error(f"Error loading memories into FAISS: {str(e)}")
@@ -152,14 +222,20 @@ class FastMemoryRetriever:
             # Perform similarity search
             docs = self.vector_store.similarity_search(query, k=k)
             
+            # Extract memory IDs for database update
+            memory_ids = []
             results = []
             for doc in docs:
                 # Skip empty placeholder results
                 if doc.metadata.get("id") in ["empty", "error"]:
                     continue
                     
+                memory_id = doc.metadata.get("id")
+                if memory_id:
+                    memory_ids.append(memory_id)
+                
                 result = {
-                    "id": doc.metadata.get("id"),
+                    "id": memory_id,
                     "content": doc.page_content,
                     "importance": doc.metadata.get("importance", 1.0),
                     "created_at": doc.metadata.get("created_at"),
@@ -167,6 +243,35 @@ class FastMemoryRetriever:
                     "relevance_score": 1.0  # FAISS doesn't return scores by default
                 }
                 results.append(result)
+            
+            # Update access tracking in database
+            if memory_ids:
+                try:
+                    db = next(get_db())
+                    
+                    # Fetch and update memory records
+                    memories = db.query(UserMemory).filter(
+                        UserMemory.id.in_(memory_ids),
+                        UserMemory.user_id == self.user_id,
+                        UserMemory.is_active == True
+                    ).all()
+                    
+                    for memory in memories:
+                        # Update access count and last_accessed (same as search_user_memories_vector)
+                        memory.access_count += 1
+                        memory.last_accessed = datetime.now()
+                        db.add(memory)
+                    
+                    # Commit the access tracking updates
+                    db.commit()
+                    logger.debug(f"Updated access tracking for {len(memories)} memories")
+                    
+                except Exception as db_error:
+                    logger.error(f"Error updating memory access tracking: {str(db_error)}")
+                    # Don't fail the search if DB update fails
+                finally:
+                    if 'db' in locals():
+                        db.close()
             
             logger.info(f"Found {len(results)} relevant memories for query")
             return results

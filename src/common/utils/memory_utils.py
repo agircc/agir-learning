@@ -513,21 +513,55 @@ def search_user_memories_cached(user_id: str, query: str, limit: int = 10) -> Li
         # Search memories
         memories = memory_retriever.search_memories(query, k=limit)
         
-        # Convert FastMemoryRetriever format to expected format
-        result = []
-        for memory in memories:
-            result.append({
-                "id": memory.get('id'),
-                "content": memory.get('content'),
-                "meta_data": {},  # FastMemoryRetriever doesn't include full metadata
-                "importance": memory.get('importance', 1.0),
-                "source": memory.get('source', 'unknown'),
-                "created_at": memory.get('created_at'),
-                "last_accessed": None,  # Not tracked by FastMemoryRetriever
-                "access_count": 0,  # Not tracked by FastMemoryRetriever
-                "embedding": None,  # Not exposed by FastMemoryRetriever
-                "score": memory.get('relevance_score', 1.0)
-            })
+        if not memories:
+            return []
+        
+        # Extract memory IDs to fetch full records from database
+        memory_ids = [memory.get('id') for memory in memories if memory.get('id')]
+        
+        if not memory_ids:
+            return []
+        
+        # Use context manager to ensure the session is properly closed
+        with get_db_session() as db:
+            # Fetch full memory records from database
+            db_memories = db.query(UserMemory).filter(
+                UserMemory.id.in_(memory_ids),
+                UserMemory.user_id == user_id,
+                UserMemory.is_active == True
+            ).all()
+            
+            # Create a mapping from ID to database memory objects
+            db_memory_map = {str(memory.id): memory for memory in db_memories}
+            
+            # Process results and update access tracking
+            result = []
+            for cached_memory in memories:
+                memory_id = cached_memory.get('id')
+                if memory_id and memory_id in db_memory_map:
+                    db_memory = db_memory_map[memory_id]
+                    
+                    # Update access count and last_accessed (same as search_user_memories_vector)
+                    db_memory.access_count += 1
+                    db_memory.last_accessed = datetime.datetime.now()
+                    db.add(db_memory)
+                    
+                    # Add to results with full data from database
+                    result.append({
+                        "id": str(db_memory.id),
+                        "content": db_memory.content,
+                        "meta_data": db_memory.meta_data,  # Full metadata from database
+                        "importance": db_memory.importance,
+                        "source": db_memory.source,
+                        "created_at": db_memory.created_at.isoformat() if db_memory.created_at else None,
+                        "last_accessed": db_memory.last_accessed.isoformat() if db_memory.last_accessed else None,
+                        "access_count": db_memory.access_count,
+                        "embedding": db_memory.embedding,  # Full embedding from database
+                        "score": cached_memory.get('relevance_score', 1.0)
+                    })
+            
+            # Commit the access tracking updates
+            db.commit()
         
         logger.info(f"Found {len(result)} memories using cached retriever for user {user_id}")
         return result
