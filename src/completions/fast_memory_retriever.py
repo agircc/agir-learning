@@ -62,11 +62,11 @@ class FastMemoryRetriever:
             if not user:
                 logger.warning(f"User {self.user_id} not found, creating empty vector store")
                 # Create empty vector store
-                self.vector_store = FAISS.from_texts(
-                    ["No memories available"], 
-                    self.embeddings,
-                    metadatas=[{"id": "empty", "content": "No memories available"}]
+                empty_doc = Document(
+                    page_content="No memories available",
+                    metadata={"id": "empty", "content": "No memories available"}
                 )
+                self.vector_store = FAISS.from_documents([empty_doc], self.embeddings)
                 return
             
             # Get all memories for the user
@@ -75,20 +75,18 @@ class FastMemoryRetriever:
             if not memories:
                 logger.info(f"No memories found for user {self.user_id}, creating empty vector store")
                 # Create empty vector store
-                self.vector_store = FAISS.from_texts(
-                    ["No memories available"], 
-                    self.embeddings,
-                    metadatas=[{"id": "empty", "content": "No memories available"}]
+                empty_doc = Document(
+                    page_content="No memories available",
+                    metadata={"id": "empty", "content": "No memories available"}
                 )
+                self.vector_store = FAISS.from_documents([empty_doc], self.embeddings)
                 return
             
             # Prepare documents for FAISS
-            texts = []
-            metadatas = []
+            documents = []
             
             for memory in memories:
                 if memory.content and memory.content.strip():
-                    texts.append(memory.content)
                     metadata = {
                         "id": str(memory.id),
                         "content": memory.content,
@@ -96,36 +94,37 @@ class FastMemoryRetriever:
                         "created_at": memory.created_at.isoformat() if memory.created_at else None,
                         "source": getattr(memory, 'source', 'unknown')
                     }
-                    metadatas.append(metadata)
+                    
+                    doc = Document(
+                        page_content=memory.content,
+                        metadata=metadata
+                    )
+                    documents.append(doc)
                     self.memories_metadata[str(memory.id)] = metadata
             
-            if not texts:
+            if not documents:
                 logger.info(f"No valid memory content found for user {self.user_id}")
                 # Create empty vector store
-                self.vector_store = FAISS.from_texts(
-                    ["No memories available"], 
-                    self.embeddings,
-                    metadatas=[{"id": "empty", "content": "No memories available"}]
+                empty_doc = Document(
+                    page_content="No memories available",
+                    metadata={"id": "empty", "content": "No memories available"}
                 )
+                self.vector_store = FAISS.from_documents([empty_doc], self.embeddings)
                 return
             
             # Create FAISS vector store
-            self.vector_store = FAISS.from_texts(
-                texts, 
-                self.embeddings, 
-                metadatas=metadatas
-            )
+            self.vector_store = FAISS.from_documents(documents, self.embeddings)
             
-            logger.info(f"Loaded {len(texts)} memories into FAISS vector store for user {self.user_id}")
+            logger.info(f"Loaded {len(documents)} memories into FAISS vector store for user {self.user_id}")
             
         except Exception as e:
             logger.error(f"Error loading memories into FAISS: {str(e)}")
             # Create fallback empty vector store
-            self.vector_store = FAISS.from_texts(
-                ["Error loading memories"], 
-                self.embeddings,
-                metadatas=[{"id": "error", "content": "Error loading memories"}]
+            error_doc = Document(
+                page_content="Error loading memories",
+                metadata={"id": "error", "content": "Error loading memories"}
             )
+            self.vector_store = FAISS.from_documents([error_doc], self.embeddings)
         finally:
             if 'db' in locals():
                 db.close()
