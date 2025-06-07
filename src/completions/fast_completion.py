@@ -112,13 +112,14 @@ class FastCompletion:
             memory_context = self._format_memories_for_context(relevant_memories)
             
             # Create system prompt with user context and memories
-            system_prompt = f"""You are {self.user.first_name} {self.user.last_name}.
-Respond based on your knowledge and the provided context.
+            system_prompt = f"""Use the following context as a reference to inform your response.
 
 {memory_context}
 
-Provide a helpful, accurate response based on the above context."""
+Respond as the expert you are, and provide the best possible answer."""
             
+            logger.warning(f"System prompt: {system_prompt}")
+            logger.warning(f"Prompt: {prompt}")
             # Create messages for LLM
             messages = [
                 SystemMessage(content=system_prompt),

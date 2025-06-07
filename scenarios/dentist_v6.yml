@@ -1,5 +1,5 @@
 scenario:
-  name: "Agent Dental Clinic Full Cycle v5"
+  name: "Agent Dental Clinic Full Cycle v6"
   description: "Simulates the full closed cycle of dental treatment in a virtual clinic powered by LLM agents."
   learner_role: "dentist"
 
