@@ -32,8 +32,8 @@ from src.llm.llm_provider import get_llm_model
 from src.common.utils.memory_utils import create_user_memory
 
 # Constants - modify these as needed
-USER_ID = "258486ed-9f70-434b-97c6-24a44d092639"  # Replace with actual user ID
-SCENARIO_ID = '2a09689d-cc52-4350-a8c3-55fa906b9313'  # Replace with actual scenario ID
+USER_ID = "544b17ee-0aa3-44c6-b14c-7a67d21f5ecd"  # Replace with actual user ID
+SCENARIO_ID = 'd1c13684-0292-4eff-b5ee-603d545f010f '  # Replace with actual scenario ID
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -168,7 +168,7 @@ def create_episode_reflection(db: Session, user_id: str, episode: Episode, scena
         user_profession = user.profession if user.profession else "professional"
         
         # Create profession-specific reflection prompt
-        reflection_prompt = f"""You've just participated in an episode of the scenario "{scenario.name}" as a {user_profession}.
+        reflection_prompt = f"""You're a {user_profession}.
 
 Here's what you experienced in your role:
 {episode_summary}
