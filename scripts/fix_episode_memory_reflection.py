@@ -164,21 +164,36 @@ def create_episode_reflection(db: Session, user_id: str, episode: Episode, scena
             episode_summary += item['content']
             episode_summary += "\n\n"
         
-        # Create reflection prompt
-        reflection_prompt = f"""You've just completed an episode in the scenario "{scenario.name}".
+        # Get user's profession for personalized reflection
+        user_profession = user.profession if user.profession else "professional"
+        
+        # Create profession-specific reflection prompt
+        reflection_prompt = f"""You've just participated in an episode of the scenario "{scenario.name}" as a {user_profession}.
 
-Here's what happened in this episode:
+Here's what you experienced in your role:
 {episode_summary}
 
-Please reflect on this experience:
-- What were the key insights or lessons from this episode?
-- How did the interactions and decisions unfold?
-- What patterns or strategies emerged?
-- How does this experience connect to your previous knowledge?
-- What would you do differently next time?
-- What emotions or thoughts did this experience evoke?
+As a {user_profession}, please reflect on your performance and learning from this experience:
 
-Provide a thoughtful reflection on the entire episode experience."""
+**What I Did Well:**
+- Which of my {user_profession} skills and techniques worked effectively in this scenario?
+- What professional behaviors or approaches did I handle successfully?
+- What decisions or actions am I proud of as a {user_profession} in this experience?
+- How did I demonstrate competence in my professional role?
+
+**What I Need to Improve:**
+- What aspects of my {user_profession} practice could have been better in this scenario?
+- Where did I struggle or feel uncertain in my professional role?
+- What mistakes or missed opportunities did I identify?
+- What professional habits or approaches need refinement?
+
+**New Skills, Knowledge & Lessons Learned:**
+- What new {user_profession} skills or techniques did I learn or develop?
+- What fresh knowledge or insights did I gain relevant to my profession?
+- What important lessons will I carry forward from this experience?
+- How has this experience expanded my understanding as a {user_profession}?
+
+Be honest and specific about your strengths, weaknesses, and learning outcomes. Focus on concrete examples from your experience as a {user_profession}."""
         
         # Generate reflection using LLM
         llm = get_llm_model(user.llm_model)
